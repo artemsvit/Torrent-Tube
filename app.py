@@ -202,10 +202,19 @@ def config():
     })
 
 
+COLLECTION_WORDS_RE = re.compile(
+    r"\b(complete collection|full collection|collection|quadrilogy|trilogy|duology|anthology|saga)\b.*",
+    re.I,
+)
+
+
 def extract_title_and_year(raw_title: str):
     """Best-effort pull of a clean, searchable title (and year) out of a
     tracker listing like 'Ukrainian Title / English Title (2001-2012) BDRip
-    Ukr/Eng | Sub Eng'. Heuristic, not exact - trackers don't structure this."""
+    Ukr/Eng | Sub Eng'. Heuristic, not exact - trackers don't structure this.
+    Also returns a shorter "base" title (franchise name only, no "Complete
+    Collection"/"Quadrilogy"/etc.) since those bundle-release words rarely
+    match anything on TMDB, which indexes individual films."""
     year_match = re.search(r"(19|20)\d{2}", raw_title)
     year = year_match.group(0) if year_match else None
 
@@ -215,40 +224,52 @@ def extract_title_and_year(raw_title: str):
     candidate = re.split(r"\(\s*(19|20)\d{2}", candidate)[0]
     candidate = re.sub(r"[\[\(].*", "", candidate)
     candidate = re.sub(r"\s+", " ", candidate).strip(" :-|/")
-    return candidate, year
+    candidate = re.sub(r"\s+\b(3D|4K|HDR|Remastered)\b\s*$", "", candidate, flags=re.I).strip()
+
+    base = COLLECTION_WORDS_RE.split(candidate)[0].strip(" :.-")
+    return candidate, base, year
 
 
-def tmdb_lookup(title: str, year: str):
+def _tmdb_search(query: str, year: str = None):
+    params = {"api_key": TMDB_API_KEY, "query": query, "include_adult": "false"}
+    if year:
+        params["year"] = year
+    url = f"https://api.themoviedb.org/3/search/multi?{urllib.parse.urlencode(params)}"
+    req = urllib.request.Request(url, headers={"User-Agent": "TorrentTube"})
+    with urllib.request.urlopen(req, timeout=8) as resp:
+        data = json.loads(resp.read())
+    for item in data.get("results", []):
+        if item.get("media_type") in ("movie", "tv"):
+            return item
+    return None
+
+
+def tmdb_lookup(title: str, base: str, year: str):
     if not TMDB_API_KEY or not title:
         return None
-    cache_key = (title.lower(), year)
+    cache_key = (title.lower(), base.lower(), year)
     cached = TMDB_CACHE.get(cache_key)
     if cached and time.time() - cached[0] < TMDB_CACHE_TTL:
         return cached[1]
 
-    params = {"api_key": TMDB_API_KEY, "query": title, "include_adult": "false"}
-    if year:
-        params["year"] = year
-    url = f"https://api.themoviedb.org/3/search/multi?{urllib.parse.urlencode(params)}"
-    result = None
+    item = None
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "TorrentTube"})
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            data = json.loads(resp.read())
-        for item in data.get("results", []):
-            if item.get("media_type") not in ("movie", "tv"):
-                continue
-            poster_path = item.get("poster_path")
-            result = {
-                "title": item.get("title") or item.get("name") or title,
-                "poster": f"https://image.tmdb.org/t/p/w200{poster_path}" if poster_path else None,
-                "rating": item.get("vote_average"),
-                "overview": (item.get("overview") or "")[:220],
-                "year": (item.get("release_date") or item.get("first_air_date") or "")[:4],
-            }
-            break
+        item = _tmdb_search(title, year) or _tmdb_search(title)
+        if not item and base and base.lower() != title.lower():
+            item = _tmdb_search(base, year) or _tmdb_search(base)
     except Exception:
-        result = None
+        item = None
+
+    result = None
+    if item:
+        poster_path = item.get("poster_path")
+        result = {
+            "title": item.get("title") or item.get("name") or title,
+            "poster": f"https://image.tmdb.org/t/p/w200{poster_path}" if poster_path else None,
+            "rating": item.get("vote_average"),
+            "overview": (item.get("overview") or "")[:220],
+            "year": (item.get("release_date") or item.get("first_air_date") or "")[:4],
+        }
     TMDB_CACHE[cache_key] = (time.time(), result)
     return result
 
@@ -260,8 +281,8 @@ def enrich_with_tmdb(results):
     top = results[:40]
 
     def enrich_one(r):
-        title, year = extract_title_and_year(r["title"])
-        meta = tmdb_lookup(title, year)
+        title, base, year = extract_title_and_year(r["title"])
+        meta = tmdb_lookup(title, base, year)
         if meta:
             r["poster"] = meta["poster"]
             r["rating"] = meta["rating"]

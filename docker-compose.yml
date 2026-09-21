@@ -27,6 +27,9 @@ services:
       - JACKETTAPI_URL=http://192.168.0.102:9117
       - JACKETTAPI_KEY=changeme
       - JACKETTAPI_INDEXER=mazepa
+      # Optional: adds posters/ratings to search results. Free key from
+      # https://www.themoviedb.org/settings/api - don't commit a real one.
+      - TMDB_API_KEY=changeme
     # Same hairpin-NAT issue as the build (see above), but for the running
     # container: Docker's embedded resolver (127.0.0.11) forwards to the
     # host's DNS server, which is Pi-hole running in another container on
