@@ -415,7 +415,9 @@ def list_torrents():
 @app.route("/api/torrents/inspect", methods=["POST"])
 def inspect_torrent():
     """Peek at a .torrent file's own name (more reliable than the OS
-    filename) to suggest a destination folder before it's actually added."""
+    filename) to suggest a destination folder and, when TMDB is configured,
+    a poster/rating/overview - same enrichment the search results get -
+    before the file is actually added."""
     f = request.files.get("file")
     if not f or not f.filename:
         return jsonify({"error": "No file"}), 400
@@ -424,7 +426,25 @@ def inspect_torrent():
         name = info.name()
     except Exception:
         return jsonify({"error": "That doesn't look like a valid .torrent file"}), 400
-    return jsonify({"name": name, "suggested_category": guess_category(name)})
+
+    result = {
+        "name": name,
+        "clean_title": None,
+        "poster": None,
+        "rating": None,
+        "overview": None,
+        "suggested_category": guess_category(name),
+    }
+    if TMDB_API_KEY:
+        title, base, year = extract_title_and_year(name)
+        meta = tmdb_lookup(title, base, year)
+        if meta:
+            result["clean_title"] = meta["title"]
+            result["poster"] = meta["poster"]
+            result["rating"] = meta["rating"]
+            result["overview"] = meta["overview"]
+            result["suggested_category"] = guess_category(meta["title"], meta["genre_ids"], meta["media_type"])
+    return jsonify(result)
 
 
 @app.route("/api/torrents", methods=["POST"])
