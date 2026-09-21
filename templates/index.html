@@ -348,17 +348,18 @@
     gap: 10px;
   }
   .result-header .item-title { flex: 1; min-width: 0; }
+  /* Stretched to match the height of the title/stats/overview column next
+     to it, rather than a small fixed square, so it reads as a real poster. */
+  .search-dropdown .item-top { align-items: stretch; }
   .result-poster {
-    width: 60px;
-    height: 80px;
+    width: 84px;
     border-radius: 8px;
     object-fit: cover;
     flex-shrink: 0;
     background: var(--border);
   }
   .result-poster-fallback {
-    width: 60px;
-    height: 80px;
+    width: 84px;
     border-radius: 8px;
     background: var(--accent-soft);
     color: var(--accent);
@@ -724,7 +725,7 @@
     .search-field > svg { left: 12px; }
     .btn-primary.btn-pill#goBtn { padding: 0 16px; height: 44px; font-size: 13px; }
     .btn-circle { width: 44px; height: 44px; }
-    .result-poster, .result-poster-fallback { width: 48px; height: 64px; }
+    .result-poster, .result-poster-fallback { width: 68px; }
     /* On narrow screens there isn't room for the folder picker + Download
        button next to the title, so re-flow the card: title/stats/overview
        stack first, then the actions row spans the full width at the bottom.
