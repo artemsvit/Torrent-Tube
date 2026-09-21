@@ -306,12 +306,30 @@
     flex-shrink: 0;
   }
   .result-poster {
-    width: 34px;
-    height: 48px;
-    border-radius: 6px;
+    width: 60px;
+    height: 80px;
+    border-radius: 8px;
     object-fit: cover;
     flex-shrink: 0;
     background: var(--border);
+  }
+  .result-poster-fallback {
+    width: 60px;
+    height: 80px;
+    border-radius: 8px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .result-poster-fallback svg { width: 22px; height: 22px; }
+  .search-result-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
   }
   .rating-badge {
     display: inline-flex;
@@ -934,6 +952,7 @@ function formatSeedPeers(seeders, peers) {
 }
 
 let searchRequestId = 0;
+let lastSearchResults = [];
 
 async function runSearch(query) {
   const requestId = ++searchRequestId;
@@ -949,7 +968,8 @@ async function runSearch(query) {
       searchDropdown.innerHTML = `<div class="empty-state" style="padding:24px;">${escapeHtml(data.error)}</div>`;
       return;
     }
-    renderSearchResults(data.results || []);
+    lastSearchResults = data.results || [];
+    renderSearchResults(lastSearchResults);
   } catch (e) {
     if (requestId !== searchRequestId) return;
     goBtn.disabled = false;
@@ -966,12 +986,18 @@ function renderSearchResults(results) {
     return;
   }
 
+  let remembered = null;
+  try { remembered = localStorage.getItem("torrenttube-category"); } catch (e) {}
+  const categoryOptions = currentCategories.map(c =>
+    `<option value="${escapeHtml(c)}"${c === remembered ? " selected" : ""}>${escapeHtml(c)}</option>`
+  ).join("");
+
   results.forEach(r => {
     const div = document.createElement("div");
     div.className = "item";
     const poster = r.poster
       ? `<img class="result-poster" src="${escapeHtml(r.poster)}" alt="" loading="lazy">`
-      : `<div class="item-icon">${ICONS.download}</div>`;
+      : `<div class="result-poster-fallback">${ICONS.download}</div>`;
     const rating = (r.rating && r.rating > 0) ? `<span class="rating-badge">${ICONS.star}${r.rating.toFixed(1)}</span>` : "";
     div.innerHTML = `
       <div class="item-top">
@@ -981,33 +1007,24 @@ function renderSearchResults(results) {
           <div class="item-sub">${r.size_label} &middot; ${formatSeedPeers(r.seeders, r.peers)} ${rating}</div>
           ${r.overview ? `<div class="item-overview">${escapeHtml(r.overview)}</div>` : ""}
         </div>
-        <div class="item-actions">
+        <div class="search-result-actions">
+          <select class="inline-category-select">${categoryOptions}</select>
           <button class="btn-secondary btn-add-result">${ICONS.download}<span>Download</span></button>
         </div>
       </div>
     `;
-    div.querySelector(".btn-add-result").addEventListener("click", (e) => { e.stopPropagation(); showFolderPicker(r, e.target.closest(".item-actions")); });
+    const actionsEl = div.querySelector(".search-result-actions");
+    actionsEl.querySelector("select").addEventListener("click", e => e.stopPropagation());
+    actionsEl.querySelector(".btn-add-result").addEventListener("click", (e) => {
+      e.stopPropagation();
+      addSearchResult(r, actionsEl.querySelector("select").value, actionsEl);
+    });
     searchDropdown.appendChild(div);
   });
 }
 
-function showFolderPicker(result, actionsEl) {
-  let remembered = null;
-  try { remembered = localStorage.getItem("torrenttube-category"); } catch (e) {}
-  const options = currentCategories.map(c =>
-    `<option value="${escapeHtml(c)}"${c === remembered ? " selected" : ""}>${escapeHtml(c)}</option>`
-  ).join("");
-  actionsEl.innerHTML = `<select class="inline-category-select">${options}</select>`;
-  const select = actionsEl.querySelector("select");
-  select.addEventListener("click", e => e.stopPropagation());
-  select.addEventListener("change", () => {
-    try { localStorage.setItem("torrenttube-category", select.value); } catch (e) {}
-    addSearchResult(result, select.value, actionsEl);
-  });
-  select.focus();
-}
-
 async function addSearchResult(result, category, actionsEl) {
+  try { localStorage.setItem("torrenttube-category", category); } catch (e) {}
   actionsEl.innerHTML = `<span class="hint" style="margin:0; padding:0; border:none;">Adding...</span>`;
   const body = { category };
   if (result.magnet) body.magnet = result.magnet;
@@ -1021,8 +1038,7 @@ async function addSearchResult(result, category, actionsEl) {
   const data = await res.json();
   if (data.error) {
     showToast(data.error, true);
-    actionsEl.innerHTML = `<button class="btn-secondary btn-add-result">${ICONS.download}<span>Download</span></button>`;
-    actionsEl.querySelector(".btn-add-result").addEventListener("click", (e) => { e.stopPropagation(); showFolderPicker(result, e.target.closest(".item-actions")); });
+    renderSearchResults(lastSearchResults);
     return;
   }
   actionsEl.innerHTML = `${ICONS.check}<span>Added</span>`;
