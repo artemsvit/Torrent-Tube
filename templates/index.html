@@ -262,30 +262,39 @@
     header, .searchbar { padding-left: 16px; padding-right: 16px; }
   }
 
-  /* ---------- Tabs ---------- */
+  /* ---------- Search dropdown ---------- */
 
-  .tab-bar {
-    display: flex;
-    gap: 6px;
-    margin-bottom: 14px;
-  }
-  .tab-btn {
-    padding: 8px 16px;
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: var(--radius-pill);
-    color: var(--text-secondary);
-    font-size: 13px;
-  }
-  .tab-btn:hover:not(.is-active) { background: var(--surface); border-color: var(--border); color: var(--text); }
-  .tab-btn.is-active {
+  .search-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    right: 0;
+    max-height: 60vh;
+    overflow-y: auto;
     background: var(--surface-solid);
-    border-color: var(--border-strong);
-    color: var(--text);
-    box-shadow: var(--shadow-sm);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    z-index: 30;
+    display: none;
+    padding: 8px;
   }
-  .tab-panel { display: none; }
-  .tab-panel.is-active { display: block; }
+  .search-dropdown.is-open { display: block; }
+  .search-dropdown .item { margin-bottom: 6px; }
+  .search-dropdown .item:last-child { margin-bottom: 0; }
+
+  .inline-category-select {
+    padding: 7px 26px 7px 12px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 12.5px;
+    font-family: inherit;
+    outline: none;
+  }
 
   /* ---------- Search results ---------- */
 
@@ -605,8 +614,9 @@
 
   <div class="searchbar">
     <div class="search-field">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.5 2a5.5 5.5 0 00-3.9 9.4L2 18v4h4l6.6-6.6A5.5 5.5 0 1012.5 2z"/></svg>
-      <input type="text" id="mainInput" placeholder="Paste a magnet link, or search for a torrent..." autofocus>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <input type="text" id="mainInput" placeholder="Paste a magnet link, or search for a torrent..." autofocus autocomplete="off">
+      <div class="search-dropdown" id="searchDropdown"></div>
     </div>
     <select class="category-select" id="categorySelect" title="Save to"></select>
     <button class="btn-secondary btn-upload" id="uploadBtn" title="Upload a .torrent file">
@@ -619,12 +629,7 @@
 </div>
 
 <div class="layout">
-  <div class="tab-bar" id="tabBar">
-    <button class="tab-btn is-active" data-tab="downloads">Downloads</button>
-    <button class="tab-btn" data-tab="search" id="searchTabBtn" style="display:none">Search</button>
-  </div>
-
-  <section class="panel tab-panel is-active" id="downloadsTab">
+  <section class="panel" id="downloadsTab">
     <div class="panel-header">
       <div class="section-label">Downloads</div>
       <span class="count-badge" id="count">0</span>
@@ -633,16 +638,6 @@
       <div class="empty-state" id="listEmpty">Paste a magnet link above, or drop a .torrent file anywhere on this page.</div>
     </div>
     <p class="hint">Files save to <code id="saveDir">the shared downloads folder</code></p>
-  </section>
-
-  <section class="panel tab-panel" id="searchTab">
-    <div class="panel-header">
-      <div class="section-label">Results</div>
-      <span class="count-badge" id="searchCount">0</span>
-    </div>
-    <div id="searchResults">
-      <div class="empty-state" id="searchEmpty">Type something above and hit Search.</div>
-    </div>
   </section>
 </div>
 
@@ -674,15 +669,10 @@ const themeToggleBtn = document.getElementById("themeToggle");
 const dropZone = document.getElementById("dropZone");
 const categorySelect = document.getElementById("categorySelect");
 
-const tabBarEl = document.getElementById("tabBar");
-const searchTabBtn = document.getElementById("searchTabBtn");
-const downloadsTabEl = document.getElementById("downloadsTab");
-const searchTabEl = document.getElementById("searchTab");
-const searchResultsEl = document.getElementById("searchResults");
-const searchEmptyEl = document.getElementById("searchEmpty");
-const searchCountEl = document.getElementById("searchCount");
+const searchDropdown = document.getElementById("searchDropdown");
 
 let searchEnabled = false;
+let currentCategories = [];
 
 let dragCounter = 0;
 
@@ -732,10 +722,8 @@ function showToast(message, isError) {
 
 // ---------- Adding torrents ----------
 
-function switchTab(tab) {
-  tabBarEl.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("is-active", b.dataset.tab === tab));
-  downloadsTabEl.classList.toggle("is-active", tab === "downloads");
-  searchTabEl.classList.toggle("is-active", tab === "search");
+function closeSearchDropdown() {
+  searchDropdown.classList.remove("is-open");
 }
 
 async function addMagnet(magnet) {
@@ -748,7 +736,7 @@ async function addMagnet(magnet) {
   if (data.error) { showToast(data.error, true); return; }
   mainInput.value = "";
   updateGoLabel();
-  switchTab("downloads");
+  closeSearchDropdown();
   refresh();
 }
 
@@ -759,7 +747,6 @@ async function addFile(file) {
   const res = await fetch("/api/torrents", { method: "POST", body: form });
   const data = await res.json();
   if (data.error) { showToast(data.error, true); return; }
-  switchTab("downloads");
   refresh();
 }
 
@@ -781,13 +768,19 @@ function handleGo() {
       showToast("Search isn't set up on this server yet", true);
       return;
     }
-    switchTab("search");
     runSearch(value);
   }
 }
 
 categorySelect.addEventListener("change", () => {
   try { localStorage.setItem("torrenttube-category", categorySelect.value); } catch (e) {}
+});
+
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".search-field")) closeSearchDropdown();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeSearchDropdown();
 });
 
 goBtn.addEventListener("click", handleGo);
@@ -926,20 +919,13 @@ async function loadConfig() {
     const categories = data.categories || [];
     let remembered = null;
     try { remembered = localStorage.getItem("torrenttube-category"); } catch (e) {}
+    currentCategories = categories;
     categorySelect.innerHTML = categories.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
     if (remembered && categories.includes(remembered)) categorySelect.value = remembered;
 
     searchEnabled = !!data.search_enabled;
-    if (searchEnabled) searchTabBtn.style.display = "";
   } catch (e) {}
 }
-
-// ---------- Tabs ----------
-
-tabBarEl.addEventListener("click", (e) => {
-  const btn = e.target.closest(".tab-btn");
-  if (btn) switchTab(btn.dataset.tab);
-});
 
 // ---------- Search ----------
 
@@ -951,9 +937,8 @@ let searchRequestId = 0;
 
 async function runSearch(query) {
   const requestId = ++searchRequestId;
-  searchResultsEl.querySelectorAll(".item").forEach(el => el.remove());
-  searchEmptyEl.style.display = "block";
-  searchEmptyEl.textContent = "Searching...";
+  searchDropdown.innerHTML = `<div class="empty-state" style="padding:24px;">Searching...</div>`;
+  searchDropdown.classList.add("is-open");
   goBtn.disabled = true;
   try {
     const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
@@ -961,28 +946,25 @@ async function runSearch(query) {
     if (requestId !== searchRequestId) return; // a newer search superseded this one
     goBtn.disabled = false;
     if (data.error) {
-      searchEmptyEl.textContent = data.error;
-      searchCountEl.textContent = "0";
+      searchDropdown.innerHTML = `<div class="empty-state" style="padding:24px;">${escapeHtml(data.error)}</div>`;
       return;
     }
     renderSearchResults(data.results || []);
   } catch (e) {
     if (requestId !== searchRequestId) return;
     goBtn.disabled = false;
-    searchEmptyEl.textContent = "Search failed. Try again.";
+    searchDropdown.innerHTML = `<div class="empty-state" style="padding:24px;">Search failed. Try again.</div>`;
   }
 }
 
 function renderSearchResults(results) {
-  searchCountEl.textContent = results.length;
-  searchResultsEl.querySelectorAll(".item").forEach(el => el.remove());
+  searchDropdown.innerHTML = "";
+  searchDropdown.classList.add("is-open");
 
   if (results.length === 0) {
-    searchEmptyEl.textContent = "No results found.";
-    searchEmptyEl.style.display = "block";
+    searchDropdown.innerHTML = `<div class="empty-state" style="padding:24px;">No results found.</div>`;
     return;
   }
-  searchEmptyEl.style.display = "none";
 
   results.forEach(r => {
     const div = document.createElement("div");
@@ -1004,14 +986,30 @@ function renderSearchResults(results) {
         </div>
       </div>
     `;
-    div.querySelector(".btn-add-result").addEventListener("click", (e) => addSearchResult(r, e.target.closest("button")));
-    searchResultsEl.appendChild(div);
+    div.querySelector(".btn-add-result").addEventListener("click", (e) => { e.stopPropagation(); showFolderPicker(r, e.target.closest(".item-actions")); });
+    searchDropdown.appendChild(div);
   });
 }
 
-async function addSearchResult(result, btn) {
-  btn.disabled = true;
-  const body = { category: categorySelect.value };
+function showFolderPicker(result, actionsEl) {
+  let remembered = null;
+  try { remembered = localStorage.getItem("torrenttube-category"); } catch (e) {}
+  const options = currentCategories.map(c =>
+    `<option value="${escapeHtml(c)}"${c === remembered ? " selected" : ""}>${escapeHtml(c)}</option>`
+  ).join("");
+  actionsEl.innerHTML = `<select class="inline-category-select">${options}</select>`;
+  const select = actionsEl.querySelector("select");
+  select.addEventListener("click", e => e.stopPropagation());
+  select.addEventListener("change", () => {
+    try { localStorage.setItem("torrenttube-category", select.value); } catch (e) {}
+    addSearchResult(result, select.value, actionsEl);
+  });
+  select.focus();
+}
+
+async function addSearchResult(result, category, actionsEl) {
+  actionsEl.innerHTML = `<span class="hint" style="margin:0; padding:0; border:none;">Adding...</span>`;
+  const body = { category };
   if (result.magnet) body.magnet = result.magnet;
   else body.download_link = result.download_link;
 
@@ -1023,11 +1021,12 @@ async function addSearchResult(result, btn) {
   const data = await res.json();
   if (data.error) {
     showToast(data.error, true);
-    btn.disabled = false;
+    actionsEl.innerHTML = `<button class="btn-secondary btn-add-result">${ICONS.download}<span>Download</span></button>`;
+    actionsEl.querySelector(".btn-add-result").addEventListener("click", (e) => { e.stopPropagation(); showFolderPicker(result, e.target.closest(".item-actions")); });
     return;
   }
-  btn.innerHTML = `${ICONS.check}<span>Downloading</span>`;
-  showToast(`"${result.title}" added to ${categorySelect.value}`);
+  actionsEl.innerHTML = `${ICONS.check}<span>Added</span>`;
+  showToast(`"${result.title}" added to ${category}`);
   refresh();
 }
 
