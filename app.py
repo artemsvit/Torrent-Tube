@@ -1,10 +1,12 @@
 import json
 import os
+import re
 import threading
 import time
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import libtorrent as lt
@@ -33,6 +35,14 @@ JACKETT_URL = os.environ.get("JACKETTAPI_URL", "").rstrip("/")
 JACKETT_API_KEY = os.environ.get("JACKETTAPI_KEY", "")
 JACKETT_INDEXER = os.environ.get("JACKETTAPI_INDEXER", "all")
 TORZNAB_NS = {"torznab": "http://torznab.com/schemas/2015/feed"}
+
+# Optional: enriches search results with a poster/rating from TMDB. Jackett's
+# indexers don't carry images, so this looks the parsed title up separately.
+# Get a free key at https://www.themoviedb.org/settings/api
+TMDB_API_KEY = os.environ.get("TMDB_API_KEY", "")
+TMDB_CACHE = {}
+TMDB_CACHE_TTL = 6 * 3600
+TMDB_EXECUTOR = ThreadPoolExecutor(max_workers=8)
 
 app = Flask(__name__)
 app.config["TEMPLATES_AUTO_RELOAD"] = True
@@ -192,6 +202,75 @@ def config():
     })
 
 
+def extract_title_and_year(raw_title: str):
+    """Best-effort pull of a clean, searchable title (and year) out of a
+    tracker listing like 'Ukrainian Title / English Title (2001-2012) BDRip
+    Ukr/Eng | Sub Eng'. Heuristic, not exact - trackers don't structure this."""
+    year_match = re.search(r"(19|20)\d{2}", raw_title)
+    year = year_match.group(0) if year_match else None
+
+    parts = raw_title.split("/")
+    candidate = max(parts, key=lambda p: sum(c.isascii() and c.isalpha() for c in p)) if len(parts) > 1 else raw_title
+    candidate = candidate.split("|")[0]
+    candidate = re.split(r"\(\s*(19|20)\d{2}", candidate)[0]
+    candidate = re.sub(r"[\[\(].*", "", candidate)
+    candidate = re.sub(r"\s+", " ", candidate).strip(" :-|/")
+    return candidate, year
+
+
+def tmdb_lookup(title: str, year: str):
+    if not TMDB_API_KEY or not title:
+        return None
+    cache_key = (title.lower(), year)
+    cached = TMDB_CACHE.get(cache_key)
+    if cached and time.time() - cached[0] < TMDB_CACHE_TTL:
+        return cached[1]
+
+    params = {"api_key": TMDB_API_KEY, "query": title, "include_adult": "false"}
+    if year:
+        params["year"] = year
+    url = f"https://api.themoviedb.org/3/search/multi?{urllib.parse.urlencode(params)}"
+    result = None
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "TorrentTube"})
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read())
+        for item in data.get("results", []):
+            if item.get("media_type") not in ("movie", "tv"):
+                continue
+            poster_path = item.get("poster_path")
+            result = {
+                "title": item.get("title") or item.get("name") or title,
+                "poster": f"https://image.tmdb.org/t/p/w200{poster_path}" if poster_path else None,
+                "rating": item.get("vote_average"),
+                "overview": (item.get("overview") or "")[:220],
+                "year": (item.get("release_date") or item.get("first_air_date") or "")[:4],
+            }
+            break
+    except Exception:
+        result = None
+    TMDB_CACHE[cache_key] = (time.time(), result)
+    return result
+
+
+def enrich_with_tmdb(results):
+    if not TMDB_API_KEY:
+        return
+    # Only the most-likely-to-be-picked results are worth the extra lookups.
+    top = results[:40]
+
+    def enrich_one(r):
+        title, year = extract_title_and_year(r["title"])
+        meta = tmdb_lookup(title, year)
+        if meta:
+            r["poster"] = meta["poster"]
+            r["rating"] = meta["rating"]
+            r["overview"] = meta["overview"]
+            r["clean_title"] = meta["title"]
+
+    list(TMDB_EXECUTOR.map(enrich_one, top))
+
+
 def format_size(num_bytes: int) -> str:
     size = float(num_bytes)
     for unit in ("B", "KB", "MB", "GB", "TB"):
@@ -244,9 +323,14 @@ def search_torrents():
             "magnet": magnet,
             "download_link": item.findtext("link") or "",
             "details_link": item.findtext("comments") or "",
+            "poster": None,
+            "rating": None,
+            "overview": None,
         })
     results.sort(key=lambda r: r["seeders"], reverse=True)
-    return jsonify({"results": results[:150]})
+    results = results[:150]
+    enrich_with_tmdb(results)
+    return jsonify({"results": results})
 
 
 @app.route("/api/torrents")
