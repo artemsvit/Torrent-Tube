@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Torrent Tube</title>
+<script>
+  (function () {
+    var saved = null;
+    try { saved = localStorage.getItem("torrenttube-theme"); } catch (e) {}
+    var theme = saved || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+</script>
+<style>
+  :root {
+    --bg-base: #f4f4f6;
+    --blob-1: rgba(60, 140, 255, 0.20);
+    --blob-2: rgba(80, 200, 180, 0.16);
+    --blob-3: rgba(140, 120, 255, 0.14);
+
+    --surface: rgba(255, 255, 255, 0.62);
+    --surface-solid: rgba(255, 255, 255, 0.9);
+    --surface-hover: rgba(255, 255, 255, 0.85);
+    --border: rgba(0, 0, 0, 0.07);
+    --border-strong: rgba(0, 0, 0, 0.13);
+    --text: #1d1d1f;
+    --text-secondary: #6e6e73;
+    --text-tertiary: #a1a1a6;
+    --accent: #0668e1;
+    --accent-hover: #2b8aff;
+    --accent-soft: rgba(6, 104, 225, 0.10);
+    --success: #1f9d4b;
+    --danger: #d9730d;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+    --shadow-lg: 0 16px 40px -12px rgba(0, 0, 0, 0.16);
+    --blur: blur(26px) saturate(180%);
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 20px;
+    --radius-pill: 980px;
+  }
+
+  html[data-theme="dark"] {
+    --bg-base: #08080a;
+    --blob-1: rgba(60, 140, 255, 0.16);
+    --blob-2: rgba(70, 210, 180, 0.14);
+    --blob-3: rgba(140, 110, 255, 0.14);
+
+    --surface: rgba(32, 32, 36, 0.55);
+    --surface-solid: rgba(28, 28, 32, 0.92);
+    --surface-hover: rgba(44, 44, 48, 0.7);
+    --border: rgba(255, 255, 255, 0.08);
+    --border-strong: rgba(255, 255, 255, 0.16);
+    --text: #f5f5f7;
+    --text-secondary: #a1a1a6;
+    --text-tertiary: #6e6e73;
+    --accent: #3b93ff;
+    --accent-hover: #62a9ff;
+    --accent-soft: rgba(59, 147, 255, 0.16);
+    --success: #32d158;
+    --danger: #ff9f0a;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 20px 48px -12px rgba(0, 0, 0, 0.55);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", sans-serif;
+    background: var(--bg-base);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    transition: background 0.3s ease, color 0.3s ease;
+    min-height: 100vh;
+  }
+
+  .bg-decor {
+    position: fixed;
+    inset: -10%;
+    z-index: -1;
+    background:
+      radial-gradient(circle at 12% 18%, var(--blob-1), transparent 42%),
+      radial-gradient(circle at 88% 12%, var(--blob-2), transparent 45%),
+      radial-gradient(circle at 45% 92%, var(--blob-3), transparent 48%);
+    filter: blur(60px);
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+
+  svg { display: block; flex-shrink: 0; }
+
+  /* ---------- Header ---------- */
+
+  .top-bar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: var(--surface);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    border-bottom: 1px solid var(--border);
+    padding-top: env(safe-area-inset-top);
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 28px 12px;
+  }
+  .logo-mark {
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+    background: linear-gradient(145deg, var(--accent-hover), var(--accent));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: var(--shadow-sm);
+  }
+  .logo-mark svg { width: 15px; height: 15px; }
+  .brand-text { flex: 1; min-width: 0; }
+  .brand-text h1 {
+    font-size: 14.5px;
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+  .brand-text p {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin: 1px 0 0;
+  }
+
+  .theme-toggle { position: relative; }
+  .theme-toggle svg { position: absolute; transition: opacity 0.2s, transform 0.3s; }
+  .theme-toggle .icon-sun { opacity: 0; transform: rotate(-90deg) scale(0.5); }
+  .theme-toggle .icon-moon { opacity: 1; transform: rotate(0) scale(1); }
+  html[data-theme="dark"] .theme-toggle .icon-sun { opacity: 1; transform: rotate(0) scale(1); }
+  html[data-theme="dark"] .theme-toggle .icon-moon { opacity: 0; transform: rotate(90deg) scale(0.5); }
+
+  /* ---------- Add bar ---------- */
+
+  .searchbar {
+    display: flex;
+    gap: 10px;
+    padding: 0 28px 14px;
+  }
+  .search-field {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  .search-field svg {
+    position: absolute;
+    left: 15px;
+    z-index: 1;
+    color: var(--text-secondary);
+    pointer-events: none;
+  }
+  input[type="text"] {
+    width: 100%;
+    padding: 12px 18px 12px 38px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    color: var(--text);
+    font-size: 14px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+  }
+  input[type="text"]::placeholder { color: var(--text-tertiary); }
+  input[type="text"]:focus {
+    border-color: var(--accent);
+    background: var(--surface-hover);
+    box-shadow: 0 0 0 4px var(--accent-soft);
+  }
+
+  button {
+    border: none;
+    border-radius: var(--radius-md);
+    font-family: inherit;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, opacity 0.15s, border-color 0.15s, transform 0.1s, box-shadow 0.15s;
+  }
+  button:disabled { opacity: 0.4; cursor: default; }
+  button:active:not(:disabled) { transform: scale(0.97); }
+
+  .btn-primary {
+    padding: 12px 22px;
+    background: linear-gradient(180deg, var(--accent-hover), var(--accent));
+    color: white;
+    box-shadow: var(--shadow-sm);
+  }
+  .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+
+  .btn-pill { border-radius: var(--radius-pill); }
+
+  .btn-secondary {
+    padding: 12px 18px;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    color: var(--text);
+    border-radius: var(--radius-pill);
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    white-space: nowrap;
+  }
+  .btn-secondary svg { width: 14px; height: 14px; }
+  .btn-secondary:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); background: var(--surface-hover); }
+
+  .icon-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding: 0;
+  }
+  .icon-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+
+  .action-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--surface-solid);
+    border: 1px solid var(--border-strong);
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding: 0;
+  }
+  .action-btn svg { width: 14px; height: 14px; }
+  .action-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  .action-btn.danger:hover:not(:disabled) { border-color: var(--danger); color: var(--danger); }
+
+  /* ---------- Layout ---------- */
+
+  .layout {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 16px 28px 48px;
+  }
+  @media (max-width: 640px) {
+    .layout { padding: 16px 16px 24px; }
+    header, .searchbar { padding-left: 16px; padding-right: 16px; }
+  }
+
+  /* ---------- Panel chrome ---------- */
+
+  .panel {
+    min-width: 0;
+    background: var(--surface);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    padding: 16px;
+    transition: background 0.3s ease, border-color 0.3s ease;
+  }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .section-label {
+    font-size: 11.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-tertiary);
+  }
+  .count-badge {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: var(--surface-solid);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-pill);
+    padding: 2px 9px;
+    min-width: 20px;
+    text-align: center;
+  }
+
+  .empty-state {
+    color: var(--text-tertiary);
+    font-size: 12.5px;
+    text-align: center;
+    padding: 40px 14px;
+    line-height: 1.6;
+  }
+
+  .hint {
+    font-size: 11.5px;
+    color: var(--text-tertiary);
+    margin: 14px 0 0;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+  }
+  .hint code {
+    color: var(--text-secondary);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11px;
+  }
+
+  /* ---------- Drop zone ---------- */
+
+  .drop-zone {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    background: rgba(6, 104, 225, 0.12);
+    backdrop-filter: blur(4px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+  .drop-zone.is-active { display: flex; }
+  .drop-zone-inner {
+    border: 2px dashed var(--accent);
+    border-radius: var(--radius-lg);
+    padding: 40px 60px;
+    background: var(--surface-solid);
+    color: var(--accent);
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  /* ---------- Torrent item ---------- */
+
+  .item {
+    background: var(--surface-solid);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    margin-bottom: 8px;
+    padding: 12px 14px;
+    transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+  }
+  .item:last-child { margin-bottom: 0; }
+  .item:hover { border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
+  .item.is-error { border-color: var(--danger); }
+
+  .item-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .item-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .item-icon svg { width: 16px; height: 16px; }
+  .item.is-done .item-icon { background: rgba(31, 157, 75, 0.14); color: var(--success); }
+  .item.is-paused .item-icon { color: var(--text-tertiary); background: var(--border); }
+
+  .item-meta { flex: 1 1 auto; min-width: 0; }
+  .item-title {
+    font-size: 13.5px;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    letter-spacing: -0.005em;
+  }
+  .item-sub {
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .item-sub.is-error-text { color: var(--danger); }
+
+  .item-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+
+  .progress-track {
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    margin-top: 10px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-hover), var(--accent));
+    border-radius: 3px;
+    transition: width 0.4s ease;
+  }
+  .item.is-done .progress-fill, .item.is-seeding .progress-fill { background: var(--success); }
+  .item.is-paused .progress-fill { background: var(--text-tertiary); }
+
+  .item-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+    margin-top: 8px;
+    font-size: 11.5px;
+    color: var(--text-tertiary);
+  }
+  .item-stats span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+  .item-stats svg { width: 11px; height: 11px; }
+
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  /* ---------- Toasts ---------- */
+
+  .toast-stack {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 100;
+    width: 300px;
+  }
+  .toast {
+    background: var(--surface-solid);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+    box-shadow: var(--shadow-lg);
+    font-size: 12.5px;
+    animation: toast-in 0.2s ease;
+  }
+  @keyframes toast-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .toast.is-error { border-color: var(--danger); color: var(--danger); }
+
+  @media (max-width: 640px) {
+    .toast-stack { left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); width: auto; }
+    .item-stats { gap: 3px 10px; }
+  }
+
+  @media (pointer: coarse) {
+    .action-btn { width: 36px; height: 36px; }
+    .icon-btn { width: 38px; height: 38px; }
+  }
+
+  @media (max-width: 480px) {
+    .btn-upload span { display: none; }
+    .btn-upload { width: 46px; padding: 0; justify-content: center; }
+  }
+</style>
+</head>
+<body>
+<div class="bg-decor" aria-hidden="true"></div>
+
+<div class="top-bar">
+  <header>
+    <div class="logo-mark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M6 11l6 6 6-6"/><path d="M5 21h14"/></svg>
+    </div>
+    <div class="brand-text">
+      <h1>Torrent Tube</h1>
+      <p>Paste a magnet link or drop a .torrent file to download</p>
+    </div>
+    <button class="icon-btn theme-toggle" id="themeToggle" aria-label="Toggle light/dark theme" title="Toggle theme">
+      <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20.4 14.7A8.5 8.5 0 019.3 3.6a8.5 8.5 0 1011.1 11.1z"/></svg>
+    </button>
+  </header>
+
+  <div class="searchbar">
+    <div class="search-field">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.5 2a5.5 5.5 0 00-3.9 9.4L2 18v4h4l6.6-6.6A5.5 5.5 0 1012.5 2z"/></svg>
+      <input type="text" id="magnetInput" placeholder="magnet:?xt=urn:btih:..." autofocus>
+    </div>
+    <button class="btn-secondary btn-upload" id="uploadBtn" title="Upload a .torrent file">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M5 20h14"/></svg>
+      <span>.torrent</span>
+    </button>
+    <input type="file" id="fileInput" accept=".torrent" style="display:none">
+    <button class="btn-primary btn-pill" id="addBtn">Add</button>
+  </div>
+</div>
+
+<div class="layout">
+  <section class="panel">
+    <div class="panel-header">
+      <div class="section-label">Downloads</div>
+      <span class="count-badge" id="count">0</span>
+    </div>
+    <div id="list">
+      <div class="empty-state" id="listEmpty">Paste a magnet link above, or drop a .torrent file anywhere on this page.</div>
+    </div>
+    <p class="hint">Files save to <code id="saveDir">the shared downloads folder</code></p>
+  </section>
+</div>
+
+<div class="drop-zone" id="dropZone"><div class="drop-zone-inner">Drop .torrent file to add it</div></div>
+<div class="toast-stack" id="toastStack"></div>
+
+<script>
+const ICONS = {
+  download: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M6 11l6 6 6-6"/><path d="M5 21h14"/></svg>`,
+  check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>`,
+  pause: `<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>`,
+  play: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7-11-7z"/></svg>`,
+  trash: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13a1 1 0 001 1h8a1 1 0 001-1l1-13"/><path d="M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/></svg>`,
+  peers: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M2 20c0-3.3 3.1-6 7-6s7 2.7 7 6"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.2c2.6.5 4.5 2.5 4.5 5.8"/></svg>`,
+  down: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v13"/><path d="M6 12l6 6 6-6"/></svg>`,
+  up: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V6"/><path d="M6 12l6-6 6 6"/></svg>`,
+};
+
+const magnetInput = document.getElementById("magnetInput");
+const addBtn = document.getElementById("addBtn");
+const uploadBtn = document.getElementById("uploadBtn");
+const fileInput = document.getElementById("fileInput");
+const listEl = document.getElementById("list");
+const listEmptyEl = document.getElementById("listEmpty");
+const countEl = document.getElementById("count");
+const toastStack = document.getElementById("toastStack");
+const themeToggleBtn = document.getElementById("themeToggle");
+const dropZone = document.getElementById("dropZone");
+
+let dragCounter = 0;
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str || "";
+  return div.innerHTML;
+}
+
+function formatBytes(n) {
+  if (!n || n <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.min(units.length - 1, Math.floor(Math.log(n) / Math.log(1024)));
+  return `${(n / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+function formatRate(n) {
+  return n > 0 ? `${formatBytes(n)}/s` : "";
+}
+
+function formatEta(secs) {
+  if (secs === null || secs === undefined) return "";
+  if (secs < 60) return `${secs}s left`;
+  if (secs < 3600) return `${Math.round(secs / 60)}m left`;
+  if (secs < 86400) return `${Math.round(secs / 3600)}h left`;
+  return `${Math.round(secs / 86400)}d left`;
+}
+
+// ---------- Theme ----------
+
+themeToggleBtn.addEventListener("click", () => {
+  const current = document.documentElement.getAttribute("data-theme");
+  const next = current === "dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  try { localStorage.setItem("torrenttube-theme", next); } catch (e) {}
+});
+
+// ---------- Toasts ----------
+
+function showToast(message, isError) {
+  const el = document.createElement("div");
+  el.className = "toast" + (isError ? " is-error" : "");
+  el.textContent = message;
+  toastStack.appendChild(el);
+  setTimeout(() => el.remove(), isError ? 6000 : 3500);
+}
+
+// ---------- Adding torrents ----------
+
+async function addMagnet(magnet) {
+  const res = await fetch("/api/torrents", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ magnet })
+  });
+  const data = await res.json();
+  if (data.error) { showToast(data.error, true); return; }
+  magnetInput.value = "";
+  refresh();
+}
+
+async function addFile(file) {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch("/api/torrents", { method: "POST", body: form });
+  const data = await res.json();
+  if (data.error) { showToast(data.error, true); return; }
+  refresh();
+}
+
+function handleAdd() {
+  const value = magnetInput.value.trim();
+  if (!value) return;
+  if (!value.toLowerCase().startsWith("magnet:?")) {
+    showToast("That doesn't look like a magnet link", true);
+    return;
+  }
+  addMagnet(value);
+}
+
+addBtn.addEventListener("click", handleAdd);
+magnetInput.addEventListener("keydown", e => { if (e.key === "Enter") handleAdd(); });
+uploadBtn.addEventListener("click", () => fileInput.click());
+fileInput.addEventListener("change", () => {
+  if (fileInput.files[0]) addFile(fileInput.files[0]);
+  fileInput.value = "";
+});
+
+// ---------- Drag & drop anywhere on the page ----------
+
+window.addEventListener("dragenter", e => {
+  if (!e.dataTransfer || !Array.from(e.dataTransfer.types || []).includes("Files")) return;
+  e.preventDefault();
+  dragCounter++;
+  dropZone.classList.add("is-active");
+});
+window.addEventListener("dragover", e => {
+  if (!e.dataTransfer || !Array.from(e.dataTransfer.types || []).includes("Files")) return;
+  e.preventDefault();
+});
+window.addEventListener("dragleave", () => {
+  dragCounter = Math.max(0, dragCounter - 1);
+  if (dragCounter === 0) dropZone.classList.remove("is-active");
+});
+window.addEventListener("drop", e => {
+  e.preventDefault();
+  dragCounter = 0;
+  dropZone.classList.remove("is-active");
+  const file = e.dataTransfer.files && e.dataTransfer.files[0];
+  if (file) addFile(file);
+});
+
+// ---------- Actions ----------
+
+async function pauseTorrent(id) {
+  await fetch(`/api/torrents/${id}/pause`, { method: "POST" });
+  refresh();
+}
+async function resumeTorrent(id) {
+  await fetch(`/api/torrents/${id}/resume`, { method: "POST" });
+  refresh();
+}
+async function removeTorrent(id, deleteFiles) {
+  const label = deleteFiles ? "Remove torrent and delete its files?" : "Remove torrent from the list? (files are kept)";
+  if (!confirm(label)) return;
+  await fetch(`/api/torrents/${id}?delete_files=${deleteFiles ? "1" : "0"}`, { method: "DELETE" });
+  refresh();
+}
+
+// ---------- Rendering ----------
+
+const STATE_LABELS = {
+  fetching_metadata: "Fetching metadata…",
+  checking: "Checking files…",
+  downloading: "Downloading",
+  finished: "Finished",
+  seeding: "Seeding",
+};
+
+function render(torrents) {
+  countEl.textContent = torrents.length;
+  listEmptyEl.style.display = torrents.length ? "none" : "block";
+  listEl.querySelectorAll(".item").forEach(el => el.remove());
+
+  torrents.forEach(t => {
+    const div = document.createElement("div");
+    const isDone = t.state === "finished" || t.state === "seeding";
+    const isPaused = t.is_paused && !isDone;
+    const isError = !!t.error;
+    div.className = "item" + (isDone ? " is-done" : "") + (isPaused ? " is-paused" : "") + (isError ? " is-error" : "") + (t.state === "seeding" ? " is-seeding" : "");
+
+    const stateLabel = isError ? "Error" : isPaused ? "Paused" : (STATE_LABELS[t.state] || t.state);
+    const icon = isDone ? ICONS.check : (isPaused ? ICONS.pause : ICONS.download);
+
+    const stats = [];
+    if (t.has_metadata) stats.push(`<span>${formatBytes(t.downloaded)} / ${formatBytes(t.size)}</span>`);
+    if (!isDone && !isPaused && t.download_rate > 0) stats.push(`<span>${ICONS.down}${formatRate(t.download_rate)}</span>`);
+    if (t.upload_rate > 0) stats.push(`<span>${ICONS.up}${formatRate(t.upload_rate)}</span>`);
+    if (!isDone && !isPaused && t.num_peers > 0) stats.push(`<span>${ICONS.peers}${t.num_peers} peers</span>`);
+    if (!isDone && !isPaused) {
+      const eta = formatEta(t.eta);
+      if (eta) stats.push(`<span>${eta}</span>`);
+    }
+
+    let actionsHtml = "";
+    if (!isDone) {
+      actionsHtml += isPaused
+        ? `<button class="action-btn resume-btn" title="Resume">${ICONS.play}</button>`
+        : `<button class="action-btn pause-btn" title="Pause">${ICONS.pause}</button>`;
+    }
+    actionsHtml += `<button class="action-btn danger remove-btn" title="Remove (Shift+click also deletes the downloaded files)">${ICONS.trash}</button>`;
+
+    div.innerHTML = `
+      <div class="item-top">
+        <div class="item-icon">${icon}</div>
+        <div class="item-meta">
+          <div class="item-title">${escapeHtml(t.name)}</div>
+          <div class="item-sub${isError ? " is-error-text" : ""}">${isError ? escapeHtml(t.error) : `${stateLabel}${t.has_metadata ? " · " + t.progress + "%" : ""}`}</div>
+        </div>
+        <div class="item-actions">${actionsHtml}</div>
+      </div>
+      ${t.has_metadata ? `<div class="progress-track"><div class="progress-fill" style="width:${t.progress}%"></div></div>` : ""}
+      ${stats.length ? `<div class="item-stats">${stats.join("")}</div>` : ""}
+    `;
+
+    const pauseBtn = div.querySelector(".pause-btn");
+    if (pauseBtn) pauseBtn.addEventListener("click", () => pauseTorrent(t.id));
+    const resumeBtn = div.querySelector(".resume-btn");
+    if (resumeBtn) resumeBtn.addEventListener("click", () => resumeTorrent(t.id));
+    div.querySelector(".remove-btn").addEventListener("click", (e) => removeTorrent(t.id, e.shiftKey));
+
+    listEl.appendChild(div);
+  });
+}
+
+async function refresh() {
+  try {
+    const res = await fetch("/api/torrents");
+    const data = await res.json();
+    render(data.torrents || []);
+  } catch (e) {
+    // Transient network hiccup; the next poll will retry.
+  }
+}
+
+async function loadConfig() {
+  try {
+    const res = await fetch("/api/config");
+    const data = await res.json();
+    if (data.download_dir) document.getElementById("saveDir").textContent = data.download_dir;
+  } catch (e) {}
+}
+
+loadConfig();
+refresh();
+setInterval(refresh, 1500);
+</script>
+</body>
+</html>

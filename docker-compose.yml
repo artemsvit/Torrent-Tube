@@ -1,0 +1,15 @@
+services:
+  torrenttube:
+    build: .
+    container_name: torrenttube
+    restart: unless-stopped
+    ports:
+      - "5058:5058"
+      - "6881:6881"
+      - "6881:6881/udp"
+    volumes:
+      - ./downloads:/downloads
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
