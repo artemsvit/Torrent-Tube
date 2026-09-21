@@ -8,9 +8,12 @@ FROM debian:bookworm-slim
 # drop down to a normal PUID/PGID before running the app — standard practice
 # for NAS containers (Synology, Unraid, etc.) so downloaded files are owned
 # by your own user, not root.
+# ca-certificates: without it Python's SSL context has no trusted root
+# store, so any https:// call (TMDB search enrichment, torrent files served
+# over https) fails with CERTIFICATE_VERIFY_FAILED.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-       python3 python3-libtorrent python3-flask python3-waitress gosu curl \
+       python3 python3-libtorrent python3-flask python3-waitress gosu curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
