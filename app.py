@@ -2,6 +2,9 @@ import json
 import os
 import threading
 import time
+import urllib.parse
+import urllib.request
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import libtorrent as lt
@@ -21,6 +24,15 @@ for _category in CATEGORIES:
 STATE_DIR = Path(os.environ.get("TORRENTTUBE_STATE_DIR") or (DOWNLOAD_DIR / ".torrenttube"))
 STATE_DIR.mkdir(parents=True, exist_ok=True)
 RESUME_FILE = STATE_DIR / "torrents.json"
+
+# Optional: point at a Jackett instance to enable the Search tab. Jackett does
+# the actual tracker login/scraping (configured with the user's own tracker
+# credentials, entered directly into Jackett's own UI) - this app only talks
+# to Jackett's local Torznab API with Jackett's own API key.
+JACKETT_URL = os.environ.get("JACKETTAPI_URL", "").rstrip("/")
+JACKETT_API_KEY = os.environ.get("JACKETTAPI_KEY", "")
+JACKETT_INDEXER = os.environ.get("JACKETTAPI_INDEXER", "all")
+TORZNAB_NS = {"torznab": "http://torznab.com/schemas/2015/feed"}
 
 app = Flask(__name__)
 app.config["TEMPLATES_AUTO_RELOAD"] = True
@@ -173,7 +185,68 @@ def index():
 
 @app.route("/api/config")
 def config():
-    return jsonify({"download_dir": str(DOWNLOAD_DIR), "categories": CATEGORIES})
+    return jsonify({
+        "download_dir": str(DOWNLOAD_DIR),
+        "categories": CATEGORIES,
+        "search_enabled": bool(JACKETT_URL and JACKETT_API_KEY),
+    })
+
+
+def format_size(num_bytes: int) -> str:
+    size = float(num_bytes)
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if size < 1024 or unit == "TB":
+            return f"{size:.1f} {unit}" if unit != "B" else f"{int(size)} {unit}"
+        size /= 1024
+    return f"{size:.1f} TB"
+
+
+@app.route("/api/search")
+def search_torrents():
+    if not (JACKETT_URL and JACKETT_API_KEY):
+        return jsonify({"error": "Search isn't configured on this server"}), 503
+    query = request.args.get("q", "").strip()
+    if not query:
+        return jsonify({"results": []})
+
+    params = urllib.parse.urlencode({"apikey": JACKETT_API_KEY, "t": "search", "q": query})
+    url = f"{JACKETT_URL}/api/v2.0/indexers/{JACKETT_INDEXER}/results/torznab/api?{params}"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "TorrentTube"})
+        with urllib.request.urlopen(req, timeout=25) as resp:
+            data = resp.read()
+        root = ET.fromstring(data)
+    except Exception:
+        return jsonify({"error": "Couldn't reach the search service"}), 502
+
+    results = []
+    for item in root.findall(".//item"):
+        title = (item.findtext("title") or "").strip()
+        if not title:
+            continue
+        size = int(item.findtext("size") or 0)
+        seeders = peers = 0
+        magnet = ""
+        for attr in item.findall("torznab:attr", TORZNAB_NS):
+            name, value = attr.get("name"), attr.get("value")
+            if name == "seeders":
+                seeders = int(value or 0)
+            elif name == "peers":
+                peers = int(value or 0)
+            elif name == "magneturl" and value:
+                magnet = value
+        results.append({
+            "title": title,
+            "size": size,
+            "size_label": format_size(size),
+            "seeders": seeders,
+            "peers": peers,
+            "magnet": magnet,
+            "download_link": item.findtext("link") or "",
+            "details_link": item.findtext("comments") or "",
+        })
+    results.sort(key=lambda r: r["seeders"], reverse=True)
+    return jsonify({"results": results[:150]})
 
 
 @app.route("/api/torrents")
@@ -197,13 +270,23 @@ def create_torrent():
     else:
         payload = (request.json or {}) if request.is_json else request.form
         magnet = payload.get("magnet", "").strip()
+        download_link = payload.get("download_link", "").strip()
         category = payload.get("category", "")
-        if not magnet.lower().startswith("magnet:?"):
+        if magnet.lower().startswith("magnet:?"):
+            try:
+                tid = add_magnet(magnet, resolve_save_path(category))
+            except Exception:
+                return jsonify({"error": "Couldn't parse that magnet link"}), 400
+        elif download_link:
+            try:
+                req = urllib.request.Request(download_link, headers={"User-Agent": "TorrentTube"})
+                with urllib.request.urlopen(req, timeout=25) as resp:
+                    info = lt.torrent_info(resp.read())
+            except Exception:
+                return jsonify({"error": "Couldn't fetch that torrent"}), 400
+            tid = add_torrent_file(info, resolve_save_path(category))
+        else:
             return jsonify({"error": "Paste a magnet link or upload a .torrent file"}), 400
-        try:
-            tid = add_magnet(magnet, resolve_save_path(category))
-        except Exception:
-            return jsonify({"error": "Couldn't parse that magnet link"}), 400
     save_registry()
     with LOCK:
         handle = HANDLES[tid]

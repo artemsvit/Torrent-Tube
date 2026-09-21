@@ -20,6 +20,13 @@ services:
       - TZ=Etc/UTC
       # Must match real subfolder names under the mounted volume above.
       - TORRENTTUBE_CATEGORIES=Cartoon,Movies,TV Shows
+      # Optional: enables the Search tab. Point at a Jackett instance (see
+      # README) — Jackett holds your tracker login, not this app. Fill in
+      # your own Jackett API key here (Jackett's dashboard, top right) —
+      # don't commit a real key to a public repo.
+      - JACKETTAPI_URL=http://192.168.0.102:9117
+      - JACKETTAPI_KEY=changeme
+      - JACKETTAPI_INDEXER=mazepa
     # Same hairpin-NAT issue as the build (see above), but for the running
     # container: Docker's embedded resolver (127.0.0.11) forwards to the
     # host's DNS server, which is Pi-hole running in another container on
