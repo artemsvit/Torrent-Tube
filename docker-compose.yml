@@ -30,6 +30,8 @@ services:
       # Optional: adds posters/ratings to search results. Free key from
       # https://www.themoviedb.org/settings/api - don't commit a real one.
       - TMDB_API_KEY=changeme
+      # Language for TMDB titles/overviews (ISO 639-1 + region, e.g. en-US).
+      - TMDB_LANGUAGE=uk-UA
     # Same hairpin-NAT issue as the build (see above), but for the running
     # container: Docker's embedded resolver (127.0.0.11) forwards to the
     # host's DNS server, which is Pi-hole running in another container on

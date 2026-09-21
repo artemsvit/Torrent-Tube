@@ -725,8 +725,23 @@
     .btn-primary.btn-pill#goBtn { padding: 0 16px; height: 44px; font-size: 13px; }
     .btn-circle { width: 44px; height: 44px; }
     .result-poster, .result-poster-fallback { width: 48px; height: 64px; }
-    .search-dropdown .result-header { flex-wrap: wrap; row-gap: 8px; }
-    .search-dropdown .search-result-actions { flex-basis: 100%; justify-content: flex-end; }
+    /* On narrow screens there isn't room for the folder picker + Download
+       button next to the title, so re-flow the card: title/stats/overview
+       stack first, then the actions row spans the full width at the bottom.
+       `display: contents` unwraps .result-header so its children become
+       direct flex items of .item-meta, orderable alongside their siblings. */
+    .search-dropdown .item-meta { display: flex; flex-direction: column; }
+    .search-dropdown .result-header { display: contents; }
+    .search-dropdown .item-title { order: 1; }
+    .search-dropdown .item-sub { order: 2; }
+    .search-dropdown .item-overview { order: 3; }
+    .search-dropdown .search-result-actions {
+      order: 4;
+      width: 100%;
+      margin-top: 10px;
+    }
+    .search-dropdown .search-result-actions .inline-category-select { flex: 1; }
+    .search-dropdown .search-result-actions .btn-add-result { flex: 1; justify-content: center; }
   }
 </style>
 </head>

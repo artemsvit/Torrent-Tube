@@ -40,6 +40,7 @@ TORZNAB_NS = {"torznab": "http://torznab.com/schemas/2015/feed"}
 # indexers don't carry images, so this looks the parsed title up separately.
 # Get a free key at https://www.themoviedb.org/settings/api
 TMDB_API_KEY = os.environ.get("TMDB_API_KEY", "")
+TMDB_LANGUAGE = os.environ.get("TMDB_LANGUAGE", "uk-UA")
 TMDB_CACHE = {}
 TMDB_CACHE_TTL = 6 * 3600
 TMDB_EXECUTOR = ThreadPoolExecutor(max_workers=8)
@@ -231,7 +232,7 @@ def extract_title_and_year(raw_title: str):
 
 
 def _tmdb_search(query: str, year: str = None):
-    params = {"api_key": TMDB_API_KEY, "query": query, "include_adult": "false"}
+    params = {"api_key": TMDB_API_KEY, "query": query, "include_adult": "false", "language": TMDB_LANGUAGE}
     if year:
         params["year"] = year
     url = f"https://api.themoviedb.org/3/search/multi?{urllib.parse.urlencode(params)}"
