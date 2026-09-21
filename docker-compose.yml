@@ -8,8 +8,10 @@ services:
       - "6881:6881"
       - "6881:6881/udp"
     volumes:
-      - ./downloads:/downloads
+      - /volume1/homes/artsvit/Media:/downloads
     environment:
-      - PUID=1000
-      - PGID=1000
+      - PUID=1026
+      - PGID=100
       - TZ=Etc/UTC
+      # Must match real subfolder names under the mounted volume above.
+      - TORRENTTUBE_CATEGORIES=Cartoon,Movies,TV Shows

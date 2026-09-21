@@ -478,6 +478,53 @@
     .btn-upload span { display: none; }
     .btn-upload { width: 46px; padding: 0; justify-content: center; }
   }
+
+  /* ---------- Category picker ---------- */
+
+  .category-select {
+    -webkit-appearance: none;
+    appearance: none;
+    padding: 12px 34px 12px 16px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 13.5px;
+    font-family: inherit;
+    font-weight: 600;
+    outline: none;
+    cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236e6e73' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 13px;
+    transition: border-color 0.15s, background-color 0.15s;
+  }
+  .category-select:hover { border-color: var(--border-strong); }
+  .category-select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 4px var(--accent-soft);
+  }
+
+  .category-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-radius: var(--radius-pill);
+    padding: 1px 9px;
+  }
+
+  @media (max-width: 640px) {
+    .category-select { padding: 12px 30px 12px 14px; font-size: 13px; }
+  }
+
+  @media (max-width: 480px) {
+    .searchbar { flex-wrap: wrap; }
+    .category-select { flex: 1 1 100%; order: 3; }
+  }
 </style>
 </head>
 <body>
@@ -503,6 +550,7 @@
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.5 2a5.5 5.5 0 00-3.9 9.4L2 18v4h4l6.6-6.6A5.5 5.5 0 1012.5 2z"/></svg>
       <input type="text" id="magnetInput" placeholder="magnet:?xt=urn:btih:..." autofocus>
     </div>
+    <select class="category-select" id="categorySelect" title="Save to"></select>
     <button class="btn-secondary btn-upload" id="uploadBtn" title="Upload a .torrent file">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M5 20h14"/></svg>
       <span>.torrent</span>
@@ -550,6 +598,7 @@ const countEl = document.getElementById("count");
 const toastStack = document.getElementById("toastStack");
 const themeToggleBtn = document.getElementById("themeToggle");
 const dropZone = document.getElementById("dropZone");
+const categorySelect = document.getElementById("categorySelect");
 
 let dragCounter = 0;
 
@@ -603,7 +652,7 @@ async function addMagnet(magnet) {
   const res = await fetch("/api/torrents", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ magnet })
+    body: JSON.stringify({ magnet, category: categorySelect.value })
   });
   const data = await res.json();
   if (data.error) { showToast(data.error, true); return; }
@@ -614,6 +663,7 @@ async function addMagnet(magnet) {
 async function addFile(file) {
   const form = new FormData();
   form.append("file", file);
+  form.append("category", categorySelect.value);
   const res = await fetch("/api/torrents", { method: "POST", body: form });
   const data = await res.json();
   if (data.error) { showToast(data.error, true); return; }
@@ -629,6 +679,10 @@ function handleAdd() {
   }
   addMagnet(value);
 }
+
+categorySelect.addEventListener("change", () => {
+  try { localStorage.setItem("torrenttube-category", categorySelect.value); } catch (e) {}
+});
 
 addBtn.addEventListener("click", handleAdd);
 magnetInput.addEventListener("keydown", e => { if (e.key === "Enter") handleAdd(); });
@@ -705,6 +759,7 @@ function render(torrents) {
     const icon = isDone ? ICONS.check : (isPaused ? ICONS.pause : ICONS.download);
 
     const stats = [];
+    if (t.category) stats.push(`<span class="category-badge">${escapeHtml(t.category)}</span>`);
     if (t.has_metadata) stats.push(`<span>${formatBytes(t.downloaded)} / ${formatBytes(t.size)}</span>`);
     if (!isDone && !isPaused && t.download_rate > 0) stats.push(`<span>${ICONS.down}${formatRate(t.download_rate)}</span>`);
     if (t.upload_rate > 0) stats.push(`<span>${ICONS.up}${formatRate(t.upload_rate)}</span>`);
@@ -760,6 +815,12 @@ async function loadConfig() {
     const res = await fetch("/api/config");
     const data = await res.json();
     if (data.download_dir) document.getElementById("saveDir").textContent = data.download_dir;
+
+    const categories = data.categories || [];
+    let remembered = null;
+    try { remembered = localStorage.getItem("torrenttube-category"); } catch (e) {}
+    categorySelect.innerHTML = categories.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
+    if (remembered && categories.includes(remembered)) categorySelect.value = remembered;
   } catch (e) {}
 }
 

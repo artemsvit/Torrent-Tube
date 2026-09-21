@@ -10,6 +10,14 @@ from flask import Flask, jsonify, render_template, request
 DOWNLOAD_DIR = Path(os.environ.get("TORRENTTUBE_DOWNLOAD_DIR") or (Path.home() / "Downloads" / "TorrentTube"))
 DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
+CATEGORIES = [
+    c.strip()
+    for c in os.environ.get("TORRENTTUBE_CATEGORIES", "Cartoon,Movies,TV Shows").split(",")
+    if c.strip()
+]
+for _category in CATEGORIES:
+    (DOWNLOAD_DIR / _category).mkdir(parents=True, exist_ok=True)
+
 STATE_DIR = Path(os.environ.get("TORRENTTUBE_STATE_DIR") or (DOWNLOAD_DIR / ".torrenttube"))
 STATE_DIR.mkdir(parents=True, exist_ok=True)
 RESUME_FILE = STATE_DIR / "torrents.json"
@@ -88,9 +96,15 @@ def load_registry():
             continue
 
 
+def resolve_save_path(category: str = None) -> str:
+    if category and category in CATEGORIES:
+        return str(DOWNLOAD_DIR / category)
+    return str(DOWNLOAD_DIR / CATEGORIES[0]) if CATEGORIES else str(DOWNLOAD_DIR)
+
+
 def add_magnet(uri: str, save_path: str = None) -> str:
     params = lt.parse_magnet_uri(uri)
-    params.save_path = save_path or str(DOWNLOAD_DIR)
+    params.save_path = save_path or resolve_save_path()
     params.storage_mode = lt.storage_mode_t.storage_mode_sparse
     handle = ses.add_torrent(params)
     tid = torrent_id(handle)
@@ -102,7 +116,7 @@ def add_magnet(uri: str, save_path: str = None) -> str:
 def add_torrent_file(info: "lt.torrent_info", save_path: str = None) -> str:
     params = lt.add_torrent_params()
     params.ti = info
-    params.save_path = save_path or str(DOWNLOAD_DIR)
+    params.save_path = save_path or resolve_save_path()
     params.storage_mode = lt.storage_mode_t.storage_mode_sparse
     handle = ses.add_torrent(params)
     tid = torrent_id(handle)
@@ -127,9 +141,16 @@ def serialize(tid: str, handle) -> dict:
     # binding - they alias the state-enum's own constants, so they're always
     # truthy. Compare st.state against the enum instead.
     is_done = st.state in (lt.torrent_status.finished, lt.torrent_status.seeding)
+    try:
+        category = Path(st.save_path).name
+    except Exception:
+        category = ""
+    if category not in CATEGORIES:
+        category = ""
     return {
         "id": tid,
         "name": name,
+        "category": category,
         "state": STATE_NAMES.get(st.state, "unknown"),
         "is_paused": tid in PAUSED_IDS and not is_done,
         "progress": round(st.progress * 100, 1),
@@ -152,7 +173,7 @@ def index():
 
 @app.route("/api/config")
 def config():
-    return jsonify({"download_dir": str(DOWNLOAD_DIR)})
+    return jsonify({"download_dir": str(DOWNLOAD_DIR), "categories": CATEGORIES})
 
 
 @app.route("/api/torrents")
@@ -167,17 +188,20 @@ def list_torrents():
 def create_torrent():
     if "file" in request.files and request.files["file"].filename:
         f = request.files["file"]
+        category = request.form.get("category", "")
         try:
             info = lt.torrent_info(f.read())
         except Exception:
             return jsonify({"error": "That doesn't look like a valid .torrent file"}), 400
-        tid = add_torrent_file(info)
+        tid = add_torrent_file(info, resolve_save_path(category))
     else:
-        magnet = ((request.json or {}) if request.is_json else request.form).get("magnet", "").strip()
+        payload = (request.json or {}) if request.is_json else request.form
+        magnet = payload.get("magnet", "").strip()
+        category = payload.get("category", "")
         if not magnet.lower().startswith("magnet:?"):
             return jsonify({"error": "Paste a magnet link or upload a .torrent file"}), 400
         try:
-            tid = add_magnet(magnet)
+            tid = add_magnet(magnet, resolve_save_path(category))
         except Exception:
             return jsonify({"error": "Couldn't parse that magnet link"}), 400
     save_registry()
