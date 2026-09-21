@@ -24,17 +24,39 @@ reverse-proxy authentication or a VPN — don't port-forward it directly.
 ## Run it with Docker (recommended)
 
 ```bash
-docker compose up -d --build
+docker compose up -d
 ```
 
 Then open `http://localhost:5058` (or `http://<host-ip>:5058` on a NAS).
+
+This pulls `artsvit/torrenttube:latest` from Docker Hub, same as
+[Music Tube](../Music%20Tube). Until that image is pushed, comment out the
+`image:` line in `docker-compose.yml` and uncomment the `build:` block instead
+to build from source (see below) — that's exactly how the copy currently
+running on the Synology at `192.168.0.102:5058` was deployed.
+
+### Publishing to Docker Hub
+
+From a machine that already has Docker (e.g. wherever `artsvit/musictube` was
+built and pushed from):
+
+```bash
+docker login -u artsvit
+docker build -t artsvit/torrenttube:latest .
+docker push artsvit/torrenttube:latest
+```
 
 ### docker-compose
 
 ```yaml
 services:
   torrenttube:
-    build: .
+    image: artsvit/torrenttube:latest
+    # To build from source instead of pulling the published image, comment
+    # out the `image:` line above and uncomment this:
+    # build:
+    #   context: .
+    #   network: host  # needed on some NAS/router setups; see below
     container_name: torrenttube
     restart: unless-stopped
     ports:
@@ -49,7 +71,16 @@ services:
       - TZ=Etc/UTC
       # Must match real subfolder names under the mounted volume above.
       - TORRENTTUBE_CATEGORIES=Cartoon,Movies,TV Shows
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
 ```
+
+If building on a NAS whose Docker daemon shares a host with a DNS-filtering
+container (like Pi-hole), `apt-get` inside the build can hang resolving
+`deb.debian.org` — the embedded Docker resolver loops back through it. The
+`network: host` build option and the explicit `dns:` at runtime above route
+around that; both are already set in this repo's `docker-compose.yml`.
 
 `PUID`/`PGID` control which user ID owns the downloaded files — set these to
 match your own user (`id yourname` on Linux/Synology) so files aren't owned

@@ -1,6 +1,11 @@
 services:
   torrenttube:
-    build: .
+    image: artsvit/torrenttube:latest
+    # To build from source instead of pulling the published image, comment
+    # out the `image:` line above and uncomment this:
+    # build:
+    #   context: .
+    #   network: host  # needed on some NAS/router setups; see README
     container_name: torrenttube
     restart: unless-stopped
     ports:
@@ -15,3 +20,11 @@ services:
       - TZ=Etc/UTC
       # Must match real subfolder names under the mounted volume above.
       - TORRENTTUBE_CATEGORIES=Cartoon,Movies,TV Shows
+    # Same hairpin-NAT issue as the build (see above), but for the running
+    # container: Docker's embedded resolver (127.0.0.11) forwards to the
+    # host's DNS server, which is Pi-hole running in another container on
+    # this same host — that loopback doesn't route through this NAS's
+    # Open vSwitch setup. Point straight at public DNS instead.
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
