@@ -148,6 +148,7 @@
     display: flex;
     gap: 10px;
     padding: 0 28px 14px;
+    position: relative;
   }
   .search-field {
     flex: 1;
@@ -680,10 +681,14 @@
 
   @media (max-width: 480px) {
     .searchbar { gap: 6px; }
-    input[type="text"] { padding: 10px 14px 10px 34px; font-size: 13px; }
+    /* iOS Safari auto-zooms on focus into any text input under 16px font -
+       keep it at 16px exactly to prevent that, and pad enough for a 44pt
+       (Apple HIG minimum) touch target rather than a smaller "looks fine"
+       height that's annoying to tap accurately. */
+    input[type="text"] { padding: 13px 14px 13px 36px; font-size: 16px; height: 44px; }
     .search-field > svg { left: 12px; }
-    .btn-primary.btn-pill#goBtn { padding: 0 16px; height: 42px; font-size: 12.5px; }
-    .btn-circle { width: 38px; height: 38px; }
+    .btn-primary.btn-pill#goBtn { padding: 0 16px; height: 44px; font-size: 13px; }
+    .btn-circle { width: 44px; height: 44px; }
     .search-dropdown .item-top { flex-wrap: wrap; row-gap: 10px; }
     .search-dropdown .search-result-actions { flex-basis: 100%; justify-content: flex-end; }
     .result-poster, .result-poster-fallback { width: 48px; height: 64px; }
@@ -712,13 +717,13 @@
     <div class="search-field">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
       <input type="text" id="mainInput" placeholder="Paste a magnet link, or search for a torrent..." autofocus autocomplete="off">
-      <div class="search-dropdown" id="searchDropdown"></div>
     </div>
     <input type="file" id="fileInput" accept=".torrent" style="display:none">
     <button class="btn-primary btn-pill" id="goBtn">Search</button>
     <button class="btn-circle btn-circle-accent" id="uploadBtn" title="Upload a .torrent file" aria-label="Upload a .torrent file">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
     </button>
+    <div class="search-dropdown" id="searchDropdown"></div>
   </div>
 </div>
 
@@ -903,7 +908,7 @@ function handleGo() {
 }
 
 document.addEventListener("click", (e) => {
-  if (!e.target.closest(".search-field")) closeSearchDropdown();
+  if (!e.target.closest(".searchbar")) closeSearchDropdown();
 });
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") { closeSearchDropdown(); closeUploadModal(); }
@@ -915,12 +920,26 @@ mainInput.addEventListener("keydown", e => { if (e.key === "Enter") handleGo(); 
 
 // ---------- Upload modal (used for both the + button and drag & drop) ----------
 
-function openUploadModal(file) {
+async function openUploadModal(file) {
   pendingFile = file;
   uploadModalFilename.textContent = file.name;
   uploadModalCategory.innerHTML = currentCategories.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
   uploadModalCategory.value = getDefaultCategory();
   uploadModal.classList.add("is-open");
+
+  // Peek at the torrent's own internal name (more reliable than the OS
+  // filename) to suggest a better folder than "whatever was used last".
+  try {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch("/api/torrents/inspect", { method: "POST", body: form });
+    const data = await res.json();
+    if (pendingFile === file && data.suggested_category && currentCategories.includes(data.suggested_category)) {
+      uploadModalCategory.value = data.suggested_category;
+    }
+  } catch (e) {
+    // Keep the fallback selection; not worth failing the modal over.
+  }
 }
 
 function closeUploadModal() {
@@ -1111,12 +1130,6 @@ function renderSearchResults(results) {
     return;
   }
 
-  let remembered = null;
-  try { remembered = localStorage.getItem("torrenttube-category"); } catch (e) {}
-  const categoryOptions = currentCategories.map(c =>
-    `<option value="${escapeHtml(c)}"${c === remembered ? " selected" : ""}>${escapeHtml(c)}</option>`
-  ).join("");
-
   results.forEach(r => {
     const div = document.createElement("div");
     div.className = "item";
@@ -1124,6 +1137,10 @@ function renderSearchResults(results) {
       ? `<img class="result-poster" src="${escapeHtml(r.poster)}" alt="" loading="lazy">`
       : `<div class="result-poster-fallback">${ICONS.download}</div>`;
     const rating = (r.rating && r.rating > 0) ? `<span class="rating-badge">${ICONS.star}${r.rating.toFixed(1)}</span>` : "";
+    const preferred = (r.suggested_category && currentCategories.includes(r.suggested_category)) ? r.suggested_category : getDefaultCategory();
+    const categoryOptions = currentCategories.map(c =>
+      `<option value="${escapeHtml(c)}"${c === preferred ? " selected" : ""}>${escapeHtml(c)}</option>`
+    ).join("");
     div.innerHTML = `
       <div class="item-top">
         ${poster}

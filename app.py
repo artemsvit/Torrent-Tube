@@ -269,13 +269,58 @@ def tmdb_lookup(title: str, base: str, year: str):
             "rating": item.get("vote_average"),
             "overview": (item.get("overview") or "")[:220],
             "year": (item.get("release_date") or item.get("first_air_date") or "")[:4],
+            "media_type": item.get("media_type"),
+            "genre_ids": item.get("genre_ids") or [],
         }
     TMDB_CACHE[cache_key] = (time.time(), result)
     return result
 
 
+TMDB_ANIMATION_GENRE_ID = 16
+
+# Keyword-based fallback for when there's no TMDB match (or TMDB is unused,
+# e.g. for an uploaded .torrent file, which has no time budget for an API
+# round-trip). None of this needs the categories to be named exactly
+# "Cartoon"/"Movies"/"TV Shows" - it just looks for one whose own name hints
+# at the right bucket, so it still works if the user renames them.
+CARTOON_KEYWORDS = ("cartoon", "anime", "animat", "мультфільм", "мультсеріал")
+TV_KEYWORDS = ("season", "episode", "series", "сезон", "серії", "серія", "епізод")
+
+
+def find_category_like(*hints) -> str:
+    for hint in hints:
+        for c in CATEGORIES:
+            if hint in c.lower():
+                return c
+    return ""
+
+
+def guess_category(title: str, genre_ids=None, media_type: str = None) -> str:
+    if not CATEGORIES:
+        return ""
+    lower = title.lower()
+
+    if genre_ids and TMDB_ANIMATION_GENRE_ID in genre_ids:
+        match = find_category_like("cartoon", "anim")
+        if match:
+            return match
+    if any(kw in lower for kw in CARTOON_KEYWORDS):
+        match = find_category_like("cartoon", "anim")
+        if match:
+            return match
+
+    if media_type == "tv" or any(kw in lower for kw in TV_KEYWORDS):
+        match = find_category_like("tv", "show", "series")
+        if match:
+            return match
+
+    return find_category_like("movie") or CATEGORIES[0]
+
+
 def enrich_with_tmdb(results):
     if not TMDB_API_KEY:
+        for r in results:
+            r["suggested_category"] = guess_category(r["title"])
         return
     # Only the most-likely-to-be-picked results are worth the extra lookups.
     top = results[:40]
@@ -288,8 +333,13 @@ def enrich_with_tmdb(results):
             r["rating"] = meta["rating"]
             r["overview"] = meta["overview"]
             r["clean_title"] = meta["title"]
+            r["suggested_category"] = guess_category(meta["title"], meta["genre_ids"], meta["media_type"])
+        else:
+            r["suggested_category"] = guess_category(r["title"])
 
     list(TMDB_EXECUTOR.map(enrich_one, top))
+    for r in results[40:]:
+        r["suggested_category"] = guess_category(r["title"])
 
 
 def format_size(num_bytes: int) -> str:
@@ -360,6 +410,21 @@ def list_torrents():
         items = [(tid, h) for tid, h in HANDLES.items() if h.is_valid()]
     items.sort(key=lambda pair: pair[1].status().added_time, reverse=True)
     return jsonify({"torrents": [serialize(tid, h) for tid, h in items]})
+
+
+@app.route("/api/torrents/inspect", methods=["POST"])
+def inspect_torrent():
+    """Peek at a .torrent file's own name (more reliable than the OS
+    filename) to suggest a destination folder before it's actually added."""
+    f = request.files.get("file")
+    if not f or not f.filename:
+        return jsonify({"error": "No file"}), 400
+    try:
+        info = lt.torrent_info(f.read())
+        name = info.name()
+    except Exception:
+        return jsonify({"error": "That doesn't look like a valid .torrent file"}), 400
+    return jsonify({"name": name, "suggested_category": guess_category(name)})
 
 
 @app.route("/api/torrents", methods=["POST"])
