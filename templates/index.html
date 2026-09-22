@@ -81,15 +81,6 @@
     min-height: 100vh;
   }
 
-  /* Discover's own request: the scrollbar itself (not just its layout
-     impact) is hidden while browsing the catalog. Scrolling still works -
-     wheel/trackpad/touch/keyboard are unaffected by this - only the
-     visible track+thumb go away. The toggled class lives on <html>, since
-     that's the element that actually owns the page's scrollbar (not
-     <body>) in standard document flow. */
-  html.discover-active { scrollbar-width: none; -ms-overflow-style: none; }
-  html.discover-active::-webkit-scrollbar { display: none; }
-
   .bg-decor {
     position: fixed;
     inset: -10%;
@@ -397,7 +388,6 @@
     position: static;
     display: none;
     max-height: none;
-    overflow: visible;
     padding: 0;
     border: none;
     background: transparent;
@@ -405,7 +395,46 @@
     -webkit-backdrop-filter: none;
     box-shadow: none;
   }
-  .search-dropdown.discover-grid.is-open { display: block; }
+  /* The tabs stay put and only the card list scrolls, in a panel bounded
+     to the viewport height - rather than the whole page growing tall
+     under a tab row that scrolls away with everything else. */
+  .panel.discover-mode {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - var(--topbar-h, 140px) - 32px);
+    overflow: hidden;
+  }
+  .panel.discover-mode #discoverHeader { flex-shrink: 0; }
+  .panel.discover-mode .search-dropdown.discover-grid.is-open {
+    display: block;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    /* Scrolling still works with the wheel/trackpad/touch/keyboard - only
+       the visible track+thumb is hidden, matching the rest of Discover. */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .panel.discover-mode .search-dropdown.discover-grid.is-open::-webkit-scrollbar { display: none; }
+
+  .discover-pagination {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    flex-shrink: 0;
+    padding-top: 12px;
+    margin-top: 10px;
+    border-top: 1px solid var(--border);
+  }
+  .discover-pagination .btn-secondary { padding: 8px 16px; font-size: 12.5px; }
+  .discover-page-info {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    min-width: 90px;
+    text-align: center;
+  }
 
   .discover-tabs {
     display: flex;
@@ -1173,6 +1202,11 @@
       <div class="empty-state" id="listEmpty">Paste a magnet link above, or drop a .torrent file anywhere on this page.</div>
     </div>
     <div class="search-dropdown discover-grid" id="discoverList"></div>
+    <div class="discover-pagination" id="discoverPagination" style="display:none">
+      <button class="btn-secondary" id="discoverPrevBtn">Prev</button>
+      <span class="discover-page-info" id="discoverPageInfo">Page 1 of 1</span>
+      <button class="btn-secondary" id="discoverNextBtn">Next</button>
+    </div>
   </section>
 </div>
 
@@ -1330,10 +1364,16 @@ const dropZone = document.getElementById("dropZone");
 const searchDropdown = document.getElementById("searchDropdown");
 
 const viewToggleBtn = document.getElementById("viewToggleBtn");
+const downloadsTab = document.getElementById("downloadsTab");
 const downloadsHeader = document.getElementById("downloadsHeader");
 const discoverHeader = document.getElementById("discoverHeader");
 const discoverTabs = document.getElementById("discoverTabs");
 const discoverList = document.getElementById("discoverList");
+const discoverPagination = document.getElementById("discoverPagination");
+const discoverPrevBtn = document.getElementById("discoverPrevBtn");
+const discoverPageInfo = document.getElementById("discoverPageInfo");
+const discoverNextBtn = document.getElementById("discoverNextBtn");
+const topBarEl = document.querySelector(".top-bar");
 
 const uploadModal = document.getElementById("uploadModal");
 const uploadModalPoster = document.getElementById("uploadModalPoster");
@@ -1740,13 +1780,15 @@ let discoverMode = false;
 let discoverEnabled = false;
 let discoverFeeds = [];
 let currentDiscoverFeed = null;
-// The tracker's Jackett feed caps out around ~50 items and doesn't support
-// real pagination (offset=20 just comes back empty), so the whole feed is
-// fetched once; "infinite scroll" reveals more of that same in-memory list
-// as the user scrolls, rather than re-querying the server each time.
+// The tracker's Jackett feed caps out around ~50-100 items and doesn't
+// support real pagination (offset=20 just comes back empty) - there's no
+// server-side "next page" to fetch. The whole feed is retrieved once and
+// paged through client-side instead, which is also just more honest about
+// it being a fixed, finite list rather than infinite scroll that
+// mysteriously stops partway through.
 let discoverAllResults = [];
-let discoverShownCount = 0;
-const DISCOVER_PAGE_SIZE = 12;
+let discoverPage = 0;
+const DISCOVER_PAGE_SIZE = 16;
 
 async function loadDiscoverFeeds() {
   try {
@@ -1764,32 +1806,31 @@ function renderDiscoverTabs() {
   ).join("");
 }
 
-function showMoreDiscoverResults() {
-  if (discoverShownCount >= discoverAllResults.length) return;
-  const next = discoverAllResults.slice(discoverShownCount, discoverShownCount + DISCOVER_PAGE_SIZE);
-  discoverList.querySelector(".discover-end-hint")?.remove();
-  appendResultCards(discoverList, next, discoverAllResults, "Nothing here right now.");
-  discoverShownCount += next.length;
-  if (discoverShownCount >= discoverAllResults.length && discoverAllResults.length > 0) {
-    discoverList.insertAdjacentHTML("beforeend", `<div class="empty-state discover-end-hint" style="padding:16px;">That's everything in this feed right now.</div>`);
-  }
+function discoverTotalPages() {
+  return Math.max(1, Math.ceil(discoverAllResults.length / DISCOVER_PAGE_SIZE));
 }
 
-// Fires on every scroll while in Discover mode; loads the next chunk once
-// the panel's bottom edge gets within one screen-height of the viewport.
-function maybeLoadMoreDiscover() {
-  if (!discoverMode) return;
-  const rect = discoverList.getBoundingClientRect();
-  if (rect.bottom - window.innerHeight < window.innerHeight) showMoreDiscoverResults();
+function renderDiscoverPage() {
+  const total = discoverTotalPages();
+  discoverPage = Math.min(Math.max(0, discoverPage), total - 1);
+  const start = discoverPage * DISCOVER_PAGE_SIZE;
+  const slice = discoverAllResults.slice(start, start + DISCOVER_PAGE_SIZE);
+  renderResultCards(discoverList, slice, "Nothing here right now.");
+  discoverList.scrollTop = 0;
+
+  discoverPageInfo.textContent = `Page ${discoverPage + 1} of ${total}`;
+  discoverPrevBtn.disabled = discoverPage === 0;
+  discoverNextBtn.disabled = discoverPage >= total - 1;
+  discoverPagination.style.display = discoverAllResults.length > DISCOVER_PAGE_SIZE ? "flex" : "none";
 }
-window.addEventListener("scroll", maybeLoadMoreDiscover, { passive: true });
 
 async function loadDiscoverFeed(feedId) {
   currentDiscoverFeed = feedId;
   renderDiscoverTabs();
   discoverList.innerHTML = `<div class="empty-state" style="padding:24px;">Loading...</div>`;
+  discoverPagination.style.display = "none";
   discoverAllResults = [];
-  discoverShownCount = 0;
+  discoverPage = 0;
   try {
     const res = await fetch(`/api/discover?feed=${encodeURIComponent(feedId)}`);
     const data = await res.json();
@@ -1798,13 +1839,7 @@ async function loadDiscoverFeed(feedId) {
       return;
     }
     discoverAllResults = data.results || [];
-    discoverList.innerHTML = "";
-    if (discoverAllResults.length === 0) {
-      discoverList.innerHTML = `<div class="empty-state" style="padding:24px;">Nothing here right now.</div>`;
-      return;
-    }
-    showMoreDiscoverResults();
-    maybeLoadMoreDiscover(); // fills the panel if the first page doesn't already overflow the screen
+    renderDiscoverPage();
   } catch (e) {
     discoverList.innerHTML = `<div class="empty-state" style="padding:24px;">Couldn't load this feed. Try again.</div>`;
   }
@@ -1817,7 +1852,7 @@ function enterDiscover() {
   }
   discoverMode = true;
   renderViewToggleBtn();
-  document.documentElement.classList.add("discover-active");
+  downloadsTab.classList.add("discover-mode");
   downloadsHeader.style.display = "none";
   discoverHeader.style.display = "flex";
   listEl.style.display = "none";
@@ -1828,12 +1863,13 @@ function enterDiscover() {
 function exitDiscover() {
   discoverMode = false;
   renderViewToggleBtn();
-  document.documentElement.classList.remove("discover-active");
+  downloadsTab.classList.remove("discover-mode");
   downloadsHeader.style.display = "";
   discoverHeader.style.display = "none";
   listEl.style.display = "";
   discoverList.classList.remove("is-open");
   discoverList.innerHTML = "";
+  discoverPagination.style.display = "none";
   refresh();
 }
 
@@ -1844,6 +1880,8 @@ discoverTabs.addEventListener("click", (e) => {
   const btn = e.target.closest(".discover-tab");
   if (btn && btn.dataset.feed !== currentDiscoverFeed) loadDiscoverFeed(btn.dataset.feed);
 });
+discoverPrevBtn.addEventListener("click", () => { discoverPage--; renderDiscoverPage(); });
+discoverNextBtn.addEventListener("click", () => { discoverPage++; renderDiscoverPage(); });
 
 async function loadConfig() {
   try {
@@ -2134,6 +2172,15 @@ async function addSearchResult(result, category, actionsEl, container, allResult
   showToast(`"${result.title}" added to ${category}`);
   refresh();
 }
+
+// Keeps the Discover panel's fixed height in sync with the real (sticky)
+// header height, same pattern Music Tube uses for its queue panel.
+function syncTopBarHeight() {
+  document.documentElement.style.setProperty("--topbar-h", `${topBarEl.offsetHeight}px`);
+}
+syncTopBarHeight();
+window.addEventListener("resize", syncTopBarHeight);
+if (window.ResizeObserver) new ResizeObserver(syncTopBarHeight).observe(topBarEl);
 
 async function init() {
   loadConfig();
