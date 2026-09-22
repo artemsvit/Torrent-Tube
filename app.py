@@ -607,11 +607,19 @@ def discover_torrents():
             seen.add(key)
             results.append(r)
 
-    # The whole (deduped-by-file, multi-category) feed is enriched and
-    # handed over in one response; infinite scroll is done client-side,
-    # revealing more of this same list as the user scrolls rather than
-    # re-querying Jackett.
-    enrich_with_tmdb(results, limit=len(results))
+    # TMDB enrichment (poster/rating/overview) is deliberately *not* done
+    # here - a merged, multi-category feed can be 200+ raw rows, and
+    # waiting on that many TMDB round-trips (even at 8-way concurrency)
+    # is exactly what made first open of a Discover tab slow. Instead this
+    # returns fast with a locally-computed title (regex-cleaned, no
+    # network) good enough for deduping and a placeholder card, and the
+    # client fetches real metadata from /api/discover/enrich only for
+    # whichever page it's actually showing, once results are on screen.
+    for r in results:
+        title, base, _year = extract_title_and_year(r["title"])
+        r["clean_title"] = title
+        r["suggested_category"] = guess_category(r["title"])
+        r["_dedupe_key"] = (title or r["title"]).strip().lower()
 
     # Every quality/language rip of the same movie is its own separate row
     # in the tracker's own listing (confirmed live: a 50-row "New" feed was
@@ -619,20 +627,51 @@ def discover_torrents():
     # 2-4x each for BDRip/WEB-DL/2160p/1080p/etc). That reads as broken
     # ("why does this list look like fewer things than the forum shows"),
     # so keep only the best (most-seeded) release per movie, identified by
-    # its TMDB-resolved title when available.
+    # the locally-cleaned title above (TMDB's own title, once enriched,
+    # can look slightly different but never needs to move an item between
+    # groups - the dedup pass here is what decides the final list).
     best_by_movie = {}
     for r in results:
-        movie_key = (r.get("clean_title") or r["title"]).strip().lower()
-        current = best_by_movie.get(movie_key)
+        current = best_by_movie.get(r["_dedupe_key"])
         if current is None or r["seeders"] > current["seeders"]:
-            best_by_movie[movie_key] = r
+            best_by_movie[r["_dedupe_key"]] = r
     results = list(best_by_movie.values())
+    for r in results:
+        del r["_dedupe_key"]
 
     if feed.get("sort") == "seeders":
         results.sort(key=lambda r: r["seeders"], reverse=True)
     else:
         results.sort(key=lambda r: r["pub_date"], reverse=True)
     return jsonify({"results": results})
+
+
+@app.route("/api/discover/enrich", methods=["POST"])
+def discover_enrich():
+    """On-demand TMDB lookup for a page's worth of Discover cards, called
+    once those specific items are actually about to be shown rather than
+    for the whole (possibly 200+ item) feed up front."""
+    payload = request.json or {}
+    titles = payload.get("titles") or []
+    if not isinstance(titles, list):
+        return jsonify({"error": "'titles' must be a list"}), 400
+    titles = [t for t in titles if isinstance(t, str) and t][:64]
+
+    def enrich_one(raw_title):
+        title, base, year = extract_title_and_year(raw_title)
+        meta = tmdb_lookup(title, base, year)
+        if not meta:
+            return raw_title, None
+        return raw_title, {
+            "poster": meta["poster"],
+            "rating": meta["rating"],
+            "overview": meta["overview"],
+            "clean_title": meta["title"],
+            "suggested_category": guess_category(meta["title"], meta["genre_ids"], meta["media_type"]),
+        }
+
+    pairs = list(TMDB_EXECUTOR.map(enrich_one, titles))
+    return jsonify({k: v for k, v in pairs if v})
 
 
 def enforce_seed_policy():

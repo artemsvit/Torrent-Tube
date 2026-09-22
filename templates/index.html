@@ -363,10 +363,10 @@
 
   .layout {
     width: 100%;
-    padding: 16px 28px 48px;
+    padding: 16px 28px 28px;
   }
   @media (max-width: 640px) {
-    .layout { padding: 16px 16px 24px; }
+    .layout { padding: 16px 16px 16px; }
     header, .searchbar { padding-left: 16px; padding-right: 16px; }
   }
 
@@ -1972,6 +1972,9 @@ let currentDiscoverFeed = null;
 // mysteriously stops partway through.
 let discoverAllResults = [];
 let discoverPage = 0;
+// Titles already sent to (or in flight to) /api/discover/enrich, so
+// re-rendering a page already on screen doesn't re-request its metadata.
+let discoverEnrichedTitles = new Set();
 const DISCOVER_PAGE_SIZE = 16;
 
 async function loadDiscoverFeeds() {
@@ -2009,6 +2012,40 @@ function renderDiscoverPage() {
   discoverPrevBtn.disabled = discoverPage === 0;
   discoverNextBtn.disabled = discoverPage >= total - 1;
   discoverPagination.style.display = discoverAllResults.length > DISCOVER_PAGE_SIZE ? "flex" : "none";
+
+  enrichDiscoverPage(slice);
+}
+
+// Posters/ratings/overviews for the whole feed aren't fetched up front -
+// /api/discover returns fast with just what's needed to list and page
+// through results. Only once a page is actually about to be shown does
+// its handful of titles get sent off for the real TMDB lookup.
+async function enrichDiscoverPage(items) {
+  const need = items.filter(r => !discoverEnrichedTitles.has(r.title));
+  if (!need.length) return;
+  need.forEach(r => discoverEnrichedTitles.add(r.title));
+  try {
+    const res = await fetch("/api/discover/enrich", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ titles: need.map(r => r.title) }),
+    });
+    const data = await res.json();
+    let changed = false;
+    for (const r of discoverAllResults) {
+      const meta = data[r.title];
+      if (meta) {
+        Object.assign(r, meta);
+        changed = true;
+      }
+    }
+    // Only the page still on screen needs a repaint - if the user has
+    // already paged away, the next renderDiscoverPage() call picks up
+    // these now-cached results anyway.
+    if (changed) renderDiscoverPage();
+  } catch (e) {
+    // Cards just keep their placeholder icon; not worth a toast for this.
+  }
 }
 
 async function loadDiscoverFeed(feedId) {
@@ -2018,6 +2055,7 @@ async function loadDiscoverFeed(feedId) {
   discoverPagination.style.display = "none";
   discoverAllResults = [];
   discoverPage = 0;
+  discoverEnrichedTitles = new Set();
   try {
     const res = await fetch(`/api/discover?feed=${encodeURIComponent(feedId)}`);
     const data = await res.json();
