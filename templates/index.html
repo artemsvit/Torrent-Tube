@@ -511,7 +511,10 @@
   .search-item-stats .seeders { color: var(--success); }
   .search-item-stats .leechers { color: var(--text-tertiary); }
   .btn-add-result {
-    padding: 7px 14px;
+    /* Vertical padding matches .inline-category-select exactly (9px) so
+       the two controls in this row are the same height - they were 4px
+       off before (7px here vs. 9px there), visibly mismatched. */
+    padding: 9px 16px;
     font-size: 12.5px;
     flex-shrink: 0;
   }
