@@ -486,6 +486,15 @@
     border-color: var(--accent);
     color: white;
   }
+
+  /* Mobile: the pill row wraps onto two lines and eats vertical space, so
+     swap it for a single dropdown instead - same control other pickers in
+     this app already use (.inline-category-select), not a new style. */
+  .discover-tabs-select { display: none; }
+  @media (max-width: 640px) {
+    .discover-tabs { display: none; }
+    .discover-tabs-select { display: block; width: 100%; }
+  }
   /* Match .layout's 16px mobile inset so the dropdown lines up with the
      panel underneath it instead of overhanging/underhanging it. This must
      come after the base rule above (same selector, same specificity) -
@@ -1267,6 +1276,7 @@
     </div>
     <div class="panel-header" id="discoverHeader" style="display:none">
       <div class="discover-tabs" id="discoverTabs"></div>
+      <select class="inline-category-select discover-tabs-select" id="discoverTabsSelect"></select>
     </div>
     <div id="list">
       <div class="empty-state" id="listEmpty">Paste a magnet link above, or drop a .torrent file anywhere on this page.</div>
@@ -1462,6 +1472,7 @@ const downloadsTab = document.getElementById("downloadsTab");
 const downloadsHeader = document.getElementById("downloadsHeader");
 const discoverHeader = document.getElementById("discoverHeader");
 const discoverTabs = document.getElementById("discoverTabs");
+const discoverTabsSelect = document.getElementById("discoverTabsSelect");
 const discoverList = document.getElementById("discoverList");
 const discoverPagination = document.getElementById("discoverPagination");
 const discoverPrevBtn = document.getElementById("discoverPrevBtn");
@@ -1903,6 +1914,9 @@ function renderDiscoverTabs() {
   discoverTabs.innerHTML = discoverFeeds.map(f =>
     `<button type="button" class="discover-tab${f.id === currentDiscoverFeed ? " is-active" : ""}" data-feed="${escapeHtml(f.id)}">${escapeHtml(f.label)}</button>`
   ).join("");
+  discoverTabsSelect.innerHTML = discoverFeeds.map(f =>
+    `<option value="${escapeHtml(f.id)}"${f.id === currentDiscoverFeed ? " selected" : ""}>${escapeHtml(f.label)}</option>`
+  ).join("");
 }
 
 function discoverTotalPages() {
@@ -1980,6 +1994,9 @@ viewToggleBtn.addEventListener("click", () => {
 discoverTabs.addEventListener("click", (e) => {
   const btn = e.target.closest(".discover-tab");
   if (btn && btn.dataset.feed !== currentDiscoverFeed) loadDiscoverFeed(btn.dataset.feed);
+});
+discoverTabsSelect.addEventListener("change", () => {
+  if (discoverTabsSelect.value !== currentDiscoverFeed) loadDiscoverFeed(discoverTabsSelect.value);
 });
 discoverPrevBtn.addEventListener("click", () => { discoverPage--; renderDiscoverPage(); });
 discoverNextBtn.addEventListener("click", () => { discoverPage++; renderDiscoverPage(); });
