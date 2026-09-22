@@ -433,6 +433,13 @@
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
   }
+  /* Capped at half the title/description column's width on desktop, so it
+     doesn't read as a full-width paragraph - tablet/mobile get the full
+     column width back, there's no room to spare there. */
+  .search-dropdown .item-overview { max-width: 50%; }
+  @media (max-width: 640px) {
+    .search-dropdown .item-overview { max-width: none; }
+  }
   .search-dropdown .item.is-expanded .item-overview {
     -webkit-line-clamp: unset;
     overflow: visible;
@@ -587,6 +594,10 @@
     white-space: nowrap;
   }
   .item-sub.is-error-text { color: var(--danger); }
+  /* A bit more room under the title specifically in search results, where
+     the title sits alone on its own line (the downloads list keeps the
+     tighter 2px gap). */
+  .search-dropdown .item-sub { margin-top: 7px; }
 
   .item-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 
