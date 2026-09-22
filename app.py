@@ -547,7 +547,13 @@ def search_torrents():
 # Torznab category 100175). Querying with cat= and no q returns that
 # section's latest uploads.
 DISCOVER_FEEDS = [
-    {"id": "new", "label": "New", "cats": ["100175"]},
+    # The dedicated "new films" forum (100175) alone maxes out at ~50 raw
+    # rows per request and collapses to ~20 distinct movies after the
+    # per-movie dedup below - same single-category ceiling "Popular" avoids
+    # by fanning out across categories. Do the same here: merge in the
+    # regular Movies/Cartoons/TV Shows categories too (sorted by pub_date,
+    # so it's still "newest first", not seeder count) for real breadth.
+    {"id": "new", "label": "New", "cats": ["100175", "100012", "100147", "100041", "100155", "100044", "100152"]},
     {"id": "popular", "label": "Popular", "cats": ["100012", "100147", "100041", "100155", "100044", "100152"], "sort": "seeders"},
     {"id": "movies", "label": "Movies", "cats": ["100012", "100147"]},
     {"id": "cartoons", "label": "Cartoons", "cats": ["100041", "100155"]},
