@@ -583,6 +583,7 @@ def enforce_seed_policy():
         if not h.is_valid() or tid in PAUSED_IDS:
             continue
         if h.status().state == lt.torrent_status.seeding:
+            h.unset_flags(lt.torrent_flags.auto_managed)  # same fix as the manual pause endpoint - see its comment
             h.pause()
             with LOCK:
                 PAUSED_IDS.add(tid)
@@ -674,6 +675,12 @@ def pause_torrent(tid):
         handle = HANDLES.get(tid)
     if not handle or not handle.is_valid():
         return jsonify({"error": "Unknown torrent"}), 404
+    # A torrent is auto-managed by default, meaning libtorrent's own queue
+    # logic can silently un-pause it again the moment there's room in the
+    # active-torrent queue (which there almost always is for a handful of
+    # home downloads) - pause() alone doesn't survive that. Taking it out
+    # of auto-management first is what makes the pause actually stick.
+    handle.unset_flags(lt.torrent_flags.auto_managed)
     handle.pause()
     with LOCK:
         PAUSED_IDS.add(tid)
@@ -686,6 +693,7 @@ def resume_torrent(tid):
         handle = HANDLES.get(tid)
     if not handle or not handle.is_valid():
         return jsonify({"error": "Unknown torrent"}), 404
+    handle.set_flags(lt.torrent_flags.auto_managed)
     handle.resume()
     with LOCK:
         PAUSED_IDS.discard(tid)
