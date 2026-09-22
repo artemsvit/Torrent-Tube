@@ -81,6 +81,11 @@
     min-height: 100vh;
   }
 
+  /* Desktop-only scale-up (~2 clicks of browser zoom). Mobile stays untouched. */
+  @media (min-width: 641px) {
+    body { zoom: 1.25; }
+  }
+
   .bg-decor {
     position: fixed;
     inset: -10%;
