@@ -242,7 +242,14 @@
     font-size: 13.5px;
     font-weight: 600;
     cursor: pointer;
-    transition: background 0.15s, opacity 0.15s, border-color 0.15s, transform 0.1s, box-shadow 0.15s;
+    /* No `background` here on purpose: several buttons are a gradient at
+       rest and a flat color on hover (.btn-primary, .btn-circle-accent,
+       .btn-circle-discover, the danger button), and a browser can't
+       smoothly interpolate gradient -> solid - it either snaps or shows a
+       broken in-between frame, which reads as the button "blinking" on
+       hover. Leaving background out of the transition list means it just
+       changes instantly instead of failing to animate. */
+    transition: opacity 0.15s, border-color 0.15s, transform 0.1s, box-shadow 0.15s;
   }
   button:disabled { opacity: 0.4; cursor: default; }
   button:active:not(:disabled) { transform: scale(0.97); }
@@ -254,6 +261,10 @@
     box-shadow: var(--shadow-sm);
   }
   .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+
+  /* Icon shown only on phones (see the 480px query), where the button
+     collapses to icon-only to save the label's horizontal space. */
+  .go-btn-icon { display: none; align-items: center; justify-content: center; }
 
   .btn-circle {
     position: relative;
@@ -1080,7 +1091,11 @@
     input[type="text"] { padding: 13px 40px 13px 36px; font-size: 16px; height: 44px; }
     .search-field > svg { left: 12px; }
     .clear-field-btn { right: 8px; }
-    .btn-primary.btn-pill#goBtn { padding: 0 16px; height: 44px; font-size: 13px; }
+    /* Icon-only on phones - "Search"/"Add" as text next to a magnet-link
+       input eats space that matters more here than the label does. */
+    .btn-primary.btn-pill#goBtn { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; }
+    #goBtn .go-btn-label { display: none; }
+    #goBtn .go-btn-icon { display: flex; }
     .btn-circle { width: 44px; height: 44px; }
     .result-poster, .result-poster-fallback { width: 68px; height: auto; }
     /* On narrow screens there isn't room for the folder picker + Download
@@ -1138,7 +1153,10 @@
       <button type="button" class="clear-field-btn" id="clearMainInput" aria-label="Clear" title="Clear"></button>
     </div>
     <input type="file" id="fileInput" accept=".torrent" style="display:none">
-    <button class="btn-primary btn-pill" id="goBtn">Search</button>
+    <button class="btn-primary btn-pill" id="goBtn">
+      <span class="go-btn-icon" id="goBtnIcon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></span>
+      <span class="go-btn-label" id="goBtnLabel">Search</span>
+    </button>
     <button class="btn-circle btn-circle-discover" id="viewToggleBtn" title="Downloads" aria-label="Switch between Discover and Downloads"></button>
     <button class="btn-circle btn-circle-accent" id="uploadBtn" title="Upload a .torrent file" aria-label="Upload a .torrent file">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
@@ -1307,6 +1325,8 @@ const ICONS = {
 const mainInput = document.getElementById("mainInput");
 const clearMainInputBtn = document.getElementById("clearMainInput");
 const goBtn = document.getElementById("goBtn");
+const goBtnIcon = document.getElementById("goBtnIcon");
+const goBtnLabel = document.getElementById("goBtnLabel");
 const uploadBtn = document.getElementById("uploadBtn");
 const fileInput = document.getElementById("fileInput");
 const listEl = document.getElementById("list");
@@ -1480,7 +1500,9 @@ function isMagnet(value) {
 }
 
 function updateGoLabel() {
-  goBtn.textContent = isMagnet(mainInput.value.trim()) ? "Add" : "Search";
+  const magnet = isMagnet(mainInput.value.trim());
+  goBtnLabel.textContent = magnet ? "Add" : "Search";
+  goBtnIcon.innerHTML = magnet ? ICONS.download : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>`;
   clearMainInputBtn.classList.toggle("is-visible", mainInput.value.length > 0);
 }
 
