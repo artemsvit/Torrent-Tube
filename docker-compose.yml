@@ -16,6 +16,12 @@ services:
       - PUID=1026
       - PGID=100
       - TZ=Etc/UTC
+    # Same DNS hairpin-NAT workaround as torrenttube below - without this,
+    # Jackett can't resolve real tracker hostnames (mazepa.to etc.) on this
+    # particular NAS. See the comment on torrenttube's own `dns:` for why.
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
 
   torrenttube:
     image: artsvit/torrenttube:latest
