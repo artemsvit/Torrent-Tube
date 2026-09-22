@@ -429,23 +429,21 @@ def format_size(num_bytes: int) -> str:
     return f"{size:.1f} TB"
 
 
-@app.route("/api/search")
-def search_torrents():
-    if not (JACKETT_URL and JACKETT_API_KEY):
-        return jsonify({"error": "Search isn't configured on this server"}), 503
-    query = request.args.get("q", "").strip()
-    if not query:
-        return jsonify({"results": []})
-
-    params = urllib.parse.urlencode({"apikey": JACKETT_API_KEY, "t": "search", "q": query})
-    url = f"{JACKETT_URL}/api/v2.0/indexers/{JACKETT_INDEXER}/results/torznab/api?{params}"
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": "TorrentTube"})
-        with urllib.request.urlopen(req, timeout=25) as resp:
-            data = resp.read()
-        root = ET.fromstring(data)
-    except Exception:
-        return jsonify({"error": "Couldn't reach the search service"}), 502
+def jackett_query(q: str = None, cat: str = None):
+    """Hits Jackett's Torznab proxy for the configured indexer and returns
+    parsed (but not yet TMDB-enriched) result dicts. A blank `q` isn't a
+    no-op search - most trackers (this one included) treat it as "give me
+    the latest uploads", which is what the Discover feeds ride on."""
+    params = {"apikey": JACKETT_API_KEY, "t": "search"}
+    if q:
+        params["q"] = q
+    if cat:
+        params["cat"] = cat
+    url = f"{JACKETT_URL}/api/v2.0/indexers/{JACKETT_INDEXER}/results/torznab/api?{urllib.parse.urlencode(params)}"
+    req = urllib.request.Request(url, headers={"User-Agent": "TorrentTube"})
+    with urllib.request.urlopen(req, timeout=25) as resp:
+        data = resp.read()
+    root = ET.fromstring(data)
 
     results = []
     for item in root.findall(".//item"):
@@ -472,12 +470,70 @@ def search_torrents():
             "magnet": magnet,
             "download_link": item.findtext("link") or "",
             "details_link": item.findtext("comments") or "",
+            "pub_date": item.findtext("pubDate") or "",
             "poster": None,
             "rating": None,
             "overview": None,
         })
+    return results
+
+
+@app.route("/api/search")
+def search_torrents():
+    if not (JACKETT_URL and JACKETT_API_KEY):
+        return jsonify({"error": "Search isn't configured on this server"}), 503
+    query = request.args.get("q", "").strip()
+    if not query:
+        return jsonify({"results": []})
+
+    try:
+        results = jackett_query(q=query)
+    except Exception:
+        return jsonify({"error": "Couldn't reach the search service"}), 502
+
     results.sort(key=lambda r: r["seeders"], reverse=True)
     results = results[:150]
+    enrich_with_tmdb(results)
+    return jsonify({"results": results})
+
+
+# ---------- Discover ----------
+# A browsable catalog instead of a reactive search: each feed below maps to
+# a specific section of the mazepa forum (Jackett's own indexer definition
+# exposes the tracker's forum ids as custom Torznab categories, numbered
+# 100000 + the forum id - e.g. "Новинки фільмів UHD/HD", forum id 175, is
+# Torznab category 100175). Querying with cat= and no q returns that
+# section's latest uploads.
+DISCOVER_FEEDS = [
+    {"id": "new", "label": "New releases", "cats": "100175"},
+    {"id": "movies", "label": "Movies", "cats": "100012,100147"},
+    {"id": "cartoons", "label": "Cartoons", "cats": "100041,100155"},
+    {"id": "tv", "label": "TV Shows", "cats": "100044,100152"},
+]
+DISCOVER_FEEDS_BY_ID = {f["id"]: f for f in DISCOVER_FEEDS}
+
+
+@app.route("/api/discover/feeds")
+def discover_feeds():
+    enabled = bool(JACKETT_URL and JACKETT_API_KEY)
+    return jsonify({"enabled": enabled, "feeds": [{"id": f["id"], "label": f["label"]} for f in DISCOVER_FEEDS] if enabled else []})
+
+
+@app.route("/api/discover")
+def discover_torrents():
+    if not (JACKETT_URL and JACKETT_API_KEY):
+        return jsonify({"error": "Search isn't configured on this server"}), 503
+    feed = DISCOVER_FEEDS_BY_ID.get(request.args.get("feed", "new"))
+    if not feed:
+        return jsonify({"error": "Unknown feed"}), 400
+
+    try:
+        results = jackett_query(cat=feed["cats"])
+    except Exception:
+        return jsonify({"error": "Couldn't reach the search service"}), 502
+
+    results.sort(key=lambda r: r["pub_date"], reverse=True)
+    results = results[:60]
     enrich_with_tmdb(results)
     return jsonify({"results": results})
 

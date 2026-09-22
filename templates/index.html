@@ -258,6 +258,19 @@
   }
   .btn-circle-accent:hover:not(:disabled) { background: #34c766; }
 
+  .btn-circle-discover {
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    color: var(--text);
+  }
+  .btn-circle-discover:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  .btn-circle-discover.is-active {
+    background: linear-gradient(180deg, var(--accent-hover), var(--accent));
+    border-color: transparent;
+    color: white;
+    box-shadow: var(--shadow-sm);
+  }
+
   .btn-pill { border-radius: var(--radius-pill); }
 
   .btn-secondary {
@@ -339,6 +352,48 @@
   .search-dropdown.is-open { display: block; }
   .search-dropdown .item { margin-bottom: 6px; }
   .search-dropdown .item:last-child { margin-bottom: 0; }
+
+  /* Discover reuses every .search-dropdown card rule (the mobile grid
+     reflow, the description's width cap, expand/collapse) but isn't a
+     floating overlay - it sits inline in the panel, so the positioning
+     and card chrome get undone here. */
+  .search-dropdown.discover-grid {
+    position: static;
+    display: none;
+    max-height: none;
+    overflow: visible;
+    padding: 0;
+    border: none;
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    box-shadow: none;
+  }
+  .search-dropdown.discover-grid.is-open { display: block; }
+
+  .discover-tabs {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    flex: 1;
+    min-width: 0;
+  }
+  .discover-tab {
+    padding: 6px 14px;
+    border-radius: var(--radius-pill);
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    color: var(--text-secondary);
+    font-size: 12.5px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .discover-tab:hover:not(.is-active) { border-color: var(--accent); color: var(--accent); }
+  .discover-tab.is-active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+  }
   /* Match .layout's 16px mobile inset so the dropdown lines up with the
      panel underneath it instead of overhanging/underhanging it. This must
      come after the base rule above (same selector, same specificity) -
@@ -1040,6 +1095,9 @@
     </div>
     <input type="file" id="fileInput" accept=".torrent" style="display:none">
     <button class="btn-primary btn-pill" id="goBtn">Search</button>
+    <button class="btn-circle btn-circle-discover" id="discoverBtn" title="Discover new releases" aria-label="Discover new releases">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>
+    </button>
     <button class="btn-circle btn-circle-accent" id="uploadBtn" title="Upload a .torrent file" aria-label="Upload a .torrent file">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
     </button>
@@ -1049,13 +1107,20 @@
 
 <div class="layout">
   <section class="panel" id="downloadsTab">
-    <div class="panel-header">
+    <div class="panel-header" id="downloadsHeader">
       <div class="section-label">Downloads</div>
       <span class="count-badge" id="count">0</span>
+    </div>
+    <div class="panel-header" id="discoverHeader" style="display:none">
+      <div class="discover-tabs" id="discoverTabs"></div>
+      <button class="icon-btn" id="discoverCloseBtn" title="Back to downloads" aria-label="Back to downloads">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+      </button>
     </div>
     <div id="list">
       <div class="empty-state" id="listEmpty">Paste a magnet link above, or drop a .torrent file anywhere on this page.</div>
     </div>
+    <div class="search-dropdown discover-grid" id="discoverList"></div>
   </section>
 </div>
 
@@ -1198,6 +1263,13 @@ const toastStack = document.getElementById("toastStack");
 const themeToggleBtn = document.getElementById("themeToggle");
 const dropZone = document.getElementById("dropZone");
 const searchDropdown = document.getElementById("searchDropdown");
+
+const discoverBtn = document.getElementById("discoverBtn");
+const downloadsHeader = document.getElementById("downloadsHeader");
+const discoverHeader = document.getElementById("discoverHeader");
+const discoverTabs = document.getElementById("discoverTabs");
+const discoverCloseBtn = document.getElementById("discoverCloseBtn");
+const discoverList = document.getElementById("discoverList");
 
 const uploadModal = document.getElementById("uploadModal");
 const uploadModalPoster = document.getElementById("uploadModalPoster");
@@ -1529,6 +1601,7 @@ function render(torrents) {
 }
 
 async function refresh() {
+  if (discoverMode) return; // #list is showing the Discover catalog right now, not torrents
   try {
     const res = await fetch("/api/torrents");
     const data = await res.json();
@@ -1537,6 +1610,84 @@ async function refresh() {
     // Transient network hiccup; the next poll will retry.
   }
 }
+
+// ---------- Discover ----------
+// A browsable catalog (latest uploads per tracker category) instead of a
+// reactive search, shown in place of the downloads list when active.
+
+let discoverMode = false;
+let discoverEnabled = false;
+let discoverFeeds = [];
+let currentDiscoverFeed = null;
+let lastDiscoverResults = [];
+
+async function loadDiscoverFeeds() {
+  try {
+    const res = await fetch("/api/discover/feeds");
+    const data = await res.json();
+    discoverEnabled = !!data.enabled;
+    discoverFeeds = data.feeds || [];
+    if (discoverFeeds.length && !currentDiscoverFeed) currentDiscoverFeed = discoverFeeds[0].id;
+  } catch (e) {}
+}
+
+function renderDiscoverTabs() {
+  discoverTabs.innerHTML = discoverFeeds.map(f =>
+    `<button type="button" class="discover-tab${f.id === currentDiscoverFeed ? " is-active" : ""}" data-feed="${escapeHtml(f.id)}">${escapeHtml(f.label)}</button>`
+  ).join("");
+}
+
+async function loadDiscoverFeed(feedId) {
+  currentDiscoverFeed = feedId;
+  renderDiscoverTabs();
+  discoverList.innerHTML = `<div class="empty-state" style="padding:24px;">Loading...</div>`;
+  try {
+    const res = await fetch(`/api/discover?feed=${encodeURIComponent(feedId)}`);
+    const data = await res.json();
+    if (data.error) {
+      discoverList.innerHTML = `<div class="empty-state" style="padding:24px;">${escapeHtml(data.error)}</div>`;
+      return;
+    }
+    lastDiscoverResults = data.results || [];
+    renderResultCards(discoverList, lastDiscoverResults, "Nothing here right now.");
+  } catch (e) {
+    discoverList.innerHTML = `<div class="empty-state" style="padding:24px;">Couldn't load this feed. Try again.</div>`;
+  }
+}
+
+function enterDiscover() {
+  if (!discoverEnabled) {
+    showToast("Search isn't set up on this server yet", true);
+    return;
+  }
+  discoverMode = true;
+  discoverBtn.classList.add("is-active");
+  downloadsHeader.style.display = "none";
+  discoverHeader.style.display = "flex";
+  listEl.style.display = "none";
+  discoverList.classList.add("is-open");
+  loadDiscoverFeed(currentDiscoverFeed || (discoverFeeds[0] && discoverFeeds[0].id));
+}
+
+function exitDiscover() {
+  discoverMode = false;
+  discoverBtn.classList.remove("is-active");
+  downloadsHeader.style.display = "";
+  discoverHeader.style.display = "none";
+  listEl.style.display = "";
+  discoverList.classList.remove("is-open");
+  discoverList.innerHTML = "";
+  refresh();
+}
+
+discoverBtn.addEventListener("click", () => {
+  if (discoverMode) exitDiscover(); else enterDiscover();
+});
+discoverCloseBtn.addEventListener("click", exitDiscover);
+discoverTabs.addEventListener("click", (e) => {
+  const btn = e.target.closest(".discover-tab");
+  if (btn && btn.dataset.feed !== currentDiscoverFeed) loadDiscoverFeed(btn.dataset.feed);
+});
 
 async function loadConfig() {
   try {
@@ -1738,12 +1889,18 @@ async function runSearch(query) {
   }
 }
 
-function renderSearchResults(results) {
-  searchDropdown.innerHTML = "";
-  searchDropdown.classList.add("is-open");
+// Shared by the search dropdown and the Discover catalog - same card
+// markup, same "pick a folder and download" flow either way. `container`
+// must carry (or be a descendant of something carrying) the
+// .search-dropdown class so the card CSS (mobile grid reflow, the
+// description's 50%-width cap, expand/collapse) applies; `emptyMessage`
+// is shown when there are no results, and `allResults` is what gets
+// re-rendered into `container` if an add fails.
+function renderResultCards(container, results, emptyMessage, allResults) {
+  container.innerHTML = "";
 
   if (results.length === 0) {
-    searchDropdown.innerHTML = `<div class="empty-state" style="padding:24px;">No results found.</div>`;
+    container.innerHTML = `<div class="empty-state" style="padding:24px;">${escapeHtml(emptyMessage)}</div>`;
     return;
   }
 
@@ -1785,13 +1942,18 @@ function renderSearchResults(results) {
     actionsEl.querySelector("select").addEventListener("click", e => e.stopPropagation());
     actionsEl.querySelector(".btn-add-result").addEventListener("click", (e) => {
       e.stopPropagation();
-      addSearchResult(r, actionsEl.querySelector("select").value, actionsEl);
+      addSearchResult(r, actionsEl.querySelector("select").value, actionsEl, container, results, emptyMessage);
     });
-    searchDropdown.appendChild(div);
+    container.appendChild(div);
   });
 }
 
-async function addSearchResult(result, category, actionsEl) {
+function renderSearchResults(results) {
+  searchDropdown.classList.add("is-open");
+  renderResultCards(searchDropdown, results, "No results found.");
+}
+
+async function addSearchResult(result, category, actionsEl, container, allResults, emptyMessage) {
   try { localStorage.setItem("torrenttube-category", category); } catch (e) {}
   actionsEl.innerHTML = `<span class="hint" style="margin:0; padding:0; border:none;">Adding...</span>`;
   const body = { category };
@@ -1806,7 +1968,7 @@ async function addSearchResult(result, category, actionsEl) {
   const data = await res.json();
   if (data.error) {
     showToast(data.error, true);
-    renderSearchResults(lastSearchResults);
+    renderResultCards(container, allResults, emptyMessage);
     return;
   }
   actionsEl.innerHTML = `${ICONS.check}<span>Added</span>`;
@@ -1816,6 +1978,7 @@ async function addSearchResult(result, category, actionsEl) {
 
 loadConfig();
 loadLimits();
+loadDiscoverFeeds();
 refresh();
 setInterval(refresh, 1500);
 </script>
