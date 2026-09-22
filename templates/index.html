@@ -39,6 +39,7 @@
     --radius-md: 12px;
     --radius-lg: 20px;
     --radius-pill: 980px;
+    --ui-zoom: 1.12;
   }
 
   html[data-theme="dark"] {
@@ -81,9 +82,13 @@
     min-height: 100vh;
   }
 
-  /* Desktop-only scale-up (~2 clicks of browser zoom). Mobile stays untouched. */
+  /* Desktop-only scale-up (~2 clicks of browser zoom). Mobile stays untouched.
+     Viewport units don't get the zoom multiplier the way px lengths do, so
+     `min-height: 100vh` above would render at 100vh * zoom (overflowing the
+     real viewport) unless divided back down here - same fix applies to
+     every other vh-based calc() below once zoom is active. */
   @media (min-width: 641px) {
-    body { zoom: 1.12; }
+    body { zoom: var(--ui-zoom); min-height: calc(100vh / var(--ui-zoom)); }
   }
 
   .bg-decor {
@@ -410,11 +415,15 @@
   .panel.discover-mode {
     display: flex;
     flex-direction: column;
-    height: calc(100vh - var(--topbar-h, 140px) - 64px);
+    /* CSS `zoom` on body (desktop only) scales rendered px lengths but not
+       viewport units, so 100vh must be divided by --ui-zoom here or this
+       renders taller than the real viewport once zoom is active. */
+    height: calc(100vh / var(--ui-zoom) - var(--topbar-h, 140px) - 64px);
     overflow: hidden;
   }
   @media (max-width: 640px) {
-    /* .layout's padding is 16+24 = 40px here (see the .layout media query). */
+    /* .layout's padding is 16+24 = 40px here (see the .layout media query).
+       No zoom below this breakpoint, so no --ui-zoom division needed. */
     .panel.discover-mode { height: calc(100vh - var(--topbar-h, 140px) - 40px); }
   }
   /* Belt and braces: even a 1-2px rounding mismatch (dynamic mobile browser
@@ -801,6 +810,13 @@
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-lg);
     padding: 22px;
+  }
+  /* Divide by --ui-zoom for the same reason as .panel.discover-mode above -
+     100vh doesn't shrink under the desktop zoom, but this box's rendered
+     px does, so the raw vh value above would let it grow past the real
+     viewport. Only desktop (>=641px) has zoom active. */
+  @media (min-width: 641px) {
+    .modal-box { max-height: calc(100vh / var(--ui-zoom) - 32px); }
   }
   .modal-title {
     font-size: 16px;
