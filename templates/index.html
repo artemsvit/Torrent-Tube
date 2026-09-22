@@ -375,16 +375,15 @@
     font-size: 12.5px;
     flex-shrink: 0;
   }
-  .result-header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 10px;
-  }
-  .result-header .item-title { flex: 1; min-width: 0; }
   /* Stretched to match the height of the title/stats/overview column next
      to it, rather than a small fixed square, so it reads as a real poster. */
   .search-dropdown .item-top { align-items: stretch; }
+  /* The folder picker + Download button live in their own column (not
+     sharing a row with the title) so they don't inflate that row's height
+     and push a gap under the title, and so the description column keeps a
+     fixed width instead of stretching under them. Centered vertically
+     against the stretched poster/description column. */
+  .search-dropdown .item-top > .search-result-actions { align-self: center; }
   .result-poster {
     width: 84px;
     border-radius: 8px;
@@ -777,22 +776,28 @@
     .clear-field-btn { right: 8px; }
     .btn-primary.btn-pill#goBtn { padding: 0 16px; height: 44px; font-size: 13px; }
     .btn-circle { width: 44px; height: 44px; }
-    .result-poster, .result-poster-fallback { width: 68px; }
+    .result-poster, .result-poster-fallback { width: 68px; height: auto; }
     /* On narrow screens there isn't room for the folder picker + Download
-       button next to the title, so re-flow the card: title/stats/overview
-       stack first, then the actions row spans the full width at the bottom.
-       `display: contents` unwraps .result-header so its children become
-       direct flex items of .item-meta, orderable alongside their siblings. */
-    .search-dropdown .item-meta { display: flex; flex-direction: column; }
-    .search-dropdown .result-header { display: contents; }
-    .search-dropdown .item-title { order: 1; }
-    .search-dropdown .item-sub { order: 2; }
-    .search-dropdown .item-overview { order: 3; }
-    .search-dropdown .overview-toggle { order: 3; }
-    .search-dropdown .search-result-actions {
-      order: 4;
+       button next to the title/description column, so switch to an
+       explicit grid: poster+meta on row 1, actions spanning full width on
+       row 2. (flex-wrap here is unreliable - a flex item with an auto
+       basis can get pushed onto its own line instead of shrinking to fit,
+       which once left the poster/description column collapsed to
+       zero-height. Grid's track sizing doesn't have that ambiguity.) */
+    .search-dropdown .item-top {
+      display: grid;
+      grid-template-columns: 68px 1fr;
+      grid-template-areas: "poster meta" "actions actions";
+      column-gap: 10px;
+      row-gap: 10px;
+    }
+    .search-dropdown .item-top > .result-poster,
+    .search-dropdown .item-top > .result-poster-fallback { grid-area: poster; width: 100%; }
+    .search-dropdown .item-top > .item-meta { grid-area: meta; min-width: 0; }
+    .search-dropdown .item-top > .search-result-actions {
+      grid-area: actions;
       width: 100%;
-      margin-top: 10px;
+      align-self: auto;
     }
     .search-dropdown .search-result-actions .inline-category-select { flex: 1; }
     .search-dropdown .search-result-actions .btn-add-result { flex: 1; justify-content: center; }
@@ -1280,16 +1285,14 @@ function renderSearchResults(results) {
       <div class="item-top">
         ${poster}
         <div class="item-meta">
-          <div class="result-header">
-            <div class="item-title">${escapeHtml(r.clean_title || r.title)}</div>
-            <div class="search-result-actions">
-              <select class="inline-category-select">${categoryOptions}</select>
-              <button class="btn-secondary btn-add-result">${ICONS.download}<span>Download</span></button>
-            </div>
-          </div>
+          <div class="item-title">${escapeHtml(r.clean_title || r.title)}</div>
           <div class="item-sub">${r.size_label} &middot; ${formatSeedPeers(r.seeders, r.peers)} ${rating}</div>
           ${r.overview ? `<div class="item-overview">${escapeHtml(r.overview)}</div>` : ""}
           ${r.overview && r.overview.length > 100 ? `<button type="button" class="overview-toggle">Show more</button>` : ""}
+        </div>
+        <div class="search-result-actions">
+          <select class="inline-category-select">${categoryOptions}</select>
+          <button class="btn-secondary btn-add-result">${ICONS.download}<span>Download</span></button>
         </div>
       </div>
     `;
