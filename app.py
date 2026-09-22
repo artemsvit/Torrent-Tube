@@ -508,7 +508,7 @@ def search_torrents():
 # Torznab category 100175). Querying with cat= and no q returns that
 # section's latest uploads.
 DISCOVER_FEEDS = [
-    {"id": "new", "label": "New releases", "cats": ["100175"]},
+    {"id": "new", "label": "New", "cats": ["100175"]},
     {"id": "movies", "label": "Movies", "cats": ["100012", "100147"]},
     {"id": "cartoons", "label": "Cartoons", "cats": ["100041", "100155"]},
     {"id": "tv", "label": "TV Shows", "cats": ["100044", "100152"]},
