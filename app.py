@@ -345,7 +345,7 @@ def tmdb_lookup(title: str, base: str, year: str):
             "title": item.get("title") or item.get("name") or title,
             "poster": f"https://image.tmdb.org/t/p/w200{poster_path}" if poster_path else None,
             "rating": item.get("vote_average"),
-            "overview": (item.get("overview") or "")[:220],
+            "overview": item.get("overview") or "",
             "year": (item.get("release_date") or item.get("first_air_date") or "")[:4],
             "media_type": item.get("media_type"),
             "genre_ids": item.get("genre_ids") or [],
