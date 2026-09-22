@@ -911,6 +911,31 @@
      22px between sections, 10px from a section's label to its first row,
      9px of padding within each row. */
   .settings-box { max-width: 440px; }
+
+  .settings-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 18px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .settings-tab {
+    padding: 6px 16px;
+    border-radius: var(--radius-pill);
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    color: var(--text-secondary);
+    font-size: 12.5px;
+    font-weight: 600;
+  }
+  .settings-tab:hover:not(.is-active) { border-color: var(--accent); color: var(--accent); }
+  .settings-tab.is-active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+  }
+  .settings-tab-panel[hidden] { display: none; }
+
   .settings-section { margin-bottom: 22px; }
   .settings-section:last-of-type { margin-bottom: 0; }
   .settings-section .section-label { margin-bottom: 10px; }
@@ -1330,105 +1355,118 @@
   <div class="modal-box settings-box">
     <div class="modal-title">Settings</div>
 
-    <div class="settings-section">
-      <div class="section-label">Downloads</div>
-      <div class="settings-row">
-        <div class="settings-row-label">Default folder</div>
-        <select class="inline-category-select" id="settingsDefaultCategory"></select>
+    <div class="settings-tabs" id="settingsTabs">
+      <button type="button" class="settings-tab is-active" data-tab="general">General</button>
+      <button type="button" class="settings-tab" data-tab="server">Server</button>
+    </div>
+
+    <div class="settings-tab-panel" data-panel="general">
+      <div class="settings-section">
+        <div class="section-label">Downloads</div>
+        <div class="settings-row">
+          <div class="settings-row-label">Default folder</div>
+          <select class="inline-category-select" id="settingsDefaultCategory"></select>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="section-label">Bandwidth &amp; Connections</div>
+
+        <div class="settings-slider-row">
+          <div class="settings-slider-header">
+            <span class="settings-slider-label">Download speed</span>
+            <span class="settings-slider-value" id="settingsDownloadLimitValue">Unlimited</span>
+          </div>
+          <input type="range" class="settings-slider" id="settingsDownloadLimit" min="0" max="1000" step="1" value="0">
+        </div>
+        <div class="settings-slider-row">
+          <div class="settings-slider-header">
+            <span class="settings-slider-label">Upload speed</span>
+            <span class="settings-slider-value" id="settingsUploadLimitValue">Unlimited</span>
+          </div>
+          <input type="range" class="settings-slider" id="settingsUploadLimit" min="0" max="1000" step="1" value="0">
+        </div>
+
+        <div class="settings-row">
+          <div class="settings-row-label">Seed after download<button type="button" class="info-tip" data-tip="Off: a torrent stops uploading the moment it finishes, instead of continuing to seed">i</button></div>
+          <label class="switch">
+            <input type="checkbox" id="settingsSeedAfterDownload" checked>
+            <span class="switch-track"></span>
+            <span class="switch-thumb"></span>
+          </label>
+        </div>
+
+        <div class="settings-slider-row">
+          <div class="settings-slider-header">
+            <span class="settings-slider-label">Max connections<button type="button" class="info-tip" data-tip="Peer connections across all torrents combined">i</button></span>
+            <span class="settings-slider-value" id="settingsMaxConnectionsValue">Default</span>
+          </div>
+          <input type="range" class="settings-slider" id="settingsMaxConnections" min="0" max="1000" step="10" value="0">
+        </div>
+        <div class="settings-slider-row">
+          <div class="settings-slider-header">
+            <span class="settings-slider-label">Per-torrent connections<button type="button" class="info-tip" data-tip="Peer connections allowed on any one torrent">i</button></span>
+            <span class="settings-slider-value" id="settingsMaxConnectionsPerTorrentValue">No cap</span>
+          </div>
+          <input type="range" class="settings-slider" id="settingsMaxConnectionsPerTorrent" min="0" max="500" step="5" value="0">
+        </div>
+        <div class="settings-slider-row">
+          <div class="settings-slider-header">
+            <span class="settings-slider-label">Max upload slots<button type="button" class="info-tip" data-tip="Peers unchoked (actively uploaded to) at the same time">i</button></span>
+            <span class="settings-slider-value" id="settingsMaxUploadSlotsValue">Default</span>
+          </div>
+          <input type="range" class="settings-slider" id="settingsMaxUploadSlots" min="0" max="100" step="1" value="0">
+        </div>
       </div>
     </div>
 
-    <div class="settings-section">
-      <div class="section-label">Server</div>
-      <div class="settings-row">
-        <div class="settings-row-label">Save location</div>
-        <div class="settings-value"><code id="settingsDownloadDir"></code></div>
-      </div>
-      <div class="settings-row">
-        <div class="settings-row-label">Categories</div>
-        <div class="settings-value" id="settingsCategories"></div>
-      </div>
-      <div class="settings-row">
-        <div class="settings-row-label">Torrent search<button type="button" class="info-tip" data-tip="Search results come from your Jackett instance">i</button></div>
-        <div class="settings-value" id="settingsSearch"></div>
-      </div>
-      <div class="settings-row">
-        <div class="settings-row-label">Posters &amp; ratings<button type="button" class="info-tip" data-tip="Enriches search results via TMDB">i</button></div>
-        <div class="settings-value" id="settingsTmdb"></div>
-      </div>
-    </div>
-
-    <div class="settings-section">
-      <div class="section-label">Search &amp; Metadata</div>
-      <div class="settings-row">
-        <div class="settings-row-label">Jackett URL</div>
-        <input type="text" class="settings-text-input" id="settingsJackettUrl" placeholder="http://jackett:9117" autocomplete="off" spellcheck="false">
-      </div>
-      <div class="settings-row">
-        <div class="settings-row-label">Jackett API key<button type="button" class="info-tip" data-tip="Jackett's dashboard, top right corner">i</button></div>
-        <input type="password" class="settings-text-input" id="settingsJackettApiKey" placeholder="Paste your Jackett API key" autocomplete="off" spellcheck="false">
-      </div>
-      <div class="settings-row">
-        <div class="settings-row-label">Jackett indexer</div>
-        <input type="text" class="settings-text-input" id="settingsJackettIndexer" placeholder="all" autocomplete="off" spellcheck="false">
-      </div>
-      <div class="settings-row">
-        <div class="settings-row-label">TMDB API key<button type="button" class="info-tip" data-tip="Free key at themoviedb.org/settings/api">i</button></div>
-        <input type="password" class="settings-text-input" id="settingsTmdbApiKey" placeholder="Paste your TMDB API key" autocomplete="off" spellcheck="false">
-      </div>
-      <div class="settings-row">
-        <div class="settings-row-label">TMDB language<button type="button" class="info-tip" data-tip="ISO 639-1 + region, e.g. en-US">i</button></div>
-        <input type="text" class="settings-text-input" id="settingsTmdbLanguage" placeholder="uk-UA" autocomplete="off" spellcheck="false">
-      </div>
-    </div>
-
-    <div class="settings-section">
-      <div class="section-label">Bandwidth &amp; Connections</div>
-
-      <div class="settings-slider-row">
-        <div class="settings-slider-header">
-          <span class="settings-slider-label">Download speed</span>
-          <span class="settings-slider-value" id="settingsDownloadLimitValue">Unlimited</span>
+    <div class="settings-tab-panel" data-panel="server" hidden>
+      <div class="settings-section">
+        <div class="section-label">Server</div>
+        <div class="settings-row">
+          <div class="settings-row-label">Save location</div>
+          <div class="settings-value"><code id="settingsDownloadDir"></code></div>
         </div>
-        <input type="range" class="settings-slider" id="settingsDownloadLimit" min="0" max="1000" step="1" value="0">
-      </div>
-      <div class="settings-slider-row">
-        <div class="settings-slider-header">
-          <span class="settings-slider-label">Upload speed</span>
-          <span class="settings-slider-value" id="settingsUploadLimitValue">Unlimited</span>
+        <div class="settings-row">
+          <div class="settings-row-label">Categories</div>
+          <div class="settings-value" id="settingsCategories"></div>
         </div>
-        <input type="range" class="settings-slider" id="settingsUploadLimit" min="0" max="1000" step="1" value="0">
       </div>
 
-      <div class="settings-row">
-        <div class="settings-row-label">Seed after download<button type="button" class="info-tip" data-tip="Off: a torrent stops uploading the moment it finishes, instead of continuing to seed">i</button></div>
-        <label class="switch">
-          <input type="checkbox" id="settingsSeedAfterDownload" checked>
-          <span class="switch-track"></span>
-          <span class="switch-thumb"></span>
-        </label>
+      <div class="settings-section">
+        <div class="section-label">Torrent Search<button type="button" class="info-tip" data-tip="Search results come from your Jackett instance">i</button></div>
+        <div class="settings-row">
+          <div class="settings-row-label">Status</div>
+          <div class="settings-value" id="settingsSearch"></div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-label">Jackett URL</div>
+          <input type="text" class="settings-text-input" id="settingsJackettUrl" placeholder="http://jackett:9117" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-label">Jackett API key<button type="button" class="info-tip" data-tip="Jackett's dashboard, top right corner">i</button></div>
+          <input type="password" class="settings-text-input" id="settingsJackettApiKey" placeholder="Paste your Jackett API key" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-label">Jackett indexer</div>
+          <input type="text" class="settings-text-input" id="settingsJackettIndexer" placeholder="all" autocomplete="off" spellcheck="false">
+        </div>
       </div>
 
-      <div class="settings-slider-row">
-        <div class="settings-slider-header">
-          <span class="settings-slider-label">Max connections<button type="button" class="info-tip" data-tip="Peer connections across all torrents combined">i</button></span>
-          <span class="settings-slider-value" id="settingsMaxConnectionsValue">Default</span>
+      <div class="settings-section">
+        <div class="section-label">Posters &amp; Ratings<button type="button" class="info-tip" data-tip="Enriches search results via TMDB">i</button></div>
+        <div class="settings-row">
+          <div class="settings-row-label">Status</div>
+          <div class="settings-value" id="settingsTmdb"></div>
         </div>
-        <input type="range" class="settings-slider" id="settingsMaxConnections" min="0" max="1000" step="10" value="0">
-      </div>
-      <div class="settings-slider-row">
-        <div class="settings-slider-header">
-          <span class="settings-slider-label">Per-torrent connections<button type="button" class="info-tip" data-tip="Peer connections allowed on any one torrent">i</button></span>
-          <span class="settings-slider-value" id="settingsMaxConnectionsPerTorrentValue">No cap</span>
+        <div class="settings-row">
+          <div class="settings-row-label">TMDB API key<button type="button" class="info-tip" data-tip="Free key at themoviedb.org/settings/api">i</button></div>
+          <input type="password" class="settings-text-input" id="settingsTmdbApiKey" placeholder="Paste your TMDB API key" autocomplete="off" spellcheck="false">
         </div>
-        <input type="range" class="settings-slider" id="settingsMaxConnectionsPerTorrent" min="0" max="500" step="5" value="0">
-      </div>
-      <div class="settings-slider-row">
-        <div class="settings-slider-header">
-          <span class="settings-slider-label">Max upload slots<button type="button" class="info-tip" data-tip="Peers unchoked (actively uploaded to) at the same time">i</button></span>
-          <span class="settings-slider-value" id="settingsMaxUploadSlotsValue">Default</span>
+        <div class="settings-row">
+          <div class="settings-row-label">TMDB language<button type="button" class="info-tip" data-tip="ISO 639-1 + region, e.g. en-US">i</button></div>
+          <input type="text" class="settings-text-input" id="settingsTmdbLanguage" placeholder="uk-UA" autocomplete="off" spellcheck="false">
         </div>
-        <input type="range" class="settings-slider" id="settingsMaxUploadSlots" min="0" max="100" step="1" value="0">
       </div>
     </div>
 
@@ -1534,6 +1572,7 @@ confirmModal.addEventListener("click", e => { if (e.target === confirmModal) clo
 
 const settingsBtn = document.getElementById("settingsBtn");
 const settingsModal = document.getElementById("settingsModal");
+const settingsTabs = document.getElementById("settingsTabs");
 const settingsSave = document.getElementById("settingsSave");
 const settingsReset = document.getElementById("settingsReset");
 const settingsDefaultCategory = document.getElementById("settingsDefaultCategory");
@@ -2170,8 +2209,16 @@ async function saveLimits() {
   }
 }
 
+function switchSettingsTab(tabId) {
+  settingsTabs.querySelectorAll(".settings-tab").forEach(btn =>
+    btn.classList.toggle("is-active", btn.dataset.tab === tabId));
+  settingsModal.querySelectorAll(".settings-tab-panel").forEach(panel =>
+    panel.hidden = panel.dataset.panel !== tabId);
+}
+
 async function openSettings() {
   renderSettings();
+  switchSettingsTab("general");
   settingsModal.classList.add("is-open");
   await loadLimits();
   renderLimits();
@@ -2183,6 +2230,10 @@ function closeSettings() {
 
 settingsBtn.addEventListener("click", openSettings);
 settingsModal.addEventListener("click", e => { if (e.target === settingsModal) closeSettings(); });
+settingsTabs.addEventListener("click", e => {
+  const btn = e.target.closest(".settings-tab");
+  if (btn) switchSettingsTab(btn.dataset.tab);
+});
 settingsDefaultCategory.addEventListener("change", () => rememberCategory(settingsDefaultCategory.value));
 
 // A native title-attribute tooltip never fires on touch, so the "i" badges
