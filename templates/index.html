@@ -315,7 +315,6 @@
   @media (max-width: 640px) {
     .layout { padding: 16px 16px 24px; }
     header, .searchbar { padding-left: 16px; padding-right: 16px; }
-    .search-dropdown { left: 16px; right: 16px; }
   }
 
   /* ---------- Search dropdown ---------- */
@@ -340,6 +339,14 @@
   .search-dropdown.is-open { display: block; }
   .search-dropdown .item { margin-bottom: 6px; }
   .search-dropdown .item:last-child { margin-bottom: 0; }
+  /* Match .layout's 16px mobile inset so the dropdown lines up with the
+     panel underneath it instead of overhanging/underhanging it. This must
+     come after the base rule above (same selector, same specificity) -
+     a media query earlier in the file loses to a later unconditional rule
+     regardless of viewport, which was the actual bug here. */
+  @media (max-width: 640px) {
+    .search-dropdown { left: 16px; right: 16px; }
+  }
 
   .inline-category-select {
     -webkit-appearance: none;
