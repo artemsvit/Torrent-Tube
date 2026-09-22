@@ -708,18 +708,23 @@
 
   /* ---------- Settings ---------- */
 
-  .settings-section { margin-bottom: 22px; }
+  .settings-box { max-width: 440px; }
+  .settings-section { margin-bottom: 16px; }
   .settings-section:last-of-type { margin-bottom: 0; }
-  .settings-section .section-label { margin-bottom: 12px; }
+  .settings-section .section-label { margin-bottom: 6px; }
   .settings-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 14px;
-    padding: 11px 0;
+    padding: 8px 0;
     border-bottom: 1px solid var(--border);
   }
   .settings-row:last-child { border-bottom: none; }
+  /* Any control that follows the row block (a full-width select, not
+     itself a .settings-row) needs its own top gap - it isn't a flex
+     sibling of the label the way a same-row value/input is. */
+  .settings-section > select { margin-top: 10px; }
   .settings-row-label {
     font-size: 13px;
     font-weight: 500;
@@ -730,7 +735,7 @@
     font-size: 11.5px;
     font-weight: 400;
     color: var(--text-tertiary);
-    margin-top: 2px;
+    margin-top: 1px;
   }
   .settings-value {
     font-size: 12.5px;
@@ -742,6 +747,38 @@
     font-size: 11px;
   }
   .settings-box .category-select { width: 100%; }
+
+  .settings-input-group { display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
+  .settings-number {
+    width: 72px;
+    padding: 6px 9px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 13px;
+    font-family: inherit;
+    text-align: right;
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    /* Hide the native spinner so a 0 (our "unlimited"/"default" sentinel)
+       doesn't get bumped to 1 by an accidental scroll or arrow-key tap. */
+    -moz-appearance: textfield;
+  }
+  .settings-number::-webkit-outer-spin-button,
+  .settings-number::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  .settings-number:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  .settings-unit {
+    font-size: 11.5px;
+    color: var(--text-tertiary);
+    min-width: 28px;
+  }
 
   .status-badge {
     display: inline-flex;
@@ -1025,6 +1062,57 @@
       </div>
     </div>
 
+    <div class="settings-section">
+      <div class="section-label">Bandwidth &amp; Connections</div>
+      <div class="settings-row">
+        <div class="settings-row-label">
+          Download speed
+          <small>0 = unlimited</small>
+        </div>
+        <div class="settings-input-group">
+          <input type="number" min="0" step="1" class="settings-number" id="settingsDownloadLimit">
+          <span class="settings-unit">KB/s</span>
+        </div>
+      </div>
+      <div class="settings-row">
+        <div class="settings-row-label">
+          Upload speed
+          <small>0 = unlimited</small>
+        </div>
+        <div class="settings-input-group">
+          <input type="number" min="0" step="1" class="settings-number" id="settingsUploadLimit">
+          <span class="settings-unit">KB/s</span>
+        </div>
+      </div>
+      <div class="settings-row">
+        <div class="settings-row-label">
+          Max connections
+          <small>Across all torrents &middot; 0 = default</small>
+        </div>
+        <div class="settings-input-group">
+          <input type="number" min="0" step="1" class="settings-number" id="settingsMaxConnections">
+        </div>
+      </div>
+      <div class="settings-row">
+        <div class="settings-row-label">
+          Per-torrent connections
+          <small>Peers per torrent &middot; 0 = no cap</small>
+        </div>
+        <div class="settings-input-group">
+          <input type="number" min="0" step="1" class="settings-number" id="settingsMaxConnectionsPerTorrent">
+        </div>
+      </div>
+      <div class="settings-row">
+        <div class="settings-row-label">
+          Max upload slots
+          <small>Peers unchoked at once &middot; 0 = default</small>
+        </div>
+        <div class="settings-input-group">
+          <input type="number" min="0" step="1" class="settings-number" id="settingsMaxUploadSlots">
+        </div>
+      </div>
+    </div>
+
     <div class="modal-actions">
       <button class="btn-primary btn-pill" id="settingsClose">Done</button>
     </div>
@@ -1080,10 +1168,16 @@ const settingsDownloadDir = document.getElementById("settingsDownloadDir");
 const settingsCategories = document.getElementById("settingsCategories");
 const settingsSearch = document.getElementById("settingsSearch");
 const settingsTmdb = document.getElementById("settingsTmdb");
+const settingsDownloadLimit = document.getElementById("settingsDownloadLimit");
+const settingsUploadLimit = document.getElementById("settingsUploadLimit");
+const settingsMaxConnections = document.getElementById("settingsMaxConnections");
+const settingsMaxConnectionsPerTorrent = document.getElementById("settingsMaxConnectionsPerTorrent");
+const settingsMaxUploadSlots = document.getElementById("settingsMaxUploadSlots");
 
 let searchEnabled = false;
 let currentCategories = [];
 let lastConfig = {};
+let lastLimits = {};
 
 let dragCounter = 0;
 
@@ -1439,11 +1533,53 @@ function renderSettings() {
     : `<span class="status-badge is-off">Not configured</span>`;
 
   syncThemeSegmented();
+  renderLimits();
 }
 
-function openSettings() {
+function renderLimits() {
+  settingsDownloadLimit.value = lastLimits.download_rate_limit ?? 0;
+  settingsUploadLimit.value = lastLimits.upload_rate_limit ?? 0;
+  settingsMaxConnections.value = lastLimits.max_connections ?? 0;
+  settingsMaxConnectionsPerTorrent.value = lastLimits.max_connections_per_torrent ?? 0;
+  settingsMaxUploadSlots.value = lastLimits.max_upload_slots ?? 0;
+}
+
+async function loadLimits() {
+  try {
+    const res = await fetch("/api/settings");
+    lastLimits = await res.json();
+  } catch (e) {}
+}
+
+async function saveLimits() {
+  const body = {
+    download_rate_limit: settingsDownloadLimit.value,
+    upload_rate_limit: settingsUploadLimit.value,
+    max_connections: settingsMaxConnections.value,
+    max_connections_per_torrent: settingsMaxConnectionsPerTorrent.value,
+    max_upload_slots: settingsMaxUploadSlots.value,
+  };
+  try {
+    const res = await fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (data.error) { showToast(data.error, true); return; }
+    lastLimits = data;
+    renderLimits();
+    showToast("Settings saved");
+  } catch (e) {
+    showToast("Couldn't save settings", true);
+  }
+}
+
+async function openSettings() {
   renderSettings();
   settingsModal.classList.add("is-open");
+  await loadLimits();
+  renderLimits();
 }
 
 function closeSettings() {
@@ -1454,6 +1590,8 @@ settingsBtn.addEventListener("click", openSettings);
 settingsClose.addEventListener("click", closeSettings);
 settingsModal.addEventListener("click", e => { if (e.target === settingsModal) closeSettings(); });
 settingsDefaultCategory.addEventListener("change", () => rememberCategory(settingsDefaultCategory.value));
+[settingsDownloadLimit, settingsUploadLimit, settingsMaxConnections, settingsMaxConnectionsPerTorrent, settingsMaxUploadSlots]
+  .forEach(el => el.addEventListener("change", saveLimits));
 
 // ---------- Search ----------
 
@@ -1564,6 +1702,7 @@ async function addSearchResult(result, category, actionsEl) {
 }
 
 loadConfig();
+loadLimits();
 refresh();
 setInterval(refresh, 1500);
 </script>

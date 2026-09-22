@@ -68,6 +68,49 @@ ses = lt.session(
     }
 )
 
+# ---------- Bandwidth / connection limits ----------
+# User-adjustable via /api/settings (Settings popup in the UI). Persisted to
+# disk so they survive a container restart, and re-applied to the live
+# libtorrent session (and every open torrent handle, for the per-torrent
+# connection cap) whenever they change.
+SETTINGS_FILE = STATE_DIR / "settings.json"
+DEFAULT_LIMITS = {
+    "download_rate_limit": 0,       # KB/s, 0 = unlimited
+    "upload_rate_limit": 0,         # KB/s, 0 = unlimited
+    "max_connections": 0,           # global peer connections, 0 = libtorrent default
+    "max_connections_per_torrent": 0,  # per-torrent peer connections, 0 = no cap
+    "max_upload_slots": 0,          # unchoke slots, 0 = libtorrent default
+}
+
+
+def load_limits() -> dict:
+    if SETTINGS_FILE.exists():
+        try:
+            saved = json.loads(SETTINGS_FILE.read_text())
+            return {k: int(saved.get(k, v)) for k, v in DEFAULT_LIMITS.items()}
+        except Exception:
+            pass
+    return dict(DEFAULT_LIMITS)
+
+
+LIMITS = load_limits()
+
+
+def apply_session_limits():
+    ses.apply_settings({
+        "download_rate_limit": LIMITS["download_rate_limit"] * 1024,
+        "upload_rate_limit": LIMITS["upload_rate_limit"] * 1024,
+        "connections_limit": LIMITS["max_connections"] or 200,  # libtorrent's own default
+        "unchoke_slots_limit": LIMITS["max_upload_slots"] or -1,
+    })
+
+
+def apply_torrent_limits(handle):
+    handle.set_max_connections(LIMITS["max_connections_per_torrent"] or -1)
+
+
+apply_session_limits()
+
 # info_hash (hex str) -> torrent_handle
 HANDLES = {}
 # ids the user explicitly paused. libtorrent's own torrent_status.paused flag
@@ -130,6 +173,7 @@ def add_magnet(uri: str, save_path: str = None) -> str:
     params.save_path = save_path or resolve_save_path()
     params.storage_mode = lt.storage_mode_t.storage_mode_sparse
     handle = ses.add_torrent(params)
+    apply_torrent_limits(handle)
     tid = torrent_id(handle)
     with LOCK:
         HANDLES[tid] = handle
@@ -142,6 +186,7 @@ def add_torrent_file(info: "lt.torrent_info", save_path: str = None) -> str:
     params.save_path = save_path or resolve_save_path()
     params.storage_mode = lt.storage_mode_t.storage_mode_sparse
     handle = ses.add_torrent(params)
+    apply_torrent_limits(handle)
     tid = torrent_id(handle)
     with LOCK:
         HANDLES[tid] = handle
@@ -206,6 +251,32 @@ def config():
         "tmdb_enabled": bool(TMDB_API_KEY),
         "tmdb_language": TMDB_LANGUAGE if TMDB_API_KEY else None,
     })
+
+
+@app.route("/api/settings", methods=["GET"])
+def get_settings():
+    return jsonify(LIMITS)
+
+
+@app.route("/api/settings", methods=["POST"])
+def update_settings():
+    payload = request.json or {}
+    for key in DEFAULT_LIMITS:
+        if key not in payload:
+            continue
+        try:
+            LIMITS[key] = max(0, int(payload[key]))
+        except (TypeError, ValueError):
+            return jsonify({"error": f"'{key}' must be a non-negative number"}), 400
+
+    apply_session_limits()
+    with LOCK:
+        handles = list(HANDLES.values())
+    for h in handles:
+        if h.is_valid():
+            apply_torrent_limits(h)
+    SETTINGS_FILE.write_text(json.dumps(LIMITS))
+    return jsonify(LIMITS)
 
 
 COLLECTION_WORDS_RE = re.compile(
