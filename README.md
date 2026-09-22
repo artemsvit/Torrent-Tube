@@ -12,8 +12,9 @@ behind qBittorrent and Deluge), served by Flask + waitress.
 - Paste a magnet link, search for one, or drag-and-drop / pick a `.torrent`
   file — the same input box does all three (paste a magnet to add it, type
   anything else to search)
-- Search results show poster, rating and a one-click Download button when
-  Jackett + TMDB are configured (see below)
+- Search results show poster, rating and a one-click Download button —
+  Jackett (bundled) and TMDB power this, and both are configured from the
+  app's own Settings screen (see below)
 - Pick which folder a download goes to (e.g. Cartoon / Movies / TV Shows)
 - Live progress, download/upload speed, peer count and ETA
 - Pause, resume, and remove (optionally deleting the downloaded files)
@@ -52,8 +53,25 @@ docker push artsvit/torrenttube:latest
 
 ### docker-compose
 
+Jackett is bundled as its own service, so `docker compose up -d` alone gives
+you a working Search/Discover tab once you've entered a couple of API keys
+(see "Search" below) — nothing else to install separately.
+
 ```yaml
 services:
+  jackett:
+    image: lscr.io/linuxserver/jackett:latest
+    container_name: jackett
+    restart: unless-stopped
+    ports:
+      - "9117:9117"
+    volumes:
+      - /volume1/docker/jackett/config:/config
+    environment:
+      - PUID=1026
+      - PGID=100
+      - TZ=Etc/UTC
+
   torrenttube:
     image: artsvit/torrenttube:latest
     # To build from source instead of pulling the published image, comment
@@ -63,6 +81,8 @@ services:
     #   network: host  # needed on some NAS/router setups; see below
     container_name: torrenttube
     restart: unless-stopped
+    depends_on:
+      - jackett
     ports:
       - "5058:5058"
       - "6881:6881"
@@ -75,11 +95,11 @@ services:
       - TZ=Etc/UTC
       # Must match real subfolder names under the mounted volume above.
       - TORRENTTUBE_CATEGORIES=Cartoon,Movies,TV Shows
-      # Optional: enables the Search tab (see "Search" below).
-      - JACKETTAPI_URL=http://192.168.0.102:9117
-      - JACKETTAPI_KEY=changeme
-      - JACKETTAPI_INDEXER=mazepa
-      - TMDB_API_KEY=changeme
+      # Points at the bundled jackett service by its compose service name -
+      # only needed if you're using an external Jackett instance instead.
+      # The API keys themselves are entered from the app's own Settings
+      # screen once it's running (see "Search" below), not here.
+      - JACKETTAPI_URL=http://jackett:9117
     dns:
       - 1.1.1.1
       - 8.8.8.8
@@ -105,23 +125,28 @@ picker and always save to one folder.
 
 ## Search
 
-The Search tab is optional and needs two other pieces, both self-hosted:
+The Search tab is optional and needs two other pieces:
 
 1. **[Jackett](https://github.com/Jackett/Jackett)** — does the actual tracker
-   login/scraping. Run it as its own container (`lscr.io/linuxserver/jackett`),
-   add your tracker (e.g. Mazepa) with **your own credentials typed directly
-   into Jackett's UI** — Torrent Tube never sees or stores them — and copy
-   Jackett's API key (shown top-right of its dashboard) into
-   `JACKETTAPI_KEY`. `JACKETTAPI_INDEXER` is the indexer's id (`mazepa`), or
-   `all` to search every indexer you've configured in Jackett.
+   login/scraping, bundled as its own service in `docker-compose.yml`. Open
+   its dashboard at `http://<host-ip>:9117`, add your tracker (e.g. Mazepa)
+   with **your own credentials typed directly into Jackett's UI** — Torrent
+   Tube never sees or stores them — then copy Jackett's API key (shown
+   top-right of its dashboard) into Torrent Tube's own Settings screen
+   (**Search & Metadata → Jackett API key**). **Jackett indexer** is the
+   indexer's id (e.g. `mazepa`), or `all` to search every indexer you've
+   configured in Jackett.
 2. **TMDB** *(optional, adds posters/ratings)* — Jackett's feed has no images,
    so this looks up each result's guessed title on
    [TMDB](https://www.themoviedb.org/settings/api) (free API key) separately.
-   Titles are messy real-world tracker listings, so matching is best-effort —
-   results without a match just show a plain icon instead of a poster.
+   Paste it into **Search & Metadata → TMDB API key** in Settings. Titles are
+   messy real-world tracker listings, so matching is best-effort — results
+   without a match just show a plain icon instead of a poster.
 
-Without `JACKETTAPI_URL`/`JACKETTAPI_KEY` set, the Search tab stays hidden
-and the app behaves exactly like the paste-only version.
+Both keys are saved to `settings.json` next to your downloads (not baked
+into the image or docker-compose.yml), so they survive a container restart
+or redeploy. Without a Jackett URL + API key set, the Search tab stays
+hidden and the app behaves exactly like the paste-only version.
 
 ## Run it locally without Docker (macOS)
 
@@ -132,7 +157,12 @@ and the app behaves exactly like the paste-only version.
 First run sets up a Python virtualenv automatically; subsequent runs are
 instant. Downloads save to `~/Downloads/TorrentTube`.
 
-## Configuration (env vars)
+## Configuration
+
+Jackett/TMDB settings (URL, API keys, indexer, language) are normally set
+from the app's own Settings screen once it's running - see "Search" above.
+The env vars below only seed their *initial* value (handy for a from-scratch
+`docker compose up`); once something's saved from Settings, that wins.
 
 | Variable                     | Default                          | Description                   |
 | ----------------------------- | --------------------------------- | ------------------------------ |
@@ -140,10 +170,11 @@ instant. Downloads save to `~/Downloads/TorrentTube`.
 | `TORRENTTUBE_PORT`            | `5058`                            | Bind port                     |
 | `TORRENTTUBE_DOWNLOAD_DIR`    | `~/Downloads/TorrentTube` (`/downloads` in Docker) | Where files are saved |
 | `TORRENTTUBE_CATEGORIES`      | `Cartoon,Movies,TV Shows`        | Comma-separated destination subfolders shown in the UI |
-| `JACKETTAPI_URL`              | unset (Search tab hidden)        | Base URL of a Jackett instance, e.g. `http://192.168.0.102:9117` |
+| `JACKETTAPI_URL`              | `http://jackett:9117` (the bundled service) | Base URL of a Jackett instance |
 | `JACKETTAPI_KEY`              | unset                            | Jackett's own API key (its dashboard, top right) |
 | `JACKETTAPI_INDEXER`          | `all`                            | Jackett indexer id to search, or `all` |
 | `TMDB_API_KEY`                | unset (no posters)               | Free key from themoviedb.org/settings/api |
+| `TMDB_LANGUAGE`               | `uk-UA`                          | ISO 639-1 + region for TMDB titles/overviews |
 | `PUID` / `PGID`               | `1000` / `1000`                  | Docker only — file ownership  |
 
 ## Notes

@@ -1,4 +1,22 @@
 services:
+  # Bundled so `docker-compose up` alone gives you a working Search/Discover
+  # tab - Jackett does the actual tracker login/scraping (configured with
+  # your own tracker credentials, entered into Jackett's own UI at
+  # :9117), this app only talks to its local Torznab API.
+  jackett:
+    image: lscr.io/linuxserver/jackett:latest
+    container_name: jackett
+    restart: unless-stopped
+    ports:
+      - "9117:9117"
+    volumes:
+      - /volume1/docker/jackett/config:/config
+      - /volume1/homes/artsvit/Media:/downloads
+    environment:
+      - PUID=1026
+      - PGID=100
+      - TZ=Etc/UTC
+
   torrenttube:
     image: artsvit/torrenttube:latest
     # To build from source instead of pulling the published image, comment
@@ -8,6 +26,8 @@ services:
     #   network: host  # needed on some NAS/router setups; see README
     container_name: torrenttube
     restart: unless-stopped
+    depends_on:
+      - jackett
     ports:
       - "5058:5058"
       - "6881:6881"
@@ -20,18 +40,17 @@ services:
       - TZ=Etc/UTC
       # Must match real subfolder names under the mounted volume above.
       - TORRENTTUBE_CATEGORIES=Cartoon,Movies,TV Shows
-      # Optional: enables the Search tab. Point at a Jackett instance (see
-      # README) — Jackett holds your tracker login, not this app. Fill in
-      # your own Jackett API key here (Jackett's dashboard, top right) —
-      # don't commit a real key to a public repo.
-      - JACKETTAPI_URL=http://192.168.0.102:9117
-      - JACKETTAPI_KEY=changeme
-      - JACKETTAPI_INDEXER=mazepa
-      # Optional: adds posters/ratings to search results. Free key from
-      # https://www.themoviedb.org/settings/api - don't commit a real one.
-      - TMDB_API_KEY=changeme
-      # Language for TMDB titles/overviews (ISO 639-1 + region, e.g. en-US).
-      - TMDB_LANGUAGE=uk-UA
+      # Everything below is optional and only seeds the *initial* value -
+      # once you enter it from the app's own Settings screen (Search &
+      # Metadata section), that's saved to settings.json next to your
+      # downloads and wins from then on, surviving container recreation.
+      # Points at the bundled jackett service above by its compose service
+      # name; only change this if you're using an external Jackett instance.
+      - JACKETTAPI_URL=http://jackett:9117
+      # - JACKETTAPI_KEY=your-jackett-api-key
+      # - JACKETTAPI_INDEXER=all
+      # - TMDB_API_KEY=your-tmdb-api-key
+      # - TMDB_LANGUAGE=uk-UA
     # Same hairpin-NAT issue as the build (see above), but for the running
     # container: Docker's embedded resolver (127.0.0.11) forwards to the
     # host's DNS server, which is Pi-hole running in another container on

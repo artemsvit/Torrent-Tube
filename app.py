@@ -27,20 +27,13 @@ STATE_DIR = Path(os.environ.get("TORRENTTUBE_STATE_DIR") or (DOWNLOAD_DIR / ".to
 STATE_DIR.mkdir(parents=True, exist_ok=True)
 RESUME_FILE = STATE_DIR / "torrents.json"
 
-# Optional: point at a Jackett instance to enable the Search tab. Jackett does
-# the actual tracker login/scraping (configured with the user's own tracker
-# credentials, entered directly into Jackett's own UI) - this app only talks
-# to Jackett's local Torznab API with Jackett's own API key.
-JACKETT_URL = os.environ.get("JACKETTAPI_URL", "").rstrip("/")
-JACKETT_API_KEY = os.environ.get("JACKETTAPI_KEY", "")
-JACKETT_INDEXER = os.environ.get("JACKETTAPI_INDEXER", "all")
-TORZNAB_NS = {"torznab": "http://torznab.com/schemas/2015/feed"}
+# All user-adjustable settings (bandwidth/connection limits, Jackett/TMDB
+# config) live in this one file, editable from the Settings popup in the UI.
+# Defined here (not down with DEFAULT_LIMITS below) so it's available to
+# load the Jackett/TMDB config immediately below too.
+SETTINGS_FILE = STATE_DIR / "settings.json"
 
-# Optional: enriches search results with a poster/rating from TMDB. Jackett's
-# indexers don't carry images, so this looks the parsed title up separately.
-# Get a free key at https://www.themoviedb.org/settings/api
-TMDB_API_KEY = os.environ.get("TMDB_API_KEY", "")
-TMDB_LANGUAGE = os.environ.get("TMDB_LANGUAGE", "uk-UA")
+TORZNAB_NS = {"torznab": "http://torznab.com/schemas/2015/feed"}
 TMDB_CACHE = {}
 TMDB_CACHE_TTL = 6 * 3600
 TMDB_EXECUTOR = ThreadPoolExecutor(max_workers=8)
@@ -68,12 +61,12 @@ ses = lt.session(
     }
 )
 
-# ---------- Bandwidth / connection limits ----------
-# User-adjustable via /api/settings (Settings popup in the UI). Persisted to
-# disk so they survive a container restart, and re-applied to the live
-# libtorrent session (and every open torrent handle, for the per-torrent
-# connection cap) whenever they change.
-SETTINGS_FILE = STATE_DIR / "settings.json"
+# ---------- Bandwidth / connection limits + Jackett / TMDB config ----------
+# Everything here is user-adjustable via /api/settings (Settings popup in the
+# UI) and persisted to SETTINGS_FILE so it survives a container restart.
+# Bandwidth/connection limits are re-applied to the live libtorrent session
+# (and every open torrent handle, for the per-torrent connection cap)
+# whenever they change.
 DEFAULT_LIMITS = {
     "download_rate_limit": 0,       # KB/s, 0 = unlimited
     "upload_rate_limit": 0,         # KB/s, 0 = unlimited
@@ -83,18 +76,50 @@ DEFAULT_LIMITS = {
     "seed_after_download": 1,       # 0/1 - pause a torrent as soon as it finishes instead of seeding
 }
 
+# Jackett does the actual tracker login/scraping (configured with the user's
+# own tracker credentials, entered directly into Jackett's own UI) - this
+# app only talks to Jackett's local Torznab API with Jackett's own API key.
+# TMDB enriches search results with a poster/rating (free key at
+# https://www.themoviedb.org/settings/api). Both optional: without them the
+# Search/Discover tabs stay disabled. Env vars only seed the *initial*
+# value (so an existing docker-compose deploy keeps working unmodified) -
+# jackett_url defaults to the bundled compose service's hostname. Once
+# something is saved from the Settings UI, settings.json wins from then on.
+DEFAULT_SERVICE = {
+    "jackett_url": os.environ.get("JACKETTAPI_URL", "http://jackett:9117").rstrip("/"),
+    "jackett_api_key": os.environ.get("JACKETTAPI_KEY", ""),
+    "jackett_indexer": os.environ.get("JACKETTAPI_INDEXER", "all"),
+    "tmdb_api_key": os.environ.get("TMDB_API_KEY", ""),
+    "tmdb_language": os.environ.get("TMDB_LANGUAGE", "uk-UA"),
+}
 
-def load_limits() -> dict:
+
+def load_settings() -> dict:
+    values = {**DEFAULT_LIMITS, **DEFAULT_SERVICE}
     if SETTINGS_FILE.exists():
         try:
             saved = json.loads(SETTINGS_FILE.read_text())
-            return {k: int(saved.get(k, v)) for k, v in DEFAULT_LIMITS.items()}
+            for k in DEFAULT_LIMITS:
+                if k in saved:
+                    values[k] = int(saved[k])
+            for k in DEFAULT_SERVICE:
+                if isinstance(saved.get(k), str):
+                    values[k] = saved[k]
         except Exception:
             pass
-    return dict(DEFAULT_LIMITS)
+    return values
 
 
-LIMITS = load_limits()
+# LIMITS is an alias for SETTINGS (same dict object), kept around because
+# the bandwidth/connection code below reads it by that name - a save from
+# /api/settings updates this one dict and both names see it.
+SETTINGS = load_settings()
+LIMITS = SETTINGS
+JACKETT_URL = SETTINGS["jackett_url"]
+JACKETT_API_KEY = SETTINGS["jackett_api_key"]
+JACKETT_INDEXER = SETTINGS["jackett_indexer"]
+TMDB_API_KEY = SETTINGS["tmdb_api_key"]
+TMDB_LANGUAGE = SETTINGS["tmdb_language"]
 
 
 def apply_session_limits():
@@ -256,19 +281,33 @@ def config():
 
 @app.route("/api/settings", methods=["GET"])
 def get_settings():
-    return jsonify(LIMITS)
+    return jsonify(SETTINGS)
 
 
 @app.route("/api/settings", methods=["POST"])
 def update_settings():
+    global JACKETT_URL, JACKETT_API_KEY, JACKETT_INDEXER, TMDB_API_KEY, TMDB_LANGUAGE
     payload = request.json or {}
     for key in DEFAULT_LIMITS:
         if key not in payload:
             continue
         try:
-            LIMITS[key] = max(0, int(payload[key]))
+            SETTINGS[key] = max(0, int(payload[key]))
         except (TypeError, ValueError):
             return jsonify({"error": f"'{key}' must be a non-negative number"}), 400
+    for key in DEFAULT_SERVICE:
+        if key not in payload:
+            continue
+        if not isinstance(payload[key], str):
+            return jsonify({"error": f"'{key}' must be text"}), 400
+        SETTINGS[key] = payload[key].strip()
+
+    JACKETT_URL = SETTINGS["jackett_url"].rstrip("/")
+    JACKETT_API_KEY = SETTINGS["jackett_api_key"]
+    JACKETT_INDEXER = SETTINGS["jackett_indexer"] or "all"
+    TMDB_API_KEY = SETTINGS["tmdb_api_key"]
+    TMDB_LANGUAGE = SETTINGS["tmdb_language"] or "uk-UA"
+    TMDB_CACHE.clear()
 
     apply_session_limits()
     with LOCK:
@@ -276,8 +315,8 @@ def update_settings():
     for h in handles:
         if h.is_valid():
             apply_torrent_limits(h)
-    SETTINGS_FILE.write_text(json.dumps(LIMITS))
-    return jsonify(LIMITS)
+    SETTINGS_FILE.write_text(json.dumps(SETTINGS))
+    return jsonify(SETTINGS)
 
 
 COLLECTION_WORDS_RE = re.compile(

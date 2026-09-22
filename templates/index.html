@@ -918,6 +918,29 @@
   }
   .settings-box .category-select { width: 100%; }
 
+  .settings-text-input {
+    min-width: 0;
+    flex: 1;
+    max-width: 220px;
+    padding: 7px 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 12.5px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    text-align: right;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .settings-text-input::placeholder { color: var(--text-tertiary); font-family: inherit; }
+  .settings-text-input:hover { border-color: var(--accent); }
+  .settings-text-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 4px var(--accent-soft);
+    text-align: left;
+  }
+
   /* A small "i" badge carrying the explanation as a toast on tap/click
      (a native title-attribute tooltip never fires on touch, which makes it
      useless on the phone this app is mainly used from) instead of a
@@ -1310,6 +1333,30 @@
     </div>
 
     <div class="settings-section">
+      <div class="section-label">Search &amp; Metadata</div>
+      <div class="settings-row">
+        <div class="settings-row-label">Jackett URL</div>
+        <input type="text" class="settings-text-input" id="settingsJackettUrl" placeholder="http://jackett:9117" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="settings-row">
+        <div class="settings-row-label">Jackett API key<button type="button" class="info-tip" data-tip="Jackett's dashboard, top right corner">i</button></div>
+        <input type="password" class="settings-text-input" id="settingsJackettApiKey" placeholder="Paste your Jackett API key" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="settings-row">
+        <div class="settings-row-label">Jackett indexer</div>
+        <input type="text" class="settings-text-input" id="settingsJackettIndexer" placeholder="all" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="settings-row">
+        <div class="settings-row-label">TMDB API key<button type="button" class="info-tip" data-tip="Free key at themoviedb.org/settings/api">i</button></div>
+        <input type="password" class="settings-text-input" id="settingsTmdbApiKey" placeholder="Paste your TMDB API key" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="settings-row">
+        <div class="settings-row-label">TMDB language<button type="button" class="info-tip" data-tip="ISO 639-1 + region, e.g. en-US">i</button></div>
+        <input type="text" class="settings-text-input" id="settingsTmdbLanguage" placeholder="uk-UA" autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+
+    <div class="settings-section">
       <div class="section-label">Bandwidth &amp; Connections</div>
 
       <div class="settings-slider-row">
@@ -1466,6 +1513,11 @@ const settingsDownloadDir = document.getElementById("settingsDownloadDir");
 const settingsCategories = document.getElementById("settingsCategories");
 const settingsSearch = document.getElementById("settingsSearch");
 const settingsTmdb = document.getElementById("settingsTmdb");
+const settingsJackettUrl = document.getElementById("settingsJackettUrl");
+const settingsJackettApiKey = document.getElementById("settingsJackettApiKey");
+const settingsJackettIndexer = document.getElementById("settingsJackettIndexer");
+const settingsTmdbApiKey = document.getElementById("settingsTmdbApiKey");
+const settingsTmdbLanguage = document.getElementById("settingsTmdbLanguage");
 const settingsDownloadLimit = document.getElementById("settingsDownloadLimit");
 const settingsDownloadLimitValue = document.getElementById("settingsDownloadLimitValue");
 const settingsUploadLimit = document.getElementById("settingsUploadLimit");
@@ -2014,6 +2066,12 @@ function renderLimits() {
   settingsMaxConnectionsPerTorrentValue.textContent = formatCount(lastLimits.max_connections_per_torrent, "No cap");
   settingsMaxUploadSlots.value = lastLimits.max_upload_slots ?? 0;
   settingsMaxUploadSlotsValue.textContent = formatCount(lastLimits.max_upload_slots, "Default");
+
+  settingsJackettUrl.value = lastLimits.jackett_url ?? "";
+  settingsJackettApiKey.value = lastLimits.jackett_api_key ?? "";
+  settingsJackettIndexer.value = lastLimits.jackett_indexer ?? "";
+  settingsTmdbApiKey.value = lastLimits.tmdb_api_key ?? "";
+  settingsTmdbLanguage.value = lastLimits.tmdb_language ?? "";
 }
 
 async function loadLimits() {
@@ -2031,6 +2089,11 @@ async function saveLimits() {
     max_connections: settingsMaxConnections.value,
     max_connections_per_torrent: settingsMaxConnectionsPerTorrent.value,
     max_upload_slots: settingsMaxUploadSlots.value,
+    jackett_url: settingsJackettUrl.value,
+    jackett_api_key: settingsJackettApiKey.value,
+    jackett_indexer: settingsJackettIndexer.value,
+    tmdb_api_key: settingsTmdbApiKey.value,
+    tmdb_language: settingsTmdbLanguage.value,
   };
   try {
     const res = await fetch("/api/settings", {
@@ -2042,6 +2105,10 @@ async function saveLimits() {
     if (data.error) { showToast(data.error, true); return; }
     lastLimits = data;
     renderLimits();
+    // Jackett/TMDB keys may have just been added or cleared - refresh the
+    // Search/Discover-enabled flags without needing a page reload.
+    await loadConfig();
+    renderSettings();
     showToast("Settings saved");
   } catch (e) {
     showToast("Couldn't save settings", true);
@@ -2077,7 +2144,8 @@ settingsMaxConnections.addEventListener("input", () => { settingsMaxConnectionsV
 settingsMaxConnectionsPerTorrent.addEventListener("input", () => { settingsMaxConnectionsPerTorrentValue.textContent = formatCount(settingsMaxConnectionsPerTorrent.value, "No cap"); });
 settingsMaxUploadSlots.addEventListener("input", () => { settingsMaxUploadSlotsValue.textContent = formatCount(settingsMaxUploadSlots.value, "Default"); });
 
-[settingsDownloadLimit, settingsUploadLimit, settingsSeedAfterDownload, settingsMaxConnections, settingsMaxConnectionsPerTorrent, settingsMaxUploadSlots]
+[settingsDownloadLimit, settingsUploadLimit, settingsSeedAfterDownload, settingsMaxConnections, settingsMaxConnectionsPerTorrent, settingsMaxUploadSlots,
+ settingsJackettUrl, settingsJackettApiKey, settingsJackettIndexer, settingsTmdbApiKey, settingsTmdbLanguage]
   .forEach(el => el.addEventListener("change", saveLimits));
 
 settingsSave.addEventListener("click", async () => {
