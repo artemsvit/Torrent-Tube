@@ -726,16 +726,12 @@
      sibling of the label the way a same-row value/input is. */
   .settings-section > select { margin-top: 10px; }
   .settings-row-label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
     font-size: 13px;
     font-weight: 500;
     color: var(--text);
-  }
-  .settings-row-label small {
-    display: block;
-    font-size: 11.5px;
-    font-weight: 400;
-    color: var(--text-tertiary);
-    margin-top: 1px;
   }
   .settings-value {
     font-size: 12.5px;
@@ -748,7 +744,26 @@
   }
   .settings-box .category-select { width: 100%; }
 
-  .settings-input-group { display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
+  /* A small "i" badge carrying the explanation as a native tooltip
+     (title attr) instead of a permanent second line of text under every
+     row - keeps the list scannable without losing the detail. */
+  .info-tip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--border);
+    color: var(--text-tertiary);
+    font-size: 9.5px;
+    font-weight: 700;
+    font-style: italic;
+    font-family: Georgia, "Times New Roman", serif;
+    cursor: help;
+    flex-shrink: 0;
+  }
+
   .settings-number {
     width: 72px;
     padding: 6px 9px;
@@ -761,6 +776,7 @@
     text-align: right;
     outline: none;
     transition: border-color 0.15s, box-shadow 0.15s;
+    flex-shrink: 0;
     /* Hide the native spinner so a 0 (our "unlimited"/"default" sentinel)
        doesn't get bumped to 1 by an accidental scroll or arrow-key tap. */
     -moz-appearance: textfield;
@@ -773,11 +789,6 @@
   .settings-number:focus {
     border-color: var(--accent);
     box-shadow: 0 0 0 3px var(--accent-soft);
-  }
-  .settings-unit {
-    font-size: 11.5px;
-    color: var(--text-tertiary);
-    min-width: 28px;
   }
 
   .status-badge {
@@ -799,27 +810,81 @@
   .status-badge.is-on { color: var(--success); background: rgba(31, 157, 75, 0.12); }
   .status-badge.is-off { color: var(--text-tertiary); background: var(--border); }
 
-  .segmented {
-    display: inline-flex;
-    background: var(--border);
-    border-radius: var(--radius-pill);
-    padding: 3px;
-    gap: 2px;
+  /* ---------- Sliders (download/upload speed) ---------- */
+
+  .settings-slider-row { padding: 7px 0; }
+  .settings-slider-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 7px;
   }
-  .segmented button {
-    padding: 6px 16px;
-    border-radius: var(--radius-pill);
-    background: transparent;
-    color: var(--text-secondary);
-    font-size: 12.5px;
-    font-weight: 600;
-    transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  .settings-slider-label { font-size: 13px; font-weight: 500; color: var(--text); }
+  .settings-slider-value { font-size: 12px; font-weight: 600; color: var(--accent); }
+  .settings-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border-strong);
+    outline: none;
+    cursor: pointer;
+    margin: 0;
   }
-  .segmented button.is-active {
-    background: var(--surface-solid);
-    color: var(--text);
+  .settings-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
     box-shadow: var(--shadow-sm);
+    cursor: pointer;
+    margin-top: -6px;
   }
+  .settings-slider::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; }
+  .settings-slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: none;
+    box-shadow: var(--shadow-sm);
+    cursor: pointer;
+  }
+  .settings-slider::-moz-range-track { height: 4px; border-radius: 2px; background: var(--border-strong); }
+
+  /* ---------- Toggle switch (seed after download) ---------- */
+
+  .switch { position: relative; display: inline-block; width: 40px; height: 24px; flex-shrink: 0; }
+  .switch input {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+    z-index: 1;
+  }
+  .switch-track {
+    position: absolute;
+    inset: 0;
+    background: var(--border-strong);
+    border-radius: var(--radius-pill);
+    transition: background 0.15s;
+  }
+  .switch-thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: white;
+    box-shadow: var(--shadow-sm);
+    transition: transform 0.15s;
+  }
+  .switch input:checked ~ .switch-track { background: var(--accent); }
+  .switch input:checked ~ .switch-thumb { transform: translateX(16px); }
 
   /* ---------- Toasts ---------- */
 
@@ -1015,23 +1080,9 @@
     <div class="modal-title">Settings</div>
 
     <div class="settings-section">
-      <div class="section-label">Appearance</div>
-      <div class="settings-row">
-        <div class="settings-row-label">Theme</div>
-        <div class="segmented" id="themeSegmented">
-          <button type="button" data-theme-choice="light">Light</button>
-          <button type="button" data-theme-choice="dark">Dark</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="settings-section">
       <div class="section-label">Downloads</div>
       <div class="settings-row">
-        <div class="settings-row-label">
-          Default folder
-          <small>Used when you paste a magnet link directly</small>
-        </div>
+        <div class="settings-row-label">Default folder</div>
       </div>
       <select class="category-select" id="settingsDefaultCategory"></select>
     </div>
@@ -1047,69 +1098,52 @@
         <div class="settings-value" id="settingsCategories"></div>
       </div>
       <div class="settings-row">
-        <div class="settings-row-label">
-          Torrent search
-          <small>Via Jackett</small>
-        </div>
+        <div class="settings-row-label">Torrent search<span class="info-tip" title="Search results come from your Jackett instance">i</span></div>
         <div class="settings-value" id="settingsSearch"></div>
       </div>
       <div class="settings-row">
-        <div class="settings-row-label">
-          Posters &amp; ratings
-          <small>Via TMDB</small>
-        </div>
+        <div class="settings-row-label">Posters &amp; ratings<span class="info-tip" title="Enriches search results via TMDB">i</span></div>
         <div class="settings-value" id="settingsTmdb"></div>
       </div>
     </div>
 
     <div class="settings-section">
       <div class="section-label">Bandwidth &amp; Connections</div>
+
+      <div class="settings-slider-row">
+        <div class="settings-slider-header">
+          <span class="settings-slider-label">Download speed</span>
+          <span class="settings-slider-value" id="settingsDownloadLimitValue">Unlimited</span>
+        </div>
+        <input type="range" class="settings-slider" id="settingsDownloadLimit" min="0" max="10000" step="50" value="0">
+      </div>
+      <div class="settings-slider-row">
+        <div class="settings-slider-header">
+          <span class="settings-slider-label">Upload speed</span>
+          <span class="settings-slider-value" id="settingsUploadLimitValue">Unlimited</span>
+        </div>
+        <input type="range" class="settings-slider" id="settingsUploadLimit" min="0" max="10000" step="50" value="0">
+      </div>
+
       <div class="settings-row">
-        <div class="settings-row-label">
-          Download speed
-          <small>0 = unlimited</small>
-        </div>
-        <div class="settings-input-group">
-          <input type="number" min="0" step="1" class="settings-number" id="settingsDownloadLimit">
-          <span class="settings-unit">KB/s</span>
-        </div>
+        <div class="settings-row-label">Seed after download<span class="info-tip" title="Off: a torrent stops uploading the moment it finishes, instead of continuing to seed">i</span></div>
+        <label class="switch">
+          <input type="checkbox" id="settingsSeedAfterDownload" checked>
+          <span class="switch-track"></span>
+          <span class="switch-thumb"></span>
+        </label>
       </div>
       <div class="settings-row">
-        <div class="settings-row-label">
-          Upload speed
-          <small>0 = unlimited</small>
-        </div>
-        <div class="settings-input-group">
-          <input type="number" min="0" step="1" class="settings-number" id="settingsUploadLimit">
-          <span class="settings-unit">KB/s</span>
-        </div>
+        <div class="settings-row-label">Max connections<span class="info-tip" title="Across all torrents combined. 0 = libtorrent's own default">i</span></div>
+        <input type="number" min="0" step="1" class="settings-number" id="settingsMaxConnections">
       </div>
       <div class="settings-row">
-        <div class="settings-row-label">
-          Max connections
-          <small>Across all torrents &middot; 0 = default</small>
-        </div>
-        <div class="settings-input-group">
-          <input type="number" min="0" step="1" class="settings-number" id="settingsMaxConnections">
-        </div>
+        <div class="settings-row-label">Per-torrent connections<span class="info-tip" title="Peers on any one torrent. 0 = no cap">i</span></div>
+        <input type="number" min="0" step="1" class="settings-number" id="settingsMaxConnectionsPerTorrent">
       </div>
       <div class="settings-row">
-        <div class="settings-row-label">
-          Per-torrent connections
-          <small>Peers per torrent &middot; 0 = no cap</small>
-        </div>
-        <div class="settings-input-group">
-          <input type="number" min="0" step="1" class="settings-number" id="settingsMaxConnectionsPerTorrent">
-        </div>
-      </div>
-      <div class="settings-row">
-        <div class="settings-row-label">
-          Max upload slots
-          <small>Peers unchoked at once &middot; 0 = default</small>
-        </div>
-        <div class="settings-input-group">
-          <input type="number" min="0" step="1" class="settings-number" id="settingsMaxUploadSlots">
-        </div>
+        <div class="settings-row-label">Max upload slots<span class="info-tip" title="Peers unchoked (actively uploaded to) at once. 0 = libtorrent's own default">i</span></div>
+        <input type="number" min="0" step="1" class="settings-number" id="settingsMaxUploadSlots">
       </div>
     </div>
 
@@ -1162,14 +1196,16 @@ let pendingFile = null;
 const settingsBtn = document.getElementById("settingsBtn");
 const settingsModal = document.getElementById("settingsModal");
 const settingsClose = document.getElementById("settingsClose");
-const themeSegmented = document.getElementById("themeSegmented");
 const settingsDefaultCategory = document.getElementById("settingsDefaultCategory");
 const settingsDownloadDir = document.getElementById("settingsDownloadDir");
 const settingsCategories = document.getElementById("settingsCategories");
 const settingsSearch = document.getElementById("settingsSearch");
 const settingsTmdb = document.getElementById("settingsTmdb");
 const settingsDownloadLimit = document.getElementById("settingsDownloadLimit");
+const settingsDownloadLimitValue = document.getElementById("settingsDownloadLimitValue");
 const settingsUploadLimit = document.getElementById("settingsUploadLimit");
+const settingsUploadLimitValue = document.getElementById("settingsUploadLimitValue");
+const settingsSeedAfterDownload = document.getElementById("settingsSeedAfterDownload");
 const settingsMaxConnections = document.getElementById("settingsMaxConnections");
 const settingsMaxConnectionsPerTorrent = document.getElementById("settingsMaxConnectionsPerTorrent");
 const settingsMaxUploadSlots = document.getElementById("settingsMaxUploadSlots");
@@ -1208,27 +1244,11 @@ function formatEta(secs) {
 
 // ---------- Theme ----------
 
-function syncThemeSegmented() {
-  const current = document.documentElement.getAttribute("data-theme");
-  themeSegmented.querySelectorAll("button").forEach(btn => {
-    btn.classList.toggle("is-active", btn.dataset.themeChoice === current);
-  });
-}
-
-function setTheme(next) {
-  document.documentElement.setAttribute("data-theme", next);
-  try { localStorage.setItem("torrenttube-theme", next); } catch (e) {}
-  syncThemeSegmented();
-}
-
 themeToggleBtn.addEventListener("click", () => {
   const current = document.documentElement.getAttribute("data-theme");
-  setTheme(current === "dark" ? "light" : "dark");
-});
-
-themeSegmented.addEventListener("click", (e) => {
-  const btn = e.target.closest("button[data-theme-choice]");
-  if (btn) setTheme(btn.dataset.themeChoice);
+  const next = current === "dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  try { localStorage.setItem("torrenttube-theme", next); } catch (e) {}
 });
 
 // ---------- Toasts ----------
@@ -1532,13 +1552,21 @@ function renderSettings() {
     ? `<span class="status-badge is-on">Enabled${lastConfig.tmdb_language ? ` &middot; ${escapeHtml(lastConfig.tmdb_language)}` : ""}</span>`
     : `<span class="status-badge is-off">Not configured</span>`;
 
-  syncThemeSegmented();
   renderLimits();
+}
+
+function formatSpeed(kbps) {
+  kbps = Number(kbps) || 0;
+  if (kbps <= 0) return "Unlimited";
+  return kbps >= 1024 ? `${(kbps / 1024).toFixed(1)} MB/s` : `${kbps} KB/s`;
 }
 
 function renderLimits() {
   settingsDownloadLimit.value = lastLimits.download_rate_limit ?? 0;
+  settingsDownloadLimitValue.textContent = formatSpeed(lastLimits.download_rate_limit);
   settingsUploadLimit.value = lastLimits.upload_rate_limit ?? 0;
+  settingsUploadLimitValue.textContent = formatSpeed(lastLimits.upload_rate_limit);
+  settingsSeedAfterDownload.checked = (lastLimits.seed_after_download ?? 1) != 0;
   settingsMaxConnections.value = lastLimits.max_connections ?? 0;
   settingsMaxConnectionsPerTorrent.value = lastLimits.max_connections_per_torrent ?? 0;
   settingsMaxUploadSlots.value = lastLimits.max_upload_slots ?? 0;
@@ -1555,6 +1583,7 @@ async function saveLimits() {
   const body = {
     download_rate_limit: settingsDownloadLimit.value,
     upload_rate_limit: settingsUploadLimit.value,
+    seed_after_download: settingsSeedAfterDownload.checked ? 1 : 0,
     max_connections: settingsMaxConnections.value,
     max_connections_per_torrent: settingsMaxConnectionsPerTorrent.value,
     max_upload_slots: settingsMaxUploadSlots.value,
@@ -1590,7 +1619,11 @@ settingsBtn.addEventListener("click", openSettings);
 settingsClose.addEventListener("click", closeSettings);
 settingsModal.addEventListener("click", e => { if (e.target === settingsModal) closeSettings(); });
 settingsDefaultCategory.addEventListener("change", () => rememberCategory(settingsDefaultCategory.value));
-[settingsDownloadLimit, settingsUploadLimit, settingsMaxConnections, settingsMaxConnectionsPerTorrent, settingsMaxUploadSlots]
+
+settingsDownloadLimit.addEventListener("input", () => { settingsDownloadLimitValue.textContent = formatSpeed(settingsDownloadLimit.value); });
+settingsUploadLimit.addEventListener("input", () => { settingsUploadLimitValue.textContent = formatSpeed(settingsUploadLimit.value); });
+
+[settingsDownloadLimit, settingsUploadLimit, settingsSeedAfterDownload, settingsMaxConnections, settingsMaxConnectionsPerTorrent, settingsMaxUploadSlots]
   .forEach(el => el.addEventListener("change", saveLimits));
 
 // ---------- Search ----------

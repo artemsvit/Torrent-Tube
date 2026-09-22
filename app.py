@@ -80,6 +80,7 @@ DEFAULT_LIMITS = {
     "max_connections": 0,           # global peer connections, 0 = libtorrent default
     "max_connections_per_torrent": 0,  # per-torrent peer connections, 0 = no cap
     "max_upload_slots": 0,          # unchoke slots, 0 = libtorrent default
+    "seed_after_download": 1,       # 0/1 - pause a torrent as soon as it finishes instead of seeding
 }
 
 
@@ -481,8 +482,28 @@ def search_torrents():
     return jsonify({"results": results})
 
 
+def enforce_seed_policy():
+    """When seeding is turned off, stop uploading as soon as a torrent
+    finishes instead of continuing to seed it. Checked on every poll rather
+    than via a timer - the UI already polls /api/torrents every 1.5s, so a
+    torrent finishing gets caught quickly without a separate background
+    loop."""
+    if LIMITS.get("seed_after_download", 1):
+        return
+    with LOCK:
+        handles = list(HANDLES.items())
+    for tid, h in handles:
+        if not h.is_valid() or tid in PAUSED_IDS:
+            continue
+        if h.status().state == lt.torrent_status.seeding:
+            h.pause()
+            with LOCK:
+                PAUSED_IDS.add(tid)
+
+
 @app.route("/api/torrents")
 def list_torrents():
+    enforce_seed_policy()
     with LOCK:
         items = [(tid, h) for tid, h in HANDLES.items() if h.is_valid()]
     items.sort(key=lambda pair: pair[1].status().added_time, reverse=True)
