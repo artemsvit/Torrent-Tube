@@ -168,7 +168,7 @@
   }
   input[type="text"] {
     width: 100%;
-    padding: 12px 18px 12px 38px;
+    padding: 12px 44px 12px 38px;
     border-radius: var(--radius-pill);
     border: 1px solid var(--border);
     background: var(--surface);
@@ -186,6 +186,27 @@
     background: var(--surface-hover);
     box-shadow: 0 0 0 4px var(--accent-soft);
   }
+
+  .clear-field-btn {
+    position: absolute;
+    right: 8px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: transparent;
+    border: none;
+    color: var(--text-tertiary);
+    padding: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    cursor: pointer;
+    z-index: 1;
+  }
+  .clear-field-btn.is-visible { display: flex; }
+  .clear-field-btn:hover { background: var(--border); color: var(--text); }
+  .clear-field-btn svg { width: 12px; height: 12px; }
 
   button {
     border: none;
@@ -721,8 +742,9 @@
        keep it at 16px exactly to prevent that, and pad enough for a 44pt
        (Apple HIG minimum) touch target rather than a smaller "looks fine"
        height that's annoying to tap accurately. */
-    input[type="text"] { padding: 13px 14px 13px 36px; font-size: 16px; height: 44px; }
+    input[type="text"] { padding: 13px 40px 13px 36px; font-size: 16px; height: 44px; }
     .search-field > svg { left: 12px; }
+    .clear-field-btn { right: 8px; }
     .btn-primary.btn-pill#goBtn { padding: 0 16px; height: 44px; font-size: 13px; }
     .btn-circle { width: 44px; height: 44px; }
     .result-poster, .result-poster-fallback { width: 68px; }
@@ -768,6 +790,9 @@
     <div class="search-field">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
       <input type="text" id="mainInput" placeholder="Paste a magnet link, or search for a torrent..." autofocus autocomplete="off">
+      <button type="button" class="clear-field-btn" id="clearMainInput" aria-label="Clear" title="Clear">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+      </button>
     </div>
     <input type="file" id="fileInput" accept=".torrent" style="display:none">
     <button class="btn-primary btn-pill" id="goBtn">Search</button>
@@ -831,6 +856,7 @@ const ICONS = {
 };
 
 const mainInput = document.getElementById("mainInput");
+const clearMainInputBtn = document.getElementById("clearMainInput");
 const goBtn = document.getElementById("goBtn");
 const uploadBtn = document.getElementById("uploadBtn");
 const fileInput = document.getElementById("fileInput");
@@ -950,6 +976,7 @@ function isMagnet(value) {
 
 function updateGoLabel() {
   goBtn.textContent = isMagnet(mainInput.value.trim()) ? "Add" : "Search";
+  clearMainInputBtn.classList.toggle("is-visible", mainInput.value.length > 0);
 }
 
 function handleGo() {
@@ -976,6 +1003,13 @@ document.addEventListener("keydown", (e) => {
 goBtn.addEventListener("click", handleGo);
 mainInput.addEventListener("input", updateGoLabel);
 mainInput.addEventListener("keydown", e => { if (e.key === "Enter") handleGo(); });
+clearMainInputBtn.addEventListener("click", () => {
+  mainInput.value = "";
+  updateGoLabel();
+  closeSearchDropdown();
+  mainInput.focus();
+});
+updateGoLabel();
 
 // ---------- Upload modal (used for both the + button and drag & drop) ----------
 
