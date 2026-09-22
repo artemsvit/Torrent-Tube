@@ -397,13 +397,26 @@
   }
   /* The tabs stay put and only the card list scrolls, in a panel bounded
      to the viewport height - rather than the whole page growing tall
-     under a tab row that scrolls away with everything else. */
+     under a tab row that scrolls away with everything else. The 64px here
+     is .layout's own top+bottom padding (16+48) - has to match exactly,
+     or the panel is taller than the space actually available for it and
+     the *page* ends up scrollable by that leftover amount, defeating the
+     whole point. */
   .panel.discover-mode {
     display: flex;
     flex-direction: column;
-    height: calc(100vh - var(--topbar-h, 140px) - 32px);
+    height: calc(100vh - var(--topbar-h, 140px) - 64px);
     overflow: hidden;
   }
+  @media (max-width: 640px) {
+    /* .layout's padding is 16+24 = 40px here (see the .layout media query). */
+    .panel.discover-mode { height: calc(100vh - var(--topbar-h, 140px) - 40px); }
+  }
+  /* Belt and braces: even a 1-2px rounding mismatch (dynamic mobile browser
+     chrome changing 100vh, etc.) would otherwise leave the page itself
+     scrollable by that sliver. Hard-disable page scroll while Discover is
+     open so scrolling can only ever happen inside the card list. */
+  body.discover-active { overflow: hidden; }
   .panel.discover-mode #discoverHeader { flex-shrink: 0; }
   .panel.discover-mode .search-dropdown.discover-grid.is-open {
     display: block;
@@ -1852,6 +1865,7 @@ function enterDiscover() {
   }
   discoverMode = true;
   renderViewToggleBtn();
+  document.body.classList.add("discover-active");
   downloadsTab.classList.add("discover-mode");
   downloadsHeader.style.display = "none";
   discoverHeader.style.display = "flex";
@@ -1863,6 +1877,7 @@ function enterDiscover() {
 function exitDiscover() {
   discoverMode = false;
   renderViewToggleBtn();
+  document.body.classList.remove("discover-active");
   downloadsTab.classList.remove("discover-mode");
   downloadsHeader.style.display = "";
   discoverHeader.style.display = "none";
