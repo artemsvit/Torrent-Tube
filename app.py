@@ -508,10 +508,10 @@ def search_torrents():
 # Torznab category 100175). Querying with cat= and no q returns that
 # section's latest uploads.
 DISCOVER_FEEDS = [
-    {"id": "new", "label": "New releases", "cats": "100175"},
-    {"id": "movies", "label": "Movies", "cats": "100012,100147"},
-    {"id": "cartoons", "label": "Cartoons", "cats": "100041,100155"},
-    {"id": "tv", "label": "TV Shows", "cats": "100044,100152"},
+    {"id": "new", "label": "New releases", "cats": ["100175"]},
+    {"id": "movies", "label": "Movies", "cats": ["100012", "100147"]},
+    {"id": "cartoons", "label": "Cartoons", "cats": ["100041", "100155"]},
+    {"id": "tv", "label": "TV Shows", "cats": ["100044", "100152"]},
 ]
 DISCOVER_FEEDS_BY_ID = {f["id"]: f for f in DISCOVER_FEEDS}
 
@@ -530,18 +530,41 @@ def discover_torrents():
     if not feed:
         return jsonify({"error": "Unknown feed"}), 400
 
-    try:
-        results = jackett_query(cat=feed["cats"])
-    except Exception:
+    # This indexer's Torznab endpoint caps out at ~50 items per request and
+    # doesn't honor an offset (confirmed: offset=20 comes back empty rather
+    # than the next page) - so there's no real "page 2" to ask for. But a
+    # feed spanning multiple categories (e.g. Movies = HD + UHD) can be
+    # queried per-category instead of combined: each subcategory request
+    # gets its OWN ~50-item cap, and in practice the HD and UHD listings
+    # barely overlap (confirmed live: 50 + 50 merged to ~100 unique items,
+    # not ~50). Firing those requests in parallel and deduping the merged
+    # set is effectively "the next page", without pretending Jackett
+    # supports pagination it doesn't.
+    def fetch_one(cat):
+        try:
+            return jackett_query(cat=cat)
+        except Exception:
+            return []
+
+    if not feed["cats"]:
         return jsonify({"error": "Couldn't reach the search service"}), 502
+    with ThreadPoolExecutor(max_workers=len(feed["cats"])) as ex:
+        batches = list(ex.map(fetch_one, feed["cats"]))
+
+    seen = set()
+    results = []
+    for batch in batches:
+        for r in batch:
+            key = r["download_link"] or r["magnet"] or r["title"]
+            if key in seen:
+                continue
+            seen.add(key)
+            results.append(r)
 
     results.sort(key=lambda r: r["pub_date"], reverse=True)
-    # This indexer's Torznab endpoint caps out at ~50 items and doesn't
-    # honor an offset (confirmed: offset=20 comes back empty rather than
-    # the next page) - there's nothing further to fetch server-side, so
-    # the whole feed is enriched and handed over in one response. Infinite
-    # scroll is done client-side, revealing more of this same list as the
-    # user scrolls rather than re-querying Jackett.
+    # The whole (deduped, multi-category) feed is enriched and handed over
+    # in one response; infinite scroll is done client-side, revealing more
+    # of this same list as the user scrolls rather than re-querying Jackett.
     enrich_with_tmdb(results, limit=len(results))
     return jsonify({"results": results})
 
