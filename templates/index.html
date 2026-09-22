@@ -66,6 +66,11 @@
 
   * { box-sizing: border-box; }
 
+  /* Reserve the scrollbar's gutter permanently, so switching between short
+     content (no scrollbar) and long content (Discover's 50-item feed)
+     doesn't shift the whole page a scrollbar-width to the left/right. */
+  html { scrollbar-gutter: stable; }
+
   body {
     margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", sans-serif;
@@ -75,6 +80,15 @@
     transition: background 0.3s ease, color 0.3s ease;
     min-height: 100vh;
   }
+
+  /* Discover's own request: the scrollbar itself (not just its layout
+     impact) is hidden while browsing the catalog. Scrolling still works -
+     wheel/trackpad/touch/keyboard are unaffected by this - only the
+     visible track+thumb go away. The toggled class lives on <html>, since
+     that's the element that actually owns the page's scrollbar (not
+     <body>) in standard document flow. */
+  html.discover-active { scrollbar-width: none; -ms-overflow-style: none; }
+  html.discover-active::-webkit-scrollbar { display: none; }
 
   .bg-decor {
     position: fixed;
@@ -259,16 +273,14 @@
   .btn-circle-accent:hover:not(:disabled) { background: #34c766; }
 
   .btn-circle-discover {
-    background: var(--surface);
-    border: 1px solid var(--border-strong);
-    color: var(--text);
-  }
-  .btn-circle-discover:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
-  .btn-circle-discover.is-active {
-    background: linear-gradient(180deg, var(--accent-hover), var(--accent));
-    border-color: transparent;
+    background: linear-gradient(180deg, #ffab40, #ff8f00);
     color: white;
     box-shadow: var(--shadow-sm);
+  }
+  .btn-circle-discover:hover:not(:disabled) { background: #ff8f00; }
+  .btn-circle-discover.is-active {
+    background: linear-gradient(180deg, #ff8f00, #e67e00);
+    box-shadow: 0 0 0 3px rgba(255, 143, 0, 0.28), var(--shadow-sm);
   }
 
   .btn-pill { border-radius: var(--radius-pill); }
@@ -1619,7 +1631,13 @@ let discoverMode = false;
 let discoverEnabled = false;
 let discoverFeeds = [];
 let currentDiscoverFeed = null;
-let lastDiscoverResults = [];
+// The tracker's Jackett feed caps out around ~50 items and doesn't support
+// real pagination (offset=20 just comes back empty), so the whole feed is
+// fetched once; "infinite scroll" reveals more of that same in-memory list
+// as the user scrolls, rather than re-querying the server each time.
+let discoverAllResults = [];
+let discoverShownCount = 0;
+const DISCOVER_PAGE_SIZE = 12;
 
 async function loadDiscoverFeeds() {
   try {
@@ -1637,10 +1655,32 @@ function renderDiscoverTabs() {
   ).join("");
 }
 
+function showMoreDiscoverResults() {
+  if (discoverShownCount >= discoverAllResults.length) return;
+  const next = discoverAllResults.slice(discoverShownCount, discoverShownCount + DISCOVER_PAGE_SIZE);
+  discoverList.querySelector(".discover-end-hint")?.remove();
+  appendResultCards(discoverList, next, discoverAllResults, "Nothing here right now.");
+  discoverShownCount += next.length;
+  if (discoverShownCount >= discoverAllResults.length && discoverAllResults.length > 0) {
+    discoverList.insertAdjacentHTML("beforeend", `<div class="empty-state discover-end-hint" style="padding:16px;">That's everything in this feed right now.</div>`);
+  }
+}
+
+// Fires on every scroll while in Discover mode; loads the next chunk once
+// the panel's bottom edge gets within one screen-height of the viewport.
+function maybeLoadMoreDiscover() {
+  if (!discoverMode) return;
+  const rect = discoverList.getBoundingClientRect();
+  if (rect.bottom - window.innerHeight < window.innerHeight) showMoreDiscoverResults();
+}
+window.addEventListener("scroll", maybeLoadMoreDiscover, { passive: true });
+
 async function loadDiscoverFeed(feedId) {
   currentDiscoverFeed = feedId;
   renderDiscoverTabs();
   discoverList.innerHTML = `<div class="empty-state" style="padding:24px;">Loading...</div>`;
+  discoverAllResults = [];
+  discoverShownCount = 0;
   try {
     const res = await fetch(`/api/discover?feed=${encodeURIComponent(feedId)}`);
     const data = await res.json();
@@ -1648,8 +1688,14 @@ async function loadDiscoverFeed(feedId) {
       discoverList.innerHTML = `<div class="empty-state" style="padding:24px;">${escapeHtml(data.error)}</div>`;
       return;
     }
-    lastDiscoverResults = data.results || [];
-    renderResultCards(discoverList, lastDiscoverResults, "Nothing here right now.");
+    discoverAllResults = data.results || [];
+    discoverList.innerHTML = "";
+    if (discoverAllResults.length === 0) {
+      discoverList.innerHTML = `<div class="empty-state" style="padding:24px;">Nothing here right now.</div>`;
+      return;
+    }
+    showMoreDiscoverResults();
+    maybeLoadMoreDiscover(); // fills the panel if the first page doesn't already overflow the screen
   } catch (e) {
     discoverList.innerHTML = `<div class="empty-state" style="padding:24px;">Couldn't load this feed. Try again.</div>`;
   }
@@ -1662,6 +1708,7 @@ function enterDiscover() {
   }
   discoverMode = true;
   discoverBtn.classList.add("is-active");
+  document.documentElement.classList.add("discover-active");
   downloadsHeader.style.display = "none";
   discoverHeader.style.display = "flex";
   listEl.style.display = "none";
@@ -1672,6 +1719,7 @@ function enterDiscover() {
 function exitDiscover() {
   discoverMode = false;
   discoverBtn.classList.remove("is-active");
+  document.documentElement.classList.remove("discover-active");
   downloadsHeader.style.display = "";
   discoverHeader.style.display = "none";
   listEl.style.display = "";
@@ -1893,59 +1941,62 @@ async function runSearch(query) {
 // markup, same "pick a folder and download" flow either way. `container`
 // must carry (or be a descendant of something carrying) the
 // .search-dropdown class so the card CSS (mobile grid reflow, the
-// description's 50%-width cap, expand/collapse) applies; `emptyMessage`
-// is shown when there are no results, and `allResults` is what gets
-// re-rendered into `container` if an add fails.
-function renderResultCards(container, results, emptyMessage, allResults) {
-  container.innerHTML = "";
+// description's 50%-width cap, expand/collapse) applies. `allResults` is
+// what gets re-rendered into `container` if an add fails.
+function buildResultCard(r, container, allResults, emptyMessage) {
+  const div = document.createElement("div");
+  div.className = "item";
+  const poster = r.poster
+    ? `<img class="result-poster" src="${escapeHtml(r.poster)}" alt="" loading="lazy">`
+    : `<div class="result-poster-fallback">${ICONS.download}</div>`;
+  const rating = (r.rating && r.rating > 0) ? `<span class="rating-badge">${ICONS.star}${r.rating.toFixed(1)}</span>` : "";
+  const preferred = (r.suggested_category && currentCategories.includes(r.suggested_category)) ? r.suggested_category : getDefaultCategory();
+  const categoryOptions = currentCategories.map(c =>
+    `<option value="${escapeHtml(c)}"${c === preferred ? " selected" : ""}>${escapeHtml(c)}</option>`
+  ).join("");
+  div.innerHTML = `
+    <div class="item-top">
+      ${poster}
+      <div class="item-meta">
+        <div class="item-title">${escapeHtml(r.clean_title || r.title)}</div>
+        <div class="item-sub">${r.size_label} &middot; ${formatSeedPeers(r.seeders, r.peers)} ${rating}</div>
+        ${r.overview ? `<div class="item-overview">${escapeHtml(r.overview)}</div>` : ""}
+        ${r.overview && r.overview.length > 100 ? `<button type="button" class="overview-toggle">Show more</button>` : ""}
+      </div>
+      <div class="search-result-actions">
+        <select class="inline-category-select">${categoryOptions}</select>
+        <button class="btn-secondary btn-add-result">${ICONS.download}<span>Download</span></button>
+      </div>
+    </div>
+  `;
+  const overviewToggle = div.querySelector(".overview-toggle");
+  if (overviewToggle) {
+    overviewToggle.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const expanded = div.classList.toggle("is-expanded");
+      overviewToggle.textContent = expanded ? "Show less" : "Show more";
+    });
+  }
+  const actionsEl = div.querySelector(".search-result-actions");
+  actionsEl.querySelector("select").addEventListener("click", e => e.stopPropagation());
+  actionsEl.querySelector(".btn-add-result").addEventListener("click", (e) => {
+    e.stopPropagation();
+    addSearchResult(r, actionsEl.querySelector("select").value, actionsEl, container, allResults, emptyMessage);
+  });
+  return div;
+}
 
+function appendResultCards(container, results, allResults, emptyMessage) {
+  results.forEach(r => container.appendChild(buildResultCard(r, container, allResults, emptyMessage)));
+}
+
+function renderResultCards(container, results, emptyMessage) {
+  container.innerHTML = "";
   if (results.length === 0) {
     container.innerHTML = `<div class="empty-state" style="padding:24px;">${escapeHtml(emptyMessage)}</div>`;
     return;
   }
-
-  results.forEach(r => {
-    const div = document.createElement("div");
-    div.className = "item";
-    const poster = r.poster
-      ? `<img class="result-poster" src="${escapeHtml(r.poster)}" alt="" loading="lazy">`
-      : `<div class="result-poster-fallback">${ICONS.download}</div>`;
-    const rating = (r.rating && r.rating > 0) ? `<span class="rating-badge">${ICONS.star}${r.rating.toFixed(1)}</span>` : "";
-    const preferred = (r.suggested_category && currentCategories.includes(r.suggested_category)) ? r.suggested_category : getDefaultCategory();
-    const categoryOptions = currentCategories.map(c =>
-      `<option value="${escapeHtml(c)}"${c === preferred ? " selected" : ""}>${escapeHtml(c)}</option>`
-    ).join("");
-    div.innerHTML = `
-      <div class="item-top">
-        ${poster}
-        <div class="item-meta">
-          <div class="item-title">${escapeHtml(r.clean_title || r.title)}</div>
-          <div class="item-sub">${r.size_label} &middot; ${formatSeedPeers(r.seeders, r.peers)} ${rating}</div>
-          ${r.overview ? `<div class="item-overview">${escapeHtml(r.overview)}</div>` : ""}
-          ${r.overview && r.overview.length > 100 ? `<button type="button" class="overview-toggle">Show more</button>` : ""}
-        </div>
-        <div class="search-result-actions">
-          <select class="inline-category-select">${categoryOptions}</select>
-          <button class="btn-secondary btn-add-result">${ICONS.download}<span>Download</span></button>
-        </div>
-      </div>
-    `;
-    const overviewToggle = div.querySelector(".overview-toggle");
-    if (overviewToggle) {
-      overviewToggle.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const expanded = div.classList.toggle("is-expanded");
-        overviewToggle.textContent = expanded ? "Show less" : "Show more";
-      });
-    }
-    const actionsEl = div.querySelector(".search-result-actions");
-    actionsEl.querySelector("select").addEventListener("click", e => e.stopPropagation());
-    actionsEl.querySelector(".btn-add-result").addEventListener("click", (e) => {
-      e.stopPropagation();
-      addSearchResult(r, actionsEl.querySelector("select").value, actionsEl, container, results, emptyMessage);
-    });
-    container.appendChild(div);
-  });
+  appendResultCards(container, results, results, emptyMessage);
 }
 
 function renderSearchResults(results) {

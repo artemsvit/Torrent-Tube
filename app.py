@@ -395,13 +395,16 @@ def guess_category(title: str, genre_ids=None, media_type: str = None) -> str:
     return find_category_like("movie") or CATEGORIES[0]
 
 
-def enrich_with_tmdb(results):
+def enrich_with_tmdb(results, limit=40):
     if not TMDB_API_KEY:
         for r in results:
             r["suggested_category"] = guess_category(r["title"])
         return
-    # Only the most-likely-to-be-picked results are worth the extra lookups.
-    top = results[:40]
+    # Only the most-likely-to-be-picked results are worth the extra lookups
+    # (a 150-result search doesn't need all of them enriched; Discover's
+    # much smaller feeds pass a higher limit so nothing is left without a
+    # poster).
+    top = results[:limit]
 
     def enrich_one(r):
         title, base, year = extract_title_and_year(r["title"])
@@ -416,7 +419,7 @@ def enrich_with_tmdb(results):
             r["suggested_category"] = guess_category(r["title"])
 
     list(TMDB_EXECUTOR.map(enrich_one, top))
-    for r in results[40:]:
+    for r in results[limit:]:
         r["suggested_category"] = guess_category(r["title"])
 
 
@@ -533,8 +536,13 @@ def discover_torrents():
         return jsonify({"error": "Couldn't reach the search service"}), 502
 
     results.sort(key=lambda r: r["pub_date"], reverse=True)
-    results = results[:60]
-    enrich_with_tmdb(results)
+    # This indexer's Torznab endpoint caps out at ~50 items and doesn't
+    # honor an offset (confirmed: offset=20 comes back empty rather than
+    # the next page) - there's nothing further to fetch server-side, so
+    # the whole feed is enriched and handed over in one response. Infinite
+    # scroll is done client-side, revealing more of this same list as the
+    # user scrolls rather than re-querying Jackett.
+    enrich_with_tmdb(results, limit=len(results))
     return jsonify({"results": results})
 
 
