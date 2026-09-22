@@ -509,6 +509,7 @@ def search_torrents():
 # section's latest uploads.
 DISCOVER_FEEDS = [
     {"id": "new", "label": "New", "cats": ["100175"]},
+    {"id": "popular", "label": "Popular", "cats": ["100012", "100147", "100041", "100155", "100044", "100152"], "sort": "seeders"},
     {"id": "movies", "label": "Movies", "cats": ["100012", "100147"]},
     {"id": "cartoons", "label": "Cartoons", "cats": ["100041", "100155"]},
     {"id": "tv", "label": "TV Shows", "cats": ["100044", "100152"]},
@@ -561,11 +562,31 @@ def discover_torrents():
             seen.add(key)
             results.append(r)
 
-    results.sort(key=lambda r: r["pub_date"], reverse=True)
-    # The whole (deduped, multi-category) feed is enriched and handed over
-    # in one response; infinite scroll is done client-side, revealing more
-    # of this same list as the user scrolls rather than re-querying Jackett.
+    # The whole (deduped-by-file, multi-category) feed is enriched and
+    # handed over in one response; infinite scroll is done client-side,
+    # revealing more of this same list as the user scrolls rather than
+    # re-querying Jackett.
     enrich_with_tmdb(results, limit=len(results))
+
+    # Every quality/language rip of the same movie is its own separate row
+    # in the tracker's own listing (confirmed live: a 50-row "New" feed was
+    # only 21 distinct movies - the same handful of new releases repeated
+    # 2-4x each for BDRip/WEB-DL/2160p/1080p/etc). That reads as broken
+    # ("why does this list look like fewer things than the forum shows"),
+    # so keep only the best (most-seeded) release per movie, identified by
+    # its TMDB-resolved title when available.
+    best_by_movie = {}
+    for r in results:
+        movie_key = (r.get("clean_title") or r["title"]).strip().lower()
+        current = best_by_movie.get(movie_key)
+        if current is None or r["seeders"] > current["seeders"]:
+            best_by_movie[movie_key] = r
+    results = list(best_by_movie.values())
+
+    if feed.get("sort") == "seeders":
+        results.sort(key=lambda r: r["seeders"], reverse=True)
+    else:
+        results.sort(key=lambda r: r["pub_date"], reverse=True)
     return jsonify({"results": results})
 
 
