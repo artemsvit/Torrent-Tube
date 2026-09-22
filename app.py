@@ -196,10 +196,15 @@ def index():
 
 @app.route("/api/config")
 def config():
+    search_enabled = bool(JACKETT_URL and JACKETT_API_KEY)
     return jsonify({
         "download_dir": str(DOWNLOAD_DIR),
         "categories": CATEGORIES,
-        "search_enabled": bool(JACKETT_URL and JACKETT_API_KEY),
+        "search_enabled": search_enabled,
+        # Descriptive only - never the Jackett/TMDB API keys themselves.
+        "search_indexer": JACKETT_INDEXER if search_enabled else None,
+        "tmdb_enabled": bool(TMDB_API_KEY),
+        "tmdb_language": TMDB_LANGUAGE if TMDB_API_KEY else None,
     })
 
 
