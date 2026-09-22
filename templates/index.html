@@ -518,17 +518,16 @@
     font-size: 12.5px;
     flex-shrink: 0;
   }
-  /* Stretched to match the height of the title/stats/overview column next
-     to it, rather than a small fixed square, so it reads as a real poster. */
-  .search-dropdown .item-top { align-items: stretch; }
-  /* The folder picker + Download button live in their own column (not
-     sharing a row with the title) so they don't inflate that row's height
-     and push a gap under the title, and so the description column keeps a
-     fixed width instead of stretching under them. Centered vertically
-     against the stretched poster/description column. */
-  .search-dropdown .item-top > .search-result-actions { align-self: center; }
+  /* Everything aligns to the top of the row now, not stretched/centered -
+     stretching the poster to match an expanded ("Show more") description
+     distorted it into a tall, oddly-proportioned rectangle, and centering
+     the actions made them drift to the middle of a very tall card instead
+     of staying anchored near the title. */
+  .search-dropdown .item-top { align-items: flex-start; }
+  .search-dropdown .item-top > .search-result-actions { align-self: flex-start; }
   .result-poster {
     width: 84px;
+    height: 112px;
     border-radius: 8px;
     object-fit: cover;
     flex-shrink: 0;
@@ -536,6 +535,7 @@
   }
   .result-poster-fallback {
     width: 84px;
+    height: 112px;
     border-radius: 8px;
     background: var(--accent-soft);
     color: var(--accent);
@@ -569,10 +569,13 @@
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
   }
-  /* Capped at half the title/description column's width on desktop, so it
-     doesn't read as a full-width paragraph - tablet/mobile get the full
-     column width back, there's no room to spare there. */
-  .search-dropdown .item-overview { max-width: 50%; }
+  /* Capped well short of the title/description column's full width on
+     desktop, so it doesn't read as a full-width paragraph running under
+     the actions column - tablet/mobile get the full column width back,
+     there's no room to spare there. The row's own 10px gap plus this cap
+     already keeps it clear of the folder picker/Download button, so this
+     can be generous without the two ever touching. */
+  .search-dropdown .item-overview { max-width: 65%; }
   @media (max-width: 640px) {
     .search-dropdown .item-overview { max-width: none; }
   }
@@ -1137,7 +1140,7 @@
     #goBtn .go-btn-label { display: none; }
     #goBtn .go-btn-icon { display: flex; }
     .btn-circle { width: 44px; height: 44px; }
-    .result-poster, .result-poster-fallback { width: 68px; height: auto; }
+    .result-poster, .result-poster-fallback { width: 68px; height: 91px; }
     /* On narrow screens there isn't room for the folder picker + Download
        button next to the title/description column, so switch to an
        explicit grid: poster+meta on row 1, actions spanning full width on
@@ -1153,7 +1156,14 @@
       row-gap: 10px;
     }
     .search-dropdown .item-top > .result-poster,
-    .search-dropdown .item-top > .result-poster-fallback { grid-area: poster; width: 100%; }
+    .search-dropdown .item-top > .result-poster-fallback {
+      grid-area: poster;
+      width: 100%;
+      /* Grid items stretch to fill their row's height by default - without
+         this, an expanded ("Show more") description makes the whole row
+         taller and the poster stretches/distorts along with it. */
+      align-self: start;
+    }
     .search-dropdown .item-top > .item-meta { grid-area: meta; min-width: 0; }
     .search-dropdown .item-top > .search-result-actions {
       grid-area: actions;
