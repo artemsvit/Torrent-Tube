@@ -661,7 +661,7 @@
   .modal-title {
     font-size: 16px;
     font-weight: 600;
-    margin-bottom: 14px;
+    margin-bottom: 18px;
   }
   .modal-preview {
     display: flex;
@@ -708,16 +708,20 @@
 
   /* ---------- Settings ---------- */
 
+  /* A deliberate spacing scale, largest to smallest, so the eye can tell
+     "new section" from "next row in the same section" at a glance:
+     22px between sections, 10px from a section's label to its first row,
+     9px of padding within each row. */
   .settings-box { max-width: 440px; }
-  .settings-section { margin-bottom: 16px; }
+  .settings-section { margin-bottom: 22px; }
   .settings-section:last-of-type { margin-bottom: 0; }
-  .settings-section .section-label { margin-bottom: 6px; }
+  .settings-section .section-label { margin-bottom: 10px; }
   .settings-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 14px;
-    padding: 8px 0;
+    padding: 9px 0;
     border-bottom: 1px solid var(--border);
   }
   .settings-row:last-child { border-bottom: none; }
@@ -740,25 +744,31 @@
   }
   .settings-box .category-select { width: 100%; }
 
-  /* A small "i" badge carrying the explanation as a native tooltip
-     (title attr) instead of a permanent second line of text under every
-     row - keeps the list scannable without losing the detail. */
+  /* A small "i" badge carrying the explanation as a toast on tap/click
+     (a native title-attribute tooltip never fires on touch, which makes it
+     useless on the phone this app is mainly used from) instead of a
+     permanent second line of text under every row - keeps the list
+     scannable without losing the detail. It's a <button>, so it needs to
+     override the global button reset (padding, border-radius, font). */
   .info-tip {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 14px;
-    height: 14px;
+    width: 15px;
+    height: 15px;
+    padding: 0;
+    border: none;
     border-radius: 50%;
     background: var(--border);
     color: var(--text-tertiary);
-    font-size: 9.5px;
+    font-size: 10px;
     font-weight: 700;
     font-style: italic;
     font-family: Georgia, "Times New Roman", serif;
-    cursor: help;
+    cursor: pointer;
     flex-shrink: 0;
   }
+  .info-tip:hover { background: var(--border-strong); color: var(--text-secondary); }
 
   .settings-number {
     width: 72px;
@@ -808,7 +818,7 @@
 
   /* ---------- Sliders (download/upload speed) ---------- */
 
-  .settings-slider-row { padding: 7px 0; }
+  .settings-slider-row { padding: 9px 0; }
   .settings-slider-header {
     display: flex;
     align-items: center;
@@ -1092,11 +1102,11 @@
         <div class="settings-value" id="settingsCategories"></div>
       </div>
       <div class="settings-row">
-        <div class="settings-row-label">Torrent search<span class="info-tip" title="Search results come from your Jackett instance">i</span></div>
+        <div class="settings-row-label">Torrent search<button type="button" class="info-tip" data-tip="Search results come from your Jackett instance">i</button></div>
         <div class="settings-value" id="settingsSearch"></div>
       </div>
       <div class="settings-row">
-        <div class="settings-row-label">Posters &amp; ratings<span class="info-tip" title="Enriches search results via TMDB">i</span></div>
+        <div class="settings-row-label">Posters &amp; ratings<button type="button" class="info-tip" data-tip="Enriches search results via TMDB">i</button></div>
         <div class="settings-value" id="settingsTmdb"></div>
       </div>
     </div>
@@ -1120,29 +1130,40 @@
       </div>
 
       <div class="settings-row">
-        <div class="settings-row-label">Seed after download<span class="info-tip" title="Off: a torrent stops uploading the moment it finishes, instead of continuing to seed">i</span></div>
+        <div class="settings-row-label">Seed after download<button type="button" class="info-tip" data-tip="Off: a torrent stops uploading the moment it finishes, instead of continuing to seed">i</button></div>
         <label class="switch">
           <input type="checkbox" id="settingsSeedAfterDownload" checked>
           <span class="switch-track"></span>
           <span class="switch-thumb"></span>
         </label>
       </div>
-      <div class="settings-row">
-        <div class="settings-row-label">Max connections<span class="info-tip" title="Across all torrents combined. 0 = libtorrent's own default">i</span></div>
-        <input type="number" min="0" step="1" class="settings-number" id="settingsMaxConnections">
+
+      <div class="settings-slider-row">
+        <div class="settings-slider-header">
+          <span class="settings-slider-label">Max connections<button type="button" class="info-tip" data-tip="Peer connections across all torrents combined">i</button></span>
+          <span class="settings-slider-value" id="settingsMaxConnectionsValue">Default</span>
+        </div>
+        <input type="range" class="settings-slider" id="settingsMaxConnections" min="0" max="1000" step="10" value="0">
       </div>
-      <div class="settings-row">
-        <div class="settings-row-label">Per-torrent connections<span class="info-tip" title="Peers on any one torrent. 0 = no cap">i</span></div>
-        <input type="number" min="0" step="1" class="settings-number" id="settingsMaxConnectionsPerTorrent">
+      <div class="settings-slider-row">
+        <div class="settings-slider-header">
+          <span class="settings-slider-label">Per-torrent connections<button type="button" class="info-tip" data-tip="Peer connections allowed on any one torrent">i</button></span>
+          <span class="settings-slider-value" id="settingsMaxConnectionsPerTorrentValue">No cap</span>
+        </div>
+        <input type="range" class="settings-slider" id="settingsMaxConnectionsPerTorrent" min="0" max="500" step="5" value="0">
       </div>
-      <div class="settings-row">
-        <div class="settings-row-label">Max upload slots<span class="info-tip" title="Peers unchoked (actively uploaded to) at once. 0 = libtorrent's own default">i</span></div>
-        <input type="number" min="0" step="1" class="settings-number" id="settingsMaxUploadSlots">
+      <div class="settings-slider-row">
+        <div class="settings-slider-header">
+          <span class="settings-slider-label">Max upload slots<button type="button" class="info-tip" data-tip="Peers unchoked (actively uploaded to) at the same time">i</button></span>
+          <span class="settings-slider-value" id="settingsMaxUploadSlotsValue">Default</span>
+        </div>
+        <input type="range" class="settings-slider" id="settingsMaxUploadSlots" min="0" max="100" step="1" value="0">
       </div>
     </div>
 
     <div class="modal-actions">
-      <button class="btn-primary btn-pill" id="settingsClose">Done</button>
+      <button class="btn-secondary" id="settingsReset">Reset</button>
+      <button class="btn-primary btn-pill" id="settingsSave">Save</button>
     </div>
   </div>
 </div>
@@ -1189,7 +1210,8 @@ let pendingFile = null;
 
 const settingsBtn = document.getElementById("settingsBtn");
 const settingsModal = document.getElementById("settingsModal");
-const settingsClose = document.getElementById("settingsClose");
+const settingsSave = document.getElementById("settingsSave");
+const settingsReset = document.getElementById("settingsReset");
 const settingsDefaultCategory = document.getElementById("settingsDefaultCategory");
 const settingsDownloadDir = document.getElementById("settingsDownloadDir");
 const settingsCategories = document.getElementById("settingsCategories");
@@ -1201,8 +1223,11 @@ const settingsUploadLimit = document.getElementById("settingsUploadLimit");
 const settingsUploadLimitValue = document.getElementById("settingsUploadLimitValue");
 const settingsSeedAfterDownload = document.getElementById("settingsSeedAfterDownload");
 const settingsMaxConnections = document.getElementById("settingsMaxConnections");
+const settingsMaxConnectionsValue = document.getElementById("settingsMaxConnectionsValue");
 const settingsMaxConnectionsPerTorrent = document.getElementById("settingsMaxConnectionsPerTorrent");
+const settingsMaxConnectionsPerTorrentValue = document.getElementById("settingsMaxConnectionsPerTorrentValue");
 const settingsMaxUploadSlots = document.getElementById("settingsMaxUploadSlots");
+const settingsMaxUploadSlotsValue = document.getElementById("settingsMaxUploadSlotsValue");
 
 let searchEnabled = false;
 let currentCategories = [];
@@ -1559,8 +1584,9 @@ function formatSpeed(kbps) {
 // a straight 0-5000 range would cap out well under what a fast connection
 // can use. A cubic curve gives most of the slider's travel to the low end
 // (where fine control actually matters for a home connection) while still
-// reaching a 100 MB/s ceiling at the far right.
-const SPEED_SLIDER_MAX_KBPS = 102400; // 100 MB/s
+// reaching a 250 MB/s ceiling at the far right - comfortably past a full
+// 1 Gbps line (~125 MB/s) with headroom for 2.5 GbE too.
+const SPEED_SLIDER_MAX_KBPS = 256000; // 250 MB/s
 function sliderToKbps(raw) {
   raw = Number(raw) || 0;
   if (raw <= 0) return 0;
@@ -1572,6 +1598,16 @@ function kbpsToSlider(kbps) {
   return Math.min(1000, Math.round(1000 * Math.pow(kbps / SPEED_SLIDER_MAX_KBPS, 1 / 3)));
 }
 
+// The three connection sliders are linear (their ranges are small enough
+// that a curve would just add confusion), but 0 means a different thing
+// for each: "use libtorrent's own default" for the two connection counts,
+// "no cap at all" for the per-torrent one. Spell that out instead of
+// showing a bare 0, which reads as broken/empty rather than intentional.
+function formatCount(value, zeroLabel) {
+  value = Number(value) || 0;
+  return value <= 0 ? zeroLabel : String(value);
+}
+
 function renderLimits() {
   settingsDownloadLimit.value = kbpsToSlider(lastLimits.download_rate_limit);
   settingsDownloadLimitValue.textContent = formatSpeed(lastLimits.download_rate_limit);
@@ -1579,8 +1615,11 @@ function renderLimits() {
   settingsUploadLimitValue.textContent = formatSpeed(lastLimits.upload_rate_limit);
   settingsSeedAfterDownload.checked = (lastLimits.seed_after_download ?? 1) != 0;
   settingsMaxConnections.value = lastLimits.max_connections ?? 0;
+  settingsMaxConnectionsValue.textContent = formatCount(lastLimits.max_connections, "Default");
   settingsMaxConnectionsPerTorrent.value = lastLimits.max_connections_per_torrent ?? 0;
+  settingsMaxConnectionsPerTorrentValue.textContent = formatCount(lastLimits.max_connections_per_torrent, "No cap");
   settingsMaxUploadSlots.value = lastLimits.max_upload_slots ?? 0;
+  settingsMaxUploadSlotsValue.textContent = formatCount(lastLimits.max_upload_slots, "Default");
 }
 
 async function loadLimits() {
@@ -1627,15 +1666,45 @@ function closeSettings() {
 }
 
 settingsBtn.addEventListener("click", openSettings);
-settingsClose.addEventListener("click", closeSettings);
 settingsModal.addEventListener("click", e => { if (e.target === settingsModal) closeSettings(); });
 settingsDefaultCategory.addEventListener("change", () => rememberCategory(settingsDefaultCategory.value));
 
+// A native title-attribute tooltip never fires on touch, so the "i" badges
+// are buttons that surface their hint as a toast instead - works the same
+// tapped on a phone or clicked with a mouse.
+settingsModal.addEventListener("click", e => {
+  const btn = e.target.closest(".info-tip");
+  if (btn) showToast(btn.dataset.tip);
+});
+
 settingsDownloadLimit.addEventListener("input", () => { settingsDownloadLimitValue.textContent = formatSpeed(sliderToKbps(settingsDownloadLimit.value)); });
 settingsUploadLimit.addEventListener("input", () => { settingsUploadLimitValue.textContent = formatSpeed(sliderToKbps(settingsUploadLimit.value)); });
+settingsMaxConnections.addEventListener("input", () => { settingsMaxConnectionsValue.textContent = formatCount(settingsMaxConnections.value, "Default"); });
+settingsMaxConnectionsPerTorrent.addEventListener("input", () => { settingsMaxConnectionsPerTorrentValue.textContent = formatCount(settingsMaxConnectionsPerTorrent.value, "No cap"); });
+settingsMaxUploadSlots.addEventListener("input", () => { settingsMaxUploadSlotsValue.textContent = formatCount(settingsMaxUploadSlots.value, "Default"); });
 
 [settingsDownloadLimit, settingsUploadLimit, settingsSeedAfterDownload, settingsMaxConnections, settingsMaxConnectionsPerTorrent, settingsMaxUploadSlots]
   .forEach(el => el.addEventListener("change", saveLimits));
+
+settingsSave.addEventListener("click", async () => {
+  await saveLimits();
+  closeSettings();
+});
+
+settingsReset.addEventListener("click", async () => {
+  settingsDownloadLimit.value = 0;
+  settingsDownloadLimitValue.textContent = "Unlimited";
+  settingsUploadLimit.value = 0;
+  settingsUploadLimitValue.textContent = "Unlimited";
+  settingsSeedAfterDownload.checked = true;
+  settingsMaxConnections.value = 0;
+  settingsMaxConnectionsValue.textContent = "Default";
+  settingsMaxConnectionsPerTorrent.value = 0;
+  settingsMaxConnectionsPerTorrentValue.textContent = "No cap";
+  settingsMaxUploadSlots.value = 0;
+  settingsMaxUploadSlotsValue.textContent = "Default";
+  await saveLimits();
+});
 
 // ---------- Search ----------
 
