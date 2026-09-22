@@ -1050,7 +1050,6 @@
     <div id="list">
       <div class="empty-state" id="listEmpty">Paste a magnet link above, or drop a .torrent file anywhere on this page.</div>
     </div>
-    <p class="hint">Files save to <code id="saveDir">the shared downloads folder</code></p>
   </section>
 </div>
 
@@ -1523,7 +1522,6 @@ async function loadConfig() {
   try {
     const res = await fetch("/api/config");
     const data = await res.json();
-    if (data.download_dir) document.getElementById("saveDir").textContent = data.download_dir;
 
     currentCategories = data.categories || [];
     searchEnabled = !!data.search_enabled;
