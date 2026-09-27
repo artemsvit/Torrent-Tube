@@ -1407,6 +1407,15 @@
           </label>
         </div>
 
+        <div class="settings-row">
+          <div class="settings-row-label">Remove when finished<button type="button" class="info-tip" data-tip="Takes a torrent off the list once it's downloaded - the files stay in their folder. Also stops seeding it">i</button></div>
+          <label class="switch">
+            <input type="checkbox" id="settingsRemoveAfterDownload">
+            <span class="switch-track"></span>
+            <span class="switch-thumb"></span>
+          </label>
+        </div>
+
         <div class="settings-slider-row">
           <div class="settings-slider-header">
             <span class="settings-slider-label">Max connections<button type="button" class="info-tip" data-tip="Peer connections across all torrents combined">i</button></span>
@@ -1601,6 +1610,7 @@ const settingsDownloadLimitValue = document.getElementById("settingsDownloadLimi
 const settingsUploadLimit = document.getElementById("settingsUploadLimit");
 const settingsUploadLimitValue = document.getElementById("settingsUploadLimitValue");
 const settingsSeedAfterDownload = document.getElementById("settingsSeedAfterDownload");
+const settingsRemoveAfterDownload = document.getElementById("settingsRemoveAfterDownload");
 const settingsMaxConnections = document.getElementById("settingsMaxConnections");
 const settingsMaxConnectionsValue = document.getElementById("settingsMaxConnectionsValue");
 const settingsMaxConnectionsPerTorrent = document.getElementById("settingsMaxConnectionsPerTorrent");
@@ -1927,11 +1937,23 @@ function render(torrents) {
   });
 }
 
+// "Remove when finished" takes a torrent off the list server-side - say so
+// once per torrent rather than having its row just disappear.
+const announcedRemovals = new Set();
+function announceAutoRemoved(removed) {
+  removed.forEach(r => {
+    if (announcedRemovals.has(r.id)) return;
+    announcedRemovals.add(r.id);
+    showToast(`Downloaded: ${r.name}`);
+  });
+}
+
 async function refresh() {
   try {
     const res = await fetch("/api/torrents");
     const data = await res.json();
     const torrents = data.torrents || [];
+    announceAutoRemoved(data.auto_removed || []);
     // The view-toggle button's badge reflects the download count regardless
     // of which screen is showing, so this keeps polling either way - only
     // the #list DOM itself is skipped while Discover has it hidden. Only
@@ -2203,6 +2225,7 @@ function renderLimits() {
   settingsUploadLimit.value = kbpsToSlider(lastLimits.upload_rate_limit);
   settingsUploadLimitValue.textContent = formatSpeed(lastLimits.upload_rate_limit);
   settingsSeedAfterDownload.checked = (lastLimits.seed_after_download ?? 1) != 0;
+  settingsRemoveAfterDownload.checked = (lastLimits.remove_after_download ?? 0) != 0;
   settingsMaxConnections.value = lastLimits.max_connections ?? 0;
   settingsMaxConnectionsValue.textContent = formatCount(lastLimits.max_connections, "Default");
   settingsMaxConnectionsPerTorrent.value = lastLimits.max_connections_per_torrent ?? 0;
@@ -2270,6 +2293,7 @@ async function saveLimits() {
     download_rate_limit: sliderToKbps(settingsDownloadLimit.value),
     upload_rate_limit: sliderToKbps(settingsUploadLimit.value),
     seed_after_download: settingsSeedAfterDownload.checked ? 1 : 0,
+    remove_after_download: settingsRemoveAfterDownload.checked ? 1 : 0,
     max_connections: settingsMaxConnections.value,
     max_connections_per_torrent: settingsMaxConnectionsPerTorrent.value,
     max_upload_slots: settingsMaxUploadSlots.value,
@@ -2342,7 +2366,7 @@ settingsMaxConnections.addEventListener("input", () => { settingsMaxConnectionsV
 settingsMaxConnectionsPerTorrent.addEventListener("input", () => { settingsMaxConnectionsPerTorrentValue.textContent = formatCount(settingsMaxConnectionsPerTorrent.value, "No cap"); });
 settingsMaxUploadSlots.addEventListener("input", () => { settingsMaxUploadSlotsValue.textContent = formatCount(settingsMaxUploadSlots.value, "Default"); });
 
-[settingsDownloadLimit, settingsUploadLimit, settingsSeedAfterDownload, settingsMaxConnections, settingsMaxConnectionsPerTorrent, settingsMaxUploadSlots,
+[settingsDownloadLimit, settingsUploadLimit, settingsSeedAfterDownload, settingsRemoveAfterDownload, settingsMaxConnections, settingsMaxConnectionsPerTorrent, settingsMaxUploadSlots,
  settingsJackettUrl, settingsJackettApiKey, settingsJackettIndexer, settingsTmdbApiKey, settingsTmdbLanguage]
   .forEach(el => el.addEventListener("change", saveLimits));
 
@@ -2357,6 +2381,7 @@ settingsReset.addEventListener("click", async () => {
   settingsUploadLimit.value = 0;
   settingsUploadLimitValue.textContent = "Unlimited";
   settingsSeedAfterDownload.checked = true;
+  settingsRemoveAfterDownload.checked = false;
   settingsMaxConnections.value = 0;
   settingsMaxConnectionsValue.textContent = "Default";
   settingsMaxConnectionsPerTorrent.value = 0;

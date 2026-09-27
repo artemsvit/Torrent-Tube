@@ -74,6 +74,7 @@ DEFAULT_LIMITS = {
     "max_connections_per_torrent": 0,  # per-torrent peer connections, 0 = no cap
     "max_upload_slots": 0,          # unchoke slots, 0 = libtorrent default
     "seed_after_download": 1,       # 0/1 - pause a torrent as soon as it finishes instead of seeding
+    "remove_after_download": 0,     # 0/1 - drop a finished torrent from the list (files are kept)
 }
 
 # Jackett does the actual tracker login/scraping (configured with the user's
@@ -731,6 +732,40 @@ def discover_enrich():
     return jsonify({k: v for k, v in pairs if v})
 
 
+# Torrents enforce_remove_policy() just took off the list, so the UI can
+# say so with a toast instead of the row silently vanishing. Kept for a
+# minute - long enough for any open tab's 1.5s poll to pick it up.
+RECENTLY_REMOVED = []
+
+
+def enforce_remove_policy():
+    """Drops finished torrents from the list (keeping their files) when
+    "Remove when finished" is on. Runs on the same /api/torrents poll as
+    enforce_seed_policy, and wins over seeding - a removed torrent can't seed."""
+    now = time.time()
+    with LOCK:
+        RECENTLY_REMOVED[:] = [r for r in RECENTLY_REMOVED if now - r["at"] < 60]
+    if not LIMITS.get("remove_after_download", 0):
+        return
+    with LOCK:
+        handles = list(HANDLES.items())
+    removed = False
+    for tid, h in handles:
+        if not h.is_valid():
+            continue
+        st = h.status()
+        if not (st.has_metadata and st.is_finished):
+            continue
+        with LOCK:
+            HANDLES.pop(tid, None)
+            PAUSED_IDS.discard(tid)
+            RECENTLY_REMOVED.append({"id": tid, "name": st.name, "at": now})
+        ses.remove_torrent(h)
+        removed = True
+    if removed:
+        save_registry()
+
+
 def enforce_seed_policy():
     """When seeding is turned off, stop uploading as soon as a torrent
     finishes instead of continuing to seed it. Checked on every poll rather
@@ -753,11 +788,13 @@ def enforce_seed_policy():
 
 @app.route("/api/torrents")
 def list_torrents():
+    enforce_remove_policy()
     enforce_seed_policy()
     with LOCK:
         items = [(tid, h) for tid, h in HANDLES.items() if h.is_valid()]
+        removed = [{"id": r["id"], "name": r["name"]} for r in RECENTLY_REMOVED]
     items.sort(key=lambda pair: pair[1].status().added_time, reverse=True)
-    return jsonify({"torrents": [serialize(tid, h) for tid, h in items]})
+    return jsonify({"torrents": [serialize(tid, h) for tid, h in items], "auto_removed": removed})
 
 
 @app.route("/api/torrents/inspect", methods=["POST"])
