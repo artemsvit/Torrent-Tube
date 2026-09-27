@@ -319,6 +319,63 @@ def update_settings():
     return jsonify(SETTINGS)
 
 
+# Fallback when TMDB can't be reached (no key yet, offline) - the Settings
+# language dropdown still offers the common picks instead of going empty.
+FALLBACK_TMDB_LANGUAGES = [
+    "uk-UA", "en-US", "en-GB", "pl-PL", "de-DE", "fr-FR", "es-ES", "it-IT",
+    "pt-BR", "pt-PT", "cs-CZ", "nl-NL", "sv-SE", "tr-TR", "ja-JP", "ko-KR", "zh-CN",
+]
+TMDB_LANGUAGES_CACHE = {}
+
+
+def _jackett_indexers():
+    """Configured indexers from Jackett's own Torznab list, as [{id, title}]."""
+    params = {"apikey": JACKETT_API_KEY, "t": "indexers", "configured": "true"}
+    url = f"{JACKETT_URL}/api/v2.0/indexers/all/results/torznab/api?{urllib.parse.urlencode(params)}"
+    req = urllib.request.Request(url, headers={"User-Agent": "TorrentTube"})
+    with urllib.request.urlopen(req, timeout=8) as resp:
+        root = ET.fromstring(resp.read())
+    return [
+        {"id": el.get("id"), "title": (el.findtext("title") or el.get("id")).strip()}
+        for el in root.findall("indexer") if el.get("id")
+    ]
+
+
+def _tmdb_languages():
+    """TMDB's primary translations (e.g. 'uk-UA') - the locales it actually
+    has titles/overviews for. Cached per key since the list barely changes."""
+    if TMDB_API_KEY in TMDB_LANGUAGES_CACHE:
+        return TMDB_LANGUAGES_CACHE[TMDB_API_KEY]
+    url = f"https://api.themoviedb.org/3/configuration/primary_translations?api_key={urllib.parse.quote(TMDB_API_KEY)}"
+    req = urllib.request.Request(url, headers={"User-Agent": "TorrentTube"})
+    with urllib.request.urlopen(req, timeout=8) as resp:
+        langs = sorted(c for c in json.loads(resp.read()) if isinstance(c, str))
+    TMDB_LANGUAGES_CACHE[TMDB_API_KEY] = langs
+    return langs
+
+
+@app.route("/api/settings/options")
+def settings_options():
+    """Known choices for the Settings dropdowns. The indexer list is None
+    when Jackett can't be reached, so the UI can fall back to free text."""
+    indexers = None
+    if JACKETT_URL and JACKETT_API_KEY:
+        try:
+            indexers = _jackett_indexers()
+        except Exception:
+            pass
+    languages = None
+    if TMDB_API_KEY:
+        try:
+            languages = _tmdb_languages()
+        except Exception:
+            pass
+    return jsonify({
+        "jackett_indexers": indexers,
+        "tmdb_languages": languages or FALLBACK_TMDB_LANGUAGES,
+    })
+
+
 COLLECTION_WORDS_RE = re.compile(
     r"\b(complete collection|full collection|collection|quadrilogy|trilogy|duology|anthology|saga)\b.*",
     re.I,

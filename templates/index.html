@@ -976,6 +976,7 @@
     font-size: 11px;
   }
   .settings-box .category-select { width: 100%; }
+  .settings-select { min-width: 0; max-width: 220px; text-overflow: ellipsis; }
 
   .settings-text-input {
     min-width: 0;
@@ -1458,8 +1459,8 @@
           <input type="password" class="settings-text-input" id="settingsJackettApiKey" placeholder="Paste your Jackett API key" autocomplete="off" spellcheck="false">
         </div>
         <div class="settings-row">
-          <div class="settings-row-label">Jackett indexer</div>
-          <input type="text" class="settings-text-input" id="settingsJackettIndexer" placeholder="all" autocomplete="off" spellcheck="false">
+          <div class="settings-row-label">Jackett indexer<button type="button" class="info-tip" data-tip="Trackers you've added in Jackett - All searches every one of them">i</button></div>
+          <select class="inline-category-select settings-select" id="settingsJackettIndexer"></select>
         </div>
       </div>
 
@@ -1474,8 +1475,8 @@
           <input type="password" class="settings-text-input" id="settingsTmdbApiKey" placeholder="Paste your TMDB API key" autocomplete="off" spellcheck="false">
         </div>
         <div class="settings-row">
-          <div class="settings-row-label">TMDB language<button type="button" class="info-tip" data-tip="ISO 639-1 + region, e.g. en-US">i</button></div>
-          <input type="text" class="settings-text-input" id="settingsTmdbLanguage" placeholder="uk-UA" autocomplete="off" spellcheck="false">
+          <div class="settings-row-label">TMDB language<button type="button" class="info-tip" data-tip="Language for titles and descriptions from TMDB">i</button></div>
+          <select class="inline-category-select settings-select" id="settingsTmdbLanguage"></select>
         </div>
       </div>
     </div>
@@ -2211,9 +2212,50 @@ function renderLimits() {
 
   settingsJackettUrl.value = lastLimits.jackett_url ?? "";
   settingsJackettApiKey.value = lastLimits.jackett_api_key ?? "";
-  settingsJackettIndexer.value = lastLimits.jackett_indexer ?? "";
   settingsTmdbApiKey.value = lastLimits.tmdb_api_key ?? "";
-  settingsTmdbLanguage.value = lastLimits.tmdb_language ?? "";
+  renderServiceOptions();
+}
+
+// Known choices for the indexer/language dropdowns, from /api/settings/options.
+// Until it loads (or when Jackett is unreachable) the saved value is still
+// offered on its own, so opening Settings never silently changes it.
+let serviceOptions = { jackett_indexers: null, tmdb_languages: [] };
+const languageNames = (() => {
+  try { return new Intl.DisplayNames(["en"], { type: "language" }); } catch (e) { return null; }
+})();
+
+function languageLabel(code) {
+  let name = null;
+  try { name = languageNames?.of(code); } catch (e) {}
+  return name && name !== code ? `${name} · ${code}` : code;
+}
+
+function fillSelect(select, options, current) {
+  if (current && !options.some(o => o.value === current)) {
+    options = [...options, { value: current, label: current }];
+  }
+  select.replaceChildren(...options.map(o => new Option(o.label, o.value)));
+  select.value = current || options[0]?.value || "";
+}
+
+function renderServiceOptions() {
+  const indexers = serviceOptions.jackett_indexers || [];
+  fillSelect(settingsJackettIndexer,
+    [{ value: "all", label: "All indexers" }, ...indexers.map(i => ({ value: i.id, label: i.title }))],
+    lastLimits.jackett_indexer || "all");
+
+  const languages = serviceOptions.tmdb_languages
+    .map(code => ({ value: code, label: languageLabel(code) }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  fillSelect(settingsTmdbLanguage, languages, lastLimits.tmdb_language || "uk-UA");
+}
+
+async function loadServiceOptions() {
+  try {
+    const res = await fetch("/api/settings/options");
+    serviceOptions = await res.json();
+    renderServiceOptions();
+  } catch (e) {}
 }
 
 async function loadLimits() {
@@ -2247,6 +2289,7 @@ async function saveLimits() {
     if (data.error) { showToast(data.error, true); return; }
     lastLimits = data;
     renderLimits();
+    loadServiceOptions();
     // Jackett/TMDB keys may have just been added or cleared - refresh the
     // Search/Discover-enabled flags without needing a page reload.
     await loadConfig();
@@ -2270,6 +2313,7 @@ async function openSettings() {
   settingsModal.classList.add("is-open");
   await loadLimits();
   renderLimits();
+  loadServiceOptions();
 }
 
 function closeSettings() {
