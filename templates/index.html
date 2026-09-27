@@ -1097,6 +1097,34 @@
   }
   .dt-watch-actions svg { width: 12px; height: 12px; }
   .dt-release .action-btn + .action-btn { margin-left: 2px; }
+
+  /* Every trailer found, as a row of chips above Download - all visible at
+     once, one tap plays it, the playing one is highlighted. Scrolls
+     sideways when there are many. */
+  .dt-trailers { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; min-width: 0; }
+  .dt-trailers-label { font-size: 12px; font-weight: 600; color: var(--text-tertiary); flex-shrink: 0; }
+  .dt-trailer-chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; min-width: 0; padding: 1px; }
+  .dt-trailer-chips::-webkit-scrollbar { display: none; }
+  .dt-trailer-chip {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 30px;
+    padding: 0 12px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .dt-trailer-chip svg { width: 10px; height: 10px; }
+  .dt-trailer-chip:hover { border-color: var(--accent); }
+  .dt-trailer-chip.is-active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
   /* body's desktop zoom (--ui-zoom) isn't passed on to an iframe's own
      content in Safari - YouTube lays out for a 12% bigger box and the
      frame shows it cropped at the right/bottom. Undo the zoom on the
@@ -1163,6 +1191,12 @@
   }
   .dt-hero-play-icon svg { width: 24px; height: 24px; margin-left: 3px; }
   .dt-hero-play:hover .dt-hero-play-icon { transform: scale(1.06); background: rgba(0, 0, 0, 0.6); }
+  /* The global button:active press effect sets transform, which would
+     wipe out the centring translate above - the button jumped half its
+     size down-right on press, the release landed off it, and the click
+     never fired. Press the icon instead. */
+  .dt-hero-play:active:not(:disabled) { transform: translate(-50%, -50%); }
+  .dt-hero-play:active:not(:disabled) .dt-hero-play-icon { transform: scale(0.95); }
   .dt-hero-play:disabled { cursor: default; }
   .dt-hero-play:disabled .dt-hero-play-icon { transform: none; }
   .dt-hero-play .spinner-ring {
@@ -3331,6 +3365,16 @@ function renderWatchPanel(s) {
   </div>`;
 }
 
+function renderTrailerChips(s) {
+  if (!s.trailers.length) return "";
+  const labels = trailerLabels(s.trailers);
+  const chips = s.trailers.map((t, i) => {
+    const active = s.playing && t.key === s.activeTrailer;
+    return `<button type="button" class="dt-trailer-chip${active ? " is-active" : ""}" data-act="pick-trailer" data-key="${escapeHtml(t.key)}" title="${escapeHtml(t.name)}">${PLAY_ICON}${escapeHtml(labels[i])}</button>`;
+  }).join("");
+  return `<div class="dt-trailers"><span class="dt-trailers-label">Trailers</span><div class="dt-trailer-chips">${chips}</div></div>`;
+}
+
 // Short picker labels - "Trailer · EN", "Trailer 2 · EN", "Teaser · UK" -
 // instead of the full YouTube title ("Downton Abbey Season 1 - Official
 // Trailer (HD)"), which stays available as the option's tooltip.
@@ -3439,15 +3483,9 @@ function renderDetailsHero() {
     overlay = `<video src="${escapeHtml(s.stream.url)}" controls autoplay playsinline></video>`;
     controls = `<div class="dt-tctl"><button type="button" class="dt-strip-btn" data-act="stop-watch">${STOP_ICON}Stop</button></div>`;
   } else if (playing) {
-    const labels = trailerLabels(s.trailers);
-    const picker = s.trailers.length > 1
-      ? `<select class="dt-strip-select" data-act="pick-trailer" aria-label="Choose a trailer">${s.trailers.map((t, i) =>
-          `<option value="${escapeHtml(t.key)}" title="${escapeHtml(t.name)}"${t.key === activeTrailer ? " selected" : ""}>${escapeHtml(labels[i])}</option>`).join("")}</select>`
-      : "";
     overlay = `<div id="dtPlayer"></div>`;
     controls = `<div class="dt-tctl">
         <button type="button" class="dt-strip-btn dt-unmute" id="dtUnmute" data-act="unmute" hidden>${UNMUTE_ICON}Unmute</button>
-        ${picker}
         <button type="button" class="dt-strip-btn" data-act="stop-trailer">${STOP_ICON}Stop trailer</button>
       </div>`;
   } else if (hasBackdrop && !s.loading) {
@@ -3601,6 +3639,7 @@ function renderDetailsBody() {
     </button>`).join("");
 
   body.innerHTML = `
+    ${renderTrailerChips(s)}
     ${renderWatchPanel(s)}
     <div class="dt-actions">${actions.join("")}</div>
     <div class="dt-cols">
@@ -3653,6 +3692,12 @@ detailsBody.addEventListener("click", (e) => {
       else findYoutubeTrailers();
       break;
     case "stop-trailer": stopTrailer(); break;
+    case "pick-trailer":
+      if (!(s.playing && s.activeTrailer === el.dataset.key)) {
+        playTrailer(el.dataset.key);
+        detailsModal.querySelector(".modal-box").scrollTo({ top: 0, behavior: "smooth" });
+      }
+      break;
     case "play": startStream(s.torrent ? null : primaryRelease()); break;
     case "play-release": startStream((s.showAllReleases ? s.releases : s.releases.slice(0, RELEASES_SHOWN))[Number(el.dataset.index)]); break;
     case "watch-here":
@@ -3685,7 +3730,6 @@ detailsBody.addEventListener("change", (e) => {
   const el = e.target.closest("[data-act]");
   if (!el || !detailsState) return;
   if (el.dataset.act === "category") Object.assign(detailsState, { category: el.value, categoryChosen: true });
-  if (el.dataset.act === "pick-trailer") playTrailer(el.value);
 });
 detailsBack.addEventListener("click", detailsGoBack);
 detailsClose.addEventListener("click", closeDetails);
