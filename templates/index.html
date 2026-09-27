@@ -3167,29 +3167,60 @@ function loadYouTubeApi() {
 }
 
 // Starts the trailer through YouTube's player API instead of a plain
-// autoplay=1 embed, which Safari ignores (no autoplay with sound in an
-// embedded player): ask it to play, and if the browser still holds it
-// back, play muted - always allowed - and YouTube's own volume control
-// unmutes it.
+// autoplay=1 embed. Always with sound: where the browser won't autoplay
+// with sound (Safari), it simply waits for a tap on YouTube's own play
+// button rather than starting muted.
+//
+// Subtitles in the user's language (the TMDB language - uk-UA -> "uk"):
+// when the trailer isn't already in that language, YouTube is asked to
+// load captions, and once it reports the video's caption tracks, a real
+// Ukrainian track is switched on - or, failing that, YouTube's own
+// auto-translation of the best other track (a hand-made one over
+// auto-generated). A trailer with no captions at all gets none.
+function subtitleLanguage() {
+  return (lastConfig.tmdb_language || navigator.language || "").split("-")[0].toLowerCase();
+}
+
 async function mountTrailerPlayer(key) {
   const s = detailsState;
   try { await loadYouTubeApi(); } catch (e) { return; }
   const mount = document.getElementById("dtPlayer");
   if (!mount || detailsState !== s || s.activeTrailer !== key || !s.playing) return;
+  const lang = subtitleLanguage();
+  const trailer = s.trailers.find(t => t.key === key);
+  const wantSubs = !!lang && (!trailer || !trailer.lang || trailer.lang !== lang);
+  let subsDone = !wantSubs;
+  const pickSubtitles = (player) => {
+    if (subsDone || s.player !== player) return;
+    const tracks = player.getOption("captions", "tracklist");
+    if (!Array.isArray(tracks) || !tracks.length) return;  // not reported yet
+    subsDone = true;
+    const match = tracks.find(t => (t.languageCode || "").split("-")[0].toLowerCase() === lang);
+    const source = tracks.filter(t => t.is_translateable !== false)
+      .sort((a, b) => (a.kind === "asr") - (b.kind === "asr"))[0];
+    if (match) player.setOption("captions", "track", { languageCode: match.languageCode });
+    else if (source) player.setOption("captions", "track", { languageCode: source.languageCode, translationLanguage: { languageCode: lang } });
+    else player.unloadModule("captions");
+  };
   s.player = new YT.Player(mount, {
     host: "https://www.youtube-nocookie.com",
     videoId: key,
-    playerVars: { autoplay: 1, rel: 0, playsinline: 1 },
+    playerVars: {
+      autoplay: 1, rel: 0, playsinline: 1,
+      ...(wantSubs ? { cc_load_policy: 1, cc_lang_pref: lang, hl: lang } : {}),
+    },
     events: {
-      onReady: (e) => {
-        e.target.playVideo();
+      onReady: (e) => e.target.playVideo(),
+      // The caption track list arrives once the captions module loads;
+      // if it never shows up the video has no captions at all.
+      onApiChange: (e) => pickSubtitles(e.target),
+      onStateChange: (e) => {
+        if (e.data !== YT.PlayerState.PLAYING || subsDone) return;
+        pickSubtitles(e.target);
         setTimeout(() => {
-          if (s.player !== e.target || !document.body.contains(e.target.getIframe())) return;
-          const state = e.target.getPlayerState();
-          if (state === YT.PlayerState.PLAYING || state === YT.PlayerState.BUFFERING) return;
-          e.target.mute();
-          e.target.playVideo();
-        }, 1200);
+          pickSubtitles(e.target);
+          if (!subsDone && s.player === e.target) { subsDone = true; e.target.unloadModule("captions"); }
+        }, 2500);
       },
     },
   });
