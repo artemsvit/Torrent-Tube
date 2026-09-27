@@ -148,18 +148,13 @@ into the image or docker-compose.yml), so they survive a container restart
 or redeploy. Without a Jackett URL + API key set, the Search tab stays
 hidden and the app behaves exactly like the paste-only version.
 
-## Streaming
+## Streaming API
 
-**Play** in a title's details streams it while it downloads. Only the video
-file is fetched, in playback order, and it's served over plain HTTP with
-Range support, so any player that opens a URL can play it and seek in it.
-In the details popup that's **Open in Infuse** (best on iPhone, iPad, Mac
-and Apple TV: it plays MKV, HEVC and every audio and subtitle track),
-**VLC**, **Play here** (browser-friendly files: MP4, M4V, WebM, MOV) or
-**Copy link**. The file also lands in the chosen folder like a normal
-download, so you can keep it.
-
-The same endpoints are meant for native clients, such as an Apple TV app:
+The server can stream a torrent while it downloads: only the video file is
+fetched, in playback order, and served over plain HTTP with Range support,
+so a player can start right away and seek. The web UI doesn't use this (it
+sticks to downloading). It's here for native clients, such as an Apple TV
+app, or for pasting the stream URL into Infuse or VLC.
 
 | Endpoint | What it does |
 |---|---|
