@@ -1,5 +1,6 @@
 import email.utils
 import json
+import mimetypes
 import os
 import re
 import threading
@@ -11,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import libtorrent as lt
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request
 
 DOWNLOAD_DIR = Path(os.environ.get("TORRENTTUBE_DOWNLOAD_DIR") or (Path.home() / "Downloads" / "TorrentTube"))
 DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -165,6 +166,11 @@ def save_registry():
                 ti = h.torrent_file()
                 wrapped = lt.bencode({"info": lt.bdecode(ti.info_section())})
                 entry["torrent_file_hex"] = wrapped.hex()
+                # A streamed torrent only wants its one video file - keep
+                # that across restarts instead of fetching everything.
+                priorities = list(h.get_file_priorities())
+                if 0 in priorities:
+                    entry["file_priorities"] = priorities
             else:
                 entry["magnet_uri"] = lt.make_magnet_uri(h)
             entries.append(entry)
@@ -183,7 +189,9 @@ def load_registry():
         try:
             if "torrent_file_hex" in entry:
                 info = lt.torrent_info(bytes.fromhex(entry["torrent_file_hex"]))
-                add_torrent_file(info, entry["save_path"])
+                tid = add_torrent_file(info, entry["save_path"])
+                if entry.get("file_priorities"):
+                    HANDLES[tid].prioritize_files(entry["file_priorities"])
             elif "magnet_uri" in entry:
                 add_magnet(entry["magnet_uri"], entry["save_path"])
         except Exception:
@@ -1314,6 +1322,242 @@ def registry_saver_loop():
             pass
 
 
+# ---------- Streaming ----------
+# Play a torrent while it downloads: the chosen video file is fetched in
+# playback order and served over plain HTTP with Range support, so any
+# player that can open a URL - Infuse, VLC, a browser <video>, or a future
+# native Apple TV app - can play it and seek in it. Seeking works by
+# pulling the pieces under the requested byte range to the front of the
+# queue (set_piece_deadline) and waiting for them, instead of waiting for
+# the whole file. Data still lands on disk like a normal download, in the
+# chosen folder, so a stream the user likes is also a download they keep.
+VIDEO_EXTS = {".mkv", ".mp4", ".m4v", ".mov", ".avi", ".ts", ".m2ts", ".webm", ".wmv", ".mpg", ".mpeg"}
+STREAM_READAHEAD = 32 * 1024 * 1024   # bytes ahead of the read position to rush
+STREAM_HEAD = 8 * 1024 * 1024         # "ready to play" once this much of the start is in
+STREAM_PIECE_TIMEOUT = 90             # seconds to wait for a piece before giving up
+STREAM_CHUNK = 256 * 1024
+mimetypes.add_type("video/x-matroska", ".mkv")
+mimetypes.add_type("video/mp2t", ".ts")
+mimetypes.add_type("video/mp2t", ".m2ts")
+# (tid, file index) -> file path/size, kept after the handle goes away -
+# "Remove when finished" drops a completed torrent from the session, and a
+# stream still playing it should just keep reading the finished file.
+STREAM_FILES = {}
+
+
+def _info_hash_hex(magnet: str = None, info=None) -> str:
+    hashes = lt.parse_magnet_uri(magnet).info_hashes if magnet else info.info_hashes()
+    return str(hashes.get_best())
+
+
+def pick_video_file(ti) -> int:
+    """The main video of a torrent: its biggest video file (a release is
+    typically one film plus samples/extras), or its biggest file at all."""
+    fs = ti.files()
+    files = range(fs.num_files())
+    videos = [i for i in files if Path(fs.file_path(i)).suffix.lower() in VIDEO_EXTS
+              and "sample" not in fs.file_path(i).lower()]
+    return max(videos or files, key=fs.file_size)
+
+
+def _file_pieces(ti, index: int, start: int, end: int):
+    """Piece range covering bytes [start, end) of file `index`."""
+    fs = ti.files()
+    offset, piece_len = fs.file_offset(index), ti.piece_length()
+    first = (offset + start) // piece_len
+    last = (offset + max(start, end - 1)) // piece_len
+    return first, min(last, ti.num_pieces() - 1)
+
+
+def rush_pieces(handle, first: int, last: int):
+    """Ask for these pieces first, soonest-needed first."""
+    for n, piece in enumerate(range(first, last + 1)):
+        if not handle.have_piece(piece):
+            handle.set_piece_deadline(piece, 300 + n * 150)
+
+
+def stream_status(tid: str, index: int) -> dict:
+    with LOCK:
+        handle = HANDLES.get(tid)
+    entry = STREAM_FILES.get((tid, index))
+    if not handle or not handle.is_valid():
+        return {"ready": bool(entry), "done": True, "progress": 100.0}
+    st = handle.status()
+    ti = handle.torrent_file()
+    size = ti.files().file_size(index)
+    first, last = _file_pieces(ti, index, 0, min(size, STREAM_HEAD))
+    head_have = sum(handle.have_piece(p) for p in range(first, last + 1))
+    progress = handle.file_progress()[index] / size * 100 if size else 0
+    return {
+        "ready": head_have == last - first + 1,
+        "head_progress": round(head_have / (last - first + 1) * 100),
+        "progress": round(progress, 1),
+        "done": progress >= 100,
+        "download_rate": st.download_rate,
+        "num_peers": st.num_peers,
+        "num_seeds": st.num_seeds,
+    }
+
+
+@app.route("/api/stream", methods=["POST"])
+def start_stream():
+    """Start (or reuse) a torrent in streaming mode and return its stream
+    URL. Takes the same magnet / download_link / category as adding a
+    download. Waits up to ~30s for a magnet's metadata - the file list is
+    needed to know what to play."""
+    payload = request.json or {}
+    magnet = (payload.get("magnet") or "").strip()
+    download_link = (payload.get("download_link") or "").strip()
+    save_path = resolve_save_path(payload.get("category", ""))
+
+    try:
+        if payload.get("id"):  # something already in Downloads
+            info, tid = None, str(payload["id"])
+            with LOCK:
+                if tid not in HANDLES:
+                    return jsonify({"error": "That download is gone"}), 404
+        elif magnet.lower().startswith("magnet:?"):
+            info, tid = None, _info_hash_hex(magnet=magnet)
+        elif download_link:
+            req = urllib.request.Request(download_link, headers={"User-Agent": "TorrentTube"})
+            with urllib.request.urlopen(req, timeout=25) as resp:
+                info = lt.torrent_info(resp.read())
+            tid = _info_hash_hex(info=info)
+        else:
+            return jsonify({"error": "Nothing to play"}), 400
+    except Exception:
+        return jsonify({"error": "Couldn't fetch that torrent"}), 400
+
+    with LOCK:
+        existing = HANDLES.get(tid)
+    is_new = not (existing and existing.is_valid())
+    if is_new:
+        tid = add_torrent_file(info, save_path) if info else add_magnet(magnet, save_path)
+    with LOCK:
+        handle = HANDLES[tid]
+
+    deadline = time.time() + 30
+    while not handle.status().has_metadata:
+        if time.time() > deadline:
+            return jsonify({"error": "Couldn't get the file list - no peers yet. Try again in a bit."}), 504
+        time.sleep(0.25)
+
+    ti = handle.torrent_file()
+    fs = ti.files()
+    index = pick_video_file(ti)
+    if is_new:
+        # Only the video - not the samples, extras, other episodes.
+        priorities = [0] * fs.num_files()
+        priorities[index] = 4
+        handle.prioritize_files(priorities)
+    elif handle.get_file_priorities()[index] == 0:
+        handle.file_priority(index, 4)
+    handle.set_flags(lt.torrent_flags.sequential_download)
+    with LOCK:
+        PAUSED_IDS.discard(tid)
+    handle.unset_flags(lt.torrent_flags.auto_managed)
+    handle.resume()
+
+    size = fs.file_size(index)
+    # The start to begin playing, and the very end - containers keep their
+    # index there (MKV cues, a non-faststart MP4's moov), and players read
+    # it first.
+    rush_pieces(handle, *_file_pieces(ti, index, 0, min(size, STREAM_HEAD)))
+    rush_pieces(handle, *_file_pieces(ti, index, max(0, size - 2 * 1024 * 1024), size))
+    STREAM_FILES[(tid, index)] = {"path": str(Path(handle.status().save_path) / fs.file_path(index)), "size": size}
+    save_registry()
+
+    name = Path(fs.file_path(index)).name
+    return jsonify({
+        "id": tid,
+        "file": index,
+        "name": name,
+        "size": size,
+        "size_label": format_size(size),
+        "url": f"/stream/{tid}/{index}/{urllib.parse.quote(name)}",
+        **stream_status(tid, index),
+    })
+
+
+@app.route("/api/stream/<tid>/<int:index>")
+def get_stream_status(tid, index):
+    return jsonify(stream_status(tid, index))
+
+
+@app.route("/stream/<tid>/<int:index>/<path:name>")
+def stream_file(tid, index, name):
+    """The file itself, with HTTP Range support. Each chunk waits for its
+    piece (rushed to the front of the queue along with the next
+    STREAM_READAHEAD bytes) before it's read from disk."""
+    entry = STREAM_FILES.get((tid, index))
+    with LOCK:
+        handle = HANDLES.get(tid)
+    live = handle is not None and handle.is_valid() and handle.status().has_metadata
+    if live:
+        ti = handle.torrent_file()
+        fs = ti.files()
+        if index >= fs.num_files():
+            return jsonify({"error": "No such file"}), 404
+        size = fs.file_size(index)
+        path = str(Path(handle.status().save_path) / fs.file_path(index))
+    elif entry:
+        size, path = entry["size"], entry["path"]
+    else:
+        return jsonify({"error": "Not streaming that"}), 404
+
+    start, end = 0, size - 1
+    range_header = request.headers.get("Range", "")
+    match = re.match(r"bytes=(\d*)-(\d*)", range_header)
+    if match:
+        if match.group(1):
+            start = int(match.group(1))
+            if match.group(2):
+                end = min(int(match.group(2)), size - 1)
+        elif match.group(2):  # "bytes=-N": the last N bytes
+            start = max(0, size - int(match.group(2)))
+        if start >= size or start > end:
+            return Response(status=416, headers={"Content-Range": f"bytes */{size}"})
+
+    def generate():
+        pos = start
+        while pos <= end:
+            if live and handle.is_valid():
+                piece, _ = _file_pieces(ti, index, pos, pos + 1)
+                piece_end = min((piece + 1) * ti.piece_length() - fs.file_offset(index), size)
+                if not handle.have_piece(piece):
+                    rush_pieces(handle, *_file_pieces(ti, index, pos, min(size, pos + STREAM_READAHEAD)))
+                    waited = time.time()
+                    while not handle.have_piece(piece):
+                        if not handle.is_valid():
+                            break
+                        if time.time() - waited > STREAM_PIECE_TIMEOUT:
+                            return
+                        time.sleep(0.1)
+                chunk_end = min(end + 1, piece_end)
+            else:
+                chunk_end = end + 1  # finished (and possibly removed) - just read it
+            try:
+                with open(path, "rb") as f:
+                    f.seek(pos)
+                    while pos < chunk_end:
+                        data = f.read(min(STREAM_CHUNK, chunk_end - pos))
+                        if not data:
+                            return
+                        pos += len(data)
+                        yield data
+            except OSError:
+                return
+
+    headers = {
+        "Accept-Ranges": "bytes",
+        "Content-Length": str(end - start + 1),
+        "Content-Type": mimetypes.guess_type(name)[0] or "application/octet-stream",
+    }
+    if match:
+        headers["Content-Range"] = f"bytes {start}-{end}/{size}"
+    return Response(generate(), status=206 if match else 200, headers=headers, direct_passthrough=True)
+
+
 load_registry()
 threading.Thread(target=registry_saver_loop, daemon=True).start()
 
@@ -1323,4 +1567,7 @@ if __name__ == "__main__":
 
     host = os.environ.get("TORRENTTUBE_HOST", "127.0.0.1")
     port = int(os.environ.get("TORRENTTUBE_PORT", "5058"))
-    serve(app, host=host, port=port)
+    # Each open stream holds a worker thread for as long as it plays, and
+    # players open several connections (probing, seeking) - waitress's
+    # default of 4 would leave the UI unresponsive during playback.
+    serve(app, host=host, port=port, threads=24)

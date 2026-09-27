@@ -148,6 +148,32 @@ into the image or docker-compose.yml), so they survive a container restart
 or redeploy. Without a Jackett URL + API key set, the Search tab stays
 hidden and the app behaves exactly like the paste-only version.
 
+## Streaming
+
+**Play** in a title's details streams it while it downloads. Only the video
+file is fetched, in playback order, and it's served over plain HTTP with
+Range support, so any player that opens a URL can play it and seek in it.
+In the details popup that's **Open in Infuse** (best on iPhone, iPad, Mac
+and Apple TV: it plays MKV, HEVC and every audio and subtitle track),
+**VLC**, **Play here** (browser-friendly files: MP4, M4V, WebM, MOV) or
+**Copy link**. The file also lands in the chosen folder like a normal
+download, so you can keep it.
+
+The same endpoints are meant for native clients, such as an Apple TV app:
+
+| Endpoint | What it does |
+|---|---|
+| `POST /api/stream` | Body `{"magnet": ...}`, `{"download_link": ...}` or `{"id": <download id>}`, plus optional `"category"`. Starts (or reuses) the torrent in streaming mode and returns `{id, file, name, size, url, ready, progress, ...}`. |
+| `GET /api/stream/<id>/<file>` | Buffering status: `ready` (the start is buffered), `head_progress`, `progress`, `download_rate`, `num_peers`, `done`. |
+| `GET /stream/<id>/<file>/<name>` | The video itself, with HTTP Range requests (`206 Partial Content`). |
+
+AVPlayer (Apple's native player) can't open MKV, which is what most
+releases are. A native app needs a player that can (VLCKit, KSPlayer,
+mpv), or the server has to remux to HLS first.
+
+This has no authentication, like the rest of the app. Keep it on your
+local network.
+
 ## Run it locally without Docker (macOS)
 
 ```bash
