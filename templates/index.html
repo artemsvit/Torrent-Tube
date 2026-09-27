@@ -996,6 +996,19 @@
     pointer-events: none;
   }
   .dt-media iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  /* The trailer's YouTube player is loaded ahead, invisibly, behind the
+     banner, and clipped to a small circle right under the play button -
+     so the tap lands on YouTube's own play button. A real tap inside the
+     player is what lets every browser (Safari, iOS included) start it
+     with sound; our own click handler alone can't. Clipped, nothing else
+     on the banner can hit the player (its title/channel links). */
+  .dt-player-slot { position: absolute; inset: 0; z-index: 1; opacity: 0; pointer-events: none; clip-path: circle(34px at 50% 50%); }
+  .dt-hero.player-ready .dt-player-slot { pointer-events: auto; }
+  .dt-hero.player-ready .dt-hero-play { pointer-events: none; }
+  .dt-hero.is-playing .dt-player-slot { opacity: 1; pointer-events: auto; clip-path: none; z-index: 3; }
+  .dt-media-overlay { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+  .dt-media-overlay > * { pointer-events: auto; }
+  .dt-hero-rest { display: contents; }
   /* body's desktop zoom (--ui-zoom) isn't passed on to an iframe's own
      content in Safari - YouTube lays out for a 12% bigger box and the
      frame shows it cropped at the right/bottom. Undo the zoom on the
@@ -1030,8 +1043,10 @@
   .dt-hero-play {
     position: absolute;
     left: 50%;
-    top: 42%;
-    transform: translate(-50%, -50%);
+    top: 50%;
+    /* Icon centre (32px down) exactly on the media box centre - that's
+       where the tap-through circle to YouTube's own play button is. */
+    transform: translate(-50%, -32px);
     z-index: 2;
     display: flex;
     flex-direction: column;
@@ -1066,7 +1081,7 @@
      wipe out the centring translate above - the button jumped half its
      size down-right on press, the release landed off it, and the click
      never fired. Press the icon instead. */
-  .dt-hero-play:active:not(:disabled) { transform: translate(-50%, -50%); }
+  .dt-hero-play:active:not(:disabled) { transform: translate(-50%, -32px); }
   .dt-hero-play:active:not(:disabled) .dt-hero-play-icon { transform: scale(0.95); }
   .dt-hero-play:disabled { cursor: default; }
   .dt-hero-play:disabled .dt-hero-play-icon { transform: none; }
@@ -1277,7 +1292,9 @@
     .dt-actions > [data-act="category"] { flex: 0 0 auto; }
     .dt-actions > .btn-primary .dt-download-meta { overflow: hidden; text-overflow: ellipsis; }
     .dt-hero-play-icon { width: 56px; height: 56px; }
-    .dt-hero-play { top: 38%; }
+    .dt-hero-play, .dt-hero-play:active:not(:disabled) { transform: translate(-50%, -28px); }
+    /* The banner is short on a phone - the label would sit on the title. */
+    .dt-hero-play { font-size: 0; gap: 0; }
     .dt-release-title { display: none; }
     .dt-facts .dt-minor { display: none; }
   }
@@ -3008,6 +3025,9 @@ function openDetails(item, torrent = null, { push = false } = {}) {
   setDetailsBackVisible(detailsHistory.length > 0);
 
   const requestId = ++detailsRequestId;
+  destroyTrailerPlayer(detailsState);
+  detailsBody.innerHTML = "";  // fresh banner (and player slot) per title
+  loadYouTubeApi().catch(() => {});
   detailsState = {
     item, torrent,
     data: { title: item.clean_title || item.title, poster: item.poster, rating: item.rating, overview: item.overview },
@@ -3034,6 +3054,7 @@ function openDetails(item, torrent = null, { push = false } = {}) {
       Object.assign(detailsState, { data, loading: false, trailers: data.trailers || [], trailerSource: "tmdb" });
       renderDetailsHero();
       renderDetailsBody();
+      if (detailsState.trailers.length) prepareTrailerPlayer(detailsState.trailers[0].key);
       loadReleases(data.title, requestId);
     })
     .catch(e => {
@@ -3052,6 +3073,7 @@ function setDetailsBackVisible(visible) {
 }
 
 function closeDetails() {
+  destroyTrailerPlayer(detailsState);
   detailsModal.classList.remove("is-open");
   detailsRequestId++;          // drop any response still in flight
   detailsBody.innerHTML = "";  // also stops a playing trailer
@@ -3141,13 +3163,24 @@ async function findYoutubeTrailers() {
 
 
 
-// The YouTube player only loads once asked for - no third-party iframe
-// (or its cookies/requests) just for opening the popup.
+// Plays the trailer: straight away if the preloaded player is ready
+// (normally the tap already went through to it - see .dt-player-slot),
+// or as soon as it is.
 function playTrailer(key) {
-  Object.assign(detailsState, { activeTrailer: key, playing: true });
+  const s = detailsState;
+  Object.assign(s, { activeTrailer: key, playing: true });
   renderDetailsHero();
   renderDetailsBody();
-  mountTrailerPlayer(key);
+  if (s.player && s.playerKey === key) {
+    if (s.playerReady) s.player.playVideo();
+  } else {
+    prepareTrailerPlayer(key);
+  }
+}
+
+function destroyTrailerPlayer(s) {
+  if (s && s.player) { try { s.player.destroy(); } catch (e) {} }
+  if (s) Object.assign(s, { player: null, playerKey: null, playerReady: false });
 }
 
 let youtubeApiPromise = null;
@@ -3181,11 +3214,14 @@ function subtitleLanguage() {
   return (lastConfig.tmdb_language || navigator.language || "").split("-")[0].toLowerCase();
 }
 
-async function mountTrailerPlayer(key) {
+async function prepareTrailerPlayer(key) {
   const s = detailsState;
+  if (s.player && s.playerKey === key) return;
+  destroyTrailerPlayer(s);
+  s.playerKey = key;
   try { await loadYouTubeApi(); } catch (e) { return; }
   const mount = document.getElementById("dtPlayer");
-  if (!mount || detailsState !== s || s.activeTrailer !== key || !s.playing) return;
+  if (!mount || detailsState !== s || s.playerKey !== key) return;
   const lang = subtitleLanguage();
   const trailer = s.trailers.find(t => t.key === key);
   const wantSubs = !!lang && (!trailer || !trailer.lang || trailer.lang !== lang);
@@ -3206,15 +3242,38 @@ async function mountTrailerPlayer(key) {
     host: "https://www.youtube-nocookie.com",
     videoId: key,
     playerVars: {
-      autoplay: 1, rel: 0, playsinline: 1,
+      autoplay: 0, rel: 0, playsinline: 1,
       ...(wantSubs ? { cc_load_policy: 1, cc_lang_pref: lang, hl: lang } : {}),
     },
     events: {
-      onReady: (e) => e.target.playVideo(),
+      onReady: (e) => {
+        if (s.player !== e.target) return;
+        s.playerReady = true;
+        if (s.playing) e.target.playVideo();  // asked for before it was ready
+        else if (detailsState === s) renderDetailsHero();  // arms the tap-through
+      },
       // The caption track list arrives once the captions module loads;
       // if it never shows up the video has no captions at all.
       onApiChange: (e) => pickSubtitles(e.target),
       onStateChange: (e) => {
+        if (s.player !== e.target || detailsState !== s) return;
+        // Ended: back to the banner, with the trailer cued again (not
+        // seeked - a seek reports PLAYING for a moment, which would read
+        // as a new tap) so the play button works again instantly.
+        if (e.data === YT.PlayerState.ENDED) {
+          s.playing = false;
+          subsDone = !wantSubs;
+          e.target.cueVideoById(key);
+          renderDetailsHero();
+          renderDetailsBody();
+          return;
+        }
+        // Started by the tap going through to YouTube's own button.
+        if (e.data === YT.PlayerState.PLAYING && !s.playing) {
+          Object.assign(s, { playing: true, activeTrailer: key });
+          renderDetailsHero();
+          renderDetailsBody();
+        }
         if (e.data !== YT.PlayerState.PLAYING || subsDone) return;
         pickSubtitles(e.target);
         setTimeout(() => {
@@ -3227,10 +3286,16 @@ async function mountTrailerPlayer(key) {
 }
 
 function renderDetailsHero() {
-  const { data: d, playing, activeTrailer } = detailsState;
+  const { data: d, playing } = detailsState;
+  // Built once per title, then only its parts are updated - the player
+  // slot must survive re-renders (moving or re-creating an iframe
+  // reloads it).
   let hero = document.getElementById("dtHero");
   if (!hero) {
-    detailsBody.innerHTML = `<div class="dt-hero" id="dtHero"></div><div class="dt-body" id="dtBody"></div>`;
+    detailsBody.innerHTML = `<div class="dt-hero" id="dtHero">
+        <div class="dt-media"><div class="dt-player-slot"><div id="dtPlayer"></div></div><div class="dt-media-overlay"></div></div>
+        <div class="dt-hero-rest"></div>
+      </div><div class="dt-body" id="dtBody"></div>`;
     hero = document.getElementById("dtHero");
   }
   const meta = [];
@@ -3246,11 +3311,11 @@ function renderDetailsHero() {
 
   const s = detailsState;
   const hasBackdrop = !!d.backdrop;
-  hero.className = `dt-hero ${hasBackdrop ? "has-backdrop" : "no-backdrop"}${playing ? " is-playing" : ""}`;
+  hero.className = `dt-hero ${hasBackdrop ? "has-backdrop" : "no-backdrop"}${playing ? " is-playing" : ""}${s.playerReady ? " player-ready" : ""}`;
 
   let overlay = "";
   if (playing) {
-    overlay = `<div id="dtPlayer"></div>`;
+    overlay = "";
   } else if (hasBackdrop && !s.loading && s.noTrailer) {
     const q = [d.title, d.year, "trailer"].filter(Boolean).join(" ");
     overlay = `<a class="dt-hero-play" href="${escapeHtml(youtubeSearchUrl(q))}" target="_blank" rel="noopener"><span class="dt-hero-play-icon">${PLAY_ICON}</span>Search YouTube</a>`;
@@ -3259,10 +3324,9 @@ function renderDetailsHero() {
       <span class="dt-hero-play-icon">${s.findingTrailer ? `<span class="spinner-ring"></span>` : PLAY_ICON}</span>${s.findingTrailer ? "Finding trailer…" : "Trailer"}</button>`;
   }
   const showBackdrop = hasBackdrop && !playing;
-  hero.innerHTML = `
-    <div class="dt-media" style="${showBackdrop ? `background-image:url('${escapeHtml(d.backdrop)}')` : ""}">
-      ${overlay}
-    </div>
+  hero.querySelector(".dt-media").style.backgroundImage = showBackdrop ? `url('${d.backdrop.replace(/'/g, "%27")}')` : "";
+  hero.querySelector(".dt-media-overlay").innerHTML = overlay;
+  hero.querySelector(".dt-hero-rest").innerHTML = `
     ${d.poster ? `<img class="dt-poster" src="${escapeHtml(d.poster)}" alt="">` : `<div class="dt-poster result-poster-fallback">${ICONS.download}</div>`}
     <div class="dt-info">
       <h2 class="dt-title">${escapeHtml(d.title)}</h2>
