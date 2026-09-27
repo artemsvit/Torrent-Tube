@@ -408,14 +408,19 @@ def extract_title_and_year(raw_title: str):
     return candidate, base, year
 
 
-def _tmdb_search(query: str, year: str = None):
-    params = {"api_key": TMDB_API_KEY, "query": query, "include_adult": "false", "language": TMDB_LANGUAGE}
-    if year:
-        params["year"] = year
-    url = f"https://api.themoviedb.org/3/search/multi?{urllib.parse.urlencode(params)}"
+def _tmdb_get(path: str, **params):
+    params = {"api_key": TMDB_API_KEY, **params}
+    url = f"https://api.themoviedb.org/3{path}?{urllib.parse.urlencode(params)}"
     req = urllib.request.Request(url, headers={"User-Agent": "TorrentTube"})
     with urllib.request.urlopen(req, timeout=8) as resp:
-        data = json.loads(resp.read())
+        return json.loads(resp.read())
+
+
+def _tmdb_search(query: str, year: str = None):
+    params = {"query": query, "include_adult": "false", "language": TMDB_LANGUAGE}
+    if year:
+        params["year"] = year
+    data = _tmdb_get("/search/multi", **params)
     for item in data.get("results", []):
         if item.get("media_type") in ("movie", "tv"):
             return item
@@ -442,6 +447,7 @@ def tmdb_lookup(title: str, base: str, year: str):
     if item:
         poster_path = item.get("poster_path")
         result = {
+            "id": item.get("id"),
             "title": item.get("title") or item.get("name") or title,
             "poster": f"https://image.tmdb.org/t/p/w200{poster_path}" if poster_path else None,
             "rating": item.get("vote_average"),
@@ -455,6 +461,165 @@ def tmdb_lookup(title: str, base: str, year: str):
 
 
 TMDB_ANIMATION_GENRE_ID = 16
+TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p"
+
+
+def _tmdb_image(path: str, size: str):
+    return f"{TMDB_IMAGE_BASE}/{size}{path}" if path else None
+
+
+def _pick_certification(data: dict, media_type: str, region: str):
+    """Age rating for the TMDB language's own country, falling back to the US."""
+    if media_type == "movie":
+        by_country = {
+            c.get("iso_3166_1"): next((r.get("certification") for r in c.get("release_dates", []) if r.get("certification")), None)
+            for c in (data.get("release_dates") or {}).get("results", [])
+        }
+    else:
+        by_country = {c.get("iso_3166_1"): c.get("rating") for c in (data.get("content_ratings") or {}).get("results", [])}
+    return by_country.get(region) or by_country.get("US") or None
+
+
+def _pick_trailers(videos: list, lang: str) -> list:
+    """YouTube trailers/teasers, best first: the TMDB language's own
+    trailers, then official ones, then trailers before teasers."""
+    picked = [v for v in videos if v.get("site") == "YouTube" and v.get("key") and v.get("type") in ("Trailer", "Teaser")]
+    picked.sort(key=lambda v: (v.get("iso_639_1") != lang, not v.get("official"), v.get("type") != "Trailer"))
+    return [{"key": v["key"], "name": v.get("name") or v["type"], "lang": v.get("iso_639_1")} for v in picked[:8]]
+
+
+def _person(p: dict, role: str) -> dict:
+    return {"id": p.get("id"), "name": p.get("name") or "", "role": role or "",
+            "photo": _tmdb_image(p.get("profile_path"), "w185")}
+
+
+def tmdb_details(media_type: str, tmdb_id: int) -> dict:
+    """Everything the details popup shows, in one TMDB round-trip (plus an
+    English fallback when there's no overview/trailer in the configured
+    language)."""
+    cache_key = ("details", media_type, tmdb_id)
+    cached = TMDB_CACHE.get(cache_key)
+    if cached and time.time() - cached[0] < TMDB_CACHE_TTL:
+        return cached[1]
+
+    lang, _, region = TMDB_LANGUAGE.partition("-")
+    extra = "credits,videos,external_ids,recommendations," + ("release_dates" if media_type == "movie" else "content_ratings")
+    d = _tmdb_get(f"/{media_type}/{tmdb_id}", language=TMDB_LANGUAGE, append_to_response=extra,
+                  include_video_language=f"{lang},en,null")
+
+    overview = d.get("overview") or ""
+    videos = (d.get("videos") or {}).get("results", [])
+    if lang != "en" and (not overview or not videos):
+        try:
+            en = _tmdb_get(f"/{media_type}/{tmdb_id}", language="en-US", append_to_response="videos")
+            overview = overview or en.get("overview") or ""
+            videos = videos or (en.get("videos") or {}).get("results", [])
+        except Exception:
+            pass
+
+    credits = d.get("credits") or {}
+    crew = credits.get("crew") or []
+    genre_ids = [g.get("id") for g in d.get("genres", [])]
+    if media_type == "movie":
+        # Directors lead the cast row (Apple TV-style "Cast & Crew").
+        leads = [_person(c, "Director") for c in crew if c.get("job") == "Director"][:2]
+        facts = [("Writers", list(dict.fromkeys(c["name"] for c in crew if c.get("job") in ("Screenplay", "Writer", "Novel"))))]
+    else:
+        leads = [_person(c, "Creator") for c in d.get("created_by", [])][:2]
+        facts = [("Network", [n["name"] for n in d.get("networks", [])])]
+    runtime = d.get("runtime") or next(iter(d.get("episode_run_time") or []), None)
+    release_date = d.get("release_date") or d.get("first_air_date") or ""
+    next_ep = d.get("next_episode_to_air") or {}
+    collection = d.get("belongs_to_collection") or {}
+
+    result = {
+        "tmdb_id": tmdb_id,
+        "media_type": media_type,
+        "kind": "Cartoon" if TMDB_ANIMATION_GENRE_ID in genre_ids else ("Movie" if media_type == "movie" else "TV show"),
+        "title": d.get("title") or d.get("name") or "",
+        "original_title": d.get("original_title") or d.get("original_name") or "",
+        "tagline": d.get("tagline") or "",
+        "overview": overview,
+        "year": release_date[:4],
+        "release_date": release_date,
+        "last_air_date": d.get("last_air_date"),
+        "in_production": d.get("in_production"),
+        "status": d.get("status"),
+        "runtime": runtime,
+        "seasons": d.get("number_of_seasons"),
+        "episodes": d.get("number_of_episodes"),
+        "season_list": [
+            {"number": se.get("season_number"), "name": se.get("name") or "", "episodes": se.get("episode_count"),
+             "year": (se.get("air_date") or "")[:4]}
+            for se in d.get("seasons", []) if se.get("season_number")
+        ],
+        "next_episode": {"season": next_ep.get("season_number"), "episode": next_ep.get("episode_number"),
+                         "date": next_ep.get("air_date")} if next_ep.get("air_date") else None,
+        "collection": collection.get("name"),
+        "genres": [g.get("name") for g in d.get("genres", []) if g.get("name")],
+        "countries": [c.get("name") for c in d.get("production_countries", []) if c.get("name")],
+        "original_language": d.get("original_language"),
+        "certification": _pick_certification(d, media_type, region or lang.upper()),
+        "rating": d.get("vote_average"),
+        "vote_count": d.get("vote_count"),
+        "budget": d.get("budget") or None,
+        "revenue": d.get("revenue") or None,
+        "facts": [{"label": label, "names": names[:3]} for label, names in facts if names],
+        "people": leads + [_person(c, c.get("character")) for c in (credits.get("cast") or [])[:18]],
+        "poster": _tmdb_image(d.get("poster_path"), "w342"),
+        "backdrop": _tmdb_image(d.get("backdrop_path"), "w1280"),
+        "imdb_id": (d.get("external_ids") or {}).get("imdb_id") or d.get("imdb_id"),
+        "homepage": d.get("homepage") or None,
+        "tmdb_url": f"https://www.themoviedb.org/{media_type}/{tmdb_id}",
+        "trailers": _pick_trailers(videos, lang),
+        "recommendations": [
+            {"tmdb_id": r.get("id"), "media_type": r.get("media_type") or media_type,
+             "title": r.get("title") or r.get("name") or "",
+             "year": (r.get("release_date") or r.get("first_air_date") or "")[:4],
+             "rating": r.get("vote_average"), "poster": _tmdb_image(r.get("poster_path"), "w185")}
+            for r in (d.get("recommendations") or {}).get("results", [])
+            if r.get("poster_path") and r.get("media_type", media_type) in ("movie", "tv")
+        ][:14],
+    }
+    TMDB_CACHE[cache_key] = (time.time(), result)
+    return result
+
+
+# YouTube search results page, scraped - no API key needed. Only a
+# fallback for titles TMDB has no trailer for, so it being best-effort
+# (the markup can change under us) is fine: the popup still links out to
+# a plain YouTube search either way.
+YT_RESULT_RE = re.compile(r'"videoRenderer":\{"videoId":"([\w-]{11})".{0,3000}?"title":\{"runs":\[\{"text":"((?:[^"\\]|\\.)*)"', re.S)
+YT_CACHE = {}
+
+
+def youtube_search(query: str, limit: int = 6) -> list:
+    hit = YT_CACHE.get(query)
+    if hit and time.time() - hit[0] < TMDB_CACHE_TTL:
+        return hit[1]
+    url = f"https://www.youtube.com/results?{urllib.parse.urlencode({'search_query': query})}"
+    req = urllib.request.Request(url, headers={
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+        "Accept-Language": f"{TMDB_LANGUAGE.split('-')[0]},en;q=0.8",
+        "Cookie": "SOCS=CAI",  # skips the EU cookie-consent interstitial
+    })
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        html = resp.read().decode("utf-8", "replace")
+    videos, seen = [], set()
+    for m in YT_RESULT_RE.finditer(html):
+        key = m.group(1)
+        if key in seen:
+            continue
+        seen.add(key)
+        try:
+            name = json.loads(f'"{m.group(2)}"')
+        except ValueError:
+            name = m.group(2)
+        videos.append({"key": key, "name": name, "lang": None})
+        if len(videos) >= limit:
+            break
+    YT_CACHE[query] = (time.time(), videos)
+    return videos
 
 # Keyword-based fallback for when there's no TMDB match (or TMDB is unused,
 # e.g. for an uploaded .torrent file, which has no time budget for an API
@@ -514,6 +679,8 @@ def enrich_with_tmdb(results, limit=40):
             r["rating"] = meta["rating"]
             r["overview"] = meta["overview"]
             r["clean_title"] = meta["title"]
+            r["tmdb_id"] = meta["id"]
+            r["media_type"] = meta["media_type"]
             r["suggested_category"] = guess_category(meta["title"], meta["genre_ids"], meta["media_type"])
         else:
             r["suggested_category"] = guess_category(r["title"])
@@ -596,7 +763,10 @@ def search_torrents():
 
     results.sort(key=lambda r: r["seeders"], reverse=True)
     results = results[:150]
-    enrich_with_tmdb(results)
+    # The details popup's "Releases" list only needs the tracker rows
+    # themselves - skip the per-row TMDB lookups there.
+    if request.args.get("enrich") != "0":
+        enrich_with_tmdb(results)
     return jsonify({"results": results})
 
 
@@ -856,11 +1026,59 @@ def discover_enrich():
             "rating": meta["rating"],
             "overview": meta["overview"],
             "clean_title": meta["title"],
+            "tmdb_id": meta["id"],
+            "media_type": meta["media_type"],
             "suggested_category": guess_category(meta["title"], meta["genre_ids"], meta["media_type"]),
         }
 
     pairs = list(TMDB_EXECUTOR.map(enrich_one, titles))
     return jsonify({k: v for k, v in pairs if v})
+
+
+@app.route("/api/details")
+def item_details():
+    """Full metadata for the details popup. Takes a TMDB type+id when the
+    card was already enriched, or the raw tracker/torrent title otherwise
+    (a Discover card whose page hasn't been enriched yet, a download)."""
+    if not TMDB_API_KEY:
+        return jsonify({"error": "Details need a TMDB API key - add one in Settings"}), 503
+    media_type = request.args.get("type", "")
+    tmdb_id = request.args.get("id", "")
+    if media_type not in ("movie", "tv") or not tmdb_id.isdigit():
+        raw_title = request.args.get("title", "").strip()
+        meta = tmdb_lookup(*extract_title_and_year(raw_title)) if raw_title else None
+        if not meta:
+            return jsonify({"error": "Couldn't find this title on TMDB"}), 404
+        media_type, tmdb_id = meta["media_type"], meta["id"]
+    try:
+        return jsonify(tmdb_details(media_type, int(tmdb_id)))
+    except Exception:
+        return jsonify({"error": "Couldn't reach TMDB"}), 502
+
+
+# Appended to the YouTube query so results favour trailers dubbed into the
+# TMDB language when one exists, falling back to plain "trailer".
+TRAILER_WORDS = {"uk": "трейлер українською", "ru": "трейлер", "pl": "zwiastun", "de": "trailer deutsch",
+                 "fr": "bande annonce", "es": "tráiler", "it": "trailer italiano", "pt": "trailer", "cs": "trailer"}
+
+
+@app.route("/api/trailer")
+def find_trailer():
+    """YouTube fallback for when TMDB has no trailer (or isn't set up).
+    Takes a title - a raw tracker/torrent name is cleaned up first - and an
+    optional year, and returns the matching videos plus the query used, so
+    the popup's "More on YouTube" link searches for the same thing."""
+    title = request.args.get("title", "").strip()
+    year = request.args.get("year", "").strip()
+    if not title:
+        return jsonify({"videos": [], "query": ""})
+    clean, _base, found_year = extract_title_and_year(title)
+    query = " ".join(filter(None, [clean or title, year or found_year,
+                                   TRAILER_WORDS.get(TMDB_LANGUAGE.split("-")[0], "trailer")]))[:200]
+    try:
+        return jsonify({"videos": youtube_search(query), "query": query})
+    except Exception:
+        return jsonify({"error": "Couldn't reach YouTube", "videos": [], "query": query}), 502
 
 
 # Torrents enforce_remove_policy() just took off the list, so the UI can

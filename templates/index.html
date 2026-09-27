@@ -914,6 +914,288 @@
   .btn-primary.is-danger { background: linear-gradient(180deg, #e0722b, var(--danger)); }
   .btn-primary.is-danger:hover:not(:disabled) { background: var(--danger); }
 
+  /* ---------- Details popup ---------- */
+  /* Opened by clicking any card (search, Discover, Downloads). Laid out
+     like the streaming apps' title pages (Netflix/Apple TV/Plex): a wide
+     backdrop hero that turns into the trailer player, one dot-separated
+     meta line, the main action right under it, then overview + key facts
+     side by side. Edge-to-edge (padding 0) so the hero bleeds to the box
+     edges; everything below it gets .dt-body's own padding. On phones it
+     becomes a bottom sheet. */
+
+  .search-dropdown .item, #list .item { cursor: pointer; }
+
+  .details-box {
+    position: relative;
+    max-width: 780px;
+    padding: 0;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+  }
+  .dt-topbtn {
+    position: absolute;
+    top: 12px;
+    z-index: 4;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .dt-topbtn:hover { background: rgba(0, 0, 0, 0.7); }
+  .dt-close { right: 12px; }
+  .dt-back { left: 12px; }
+  .dt-back[hidden] { display: none; }
+  .dt-close::before, .dt-close::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 13px;
+    height: 1.8px;
+    background: currentColor;
+    border-radius: 1px;
+  }
+  .dt-close::before { transform: translate(-50%, -50%) rotate(45deg); }
+  .dt-close::after { transform: translate(-50%, -50%) rotate(-45deg); }
+
+  /* Hero: backdrop with the title overlaid on its fade. Without a
+     backdrop it falls back to a compact poster + title header. */
+  .dt-hero { position: relative; }
+  .dt-media {
+    position: relative;
+    aspect-ratio: 16 / 7;
+    background: #000 center 25% / cover no-repeat;
+  }
+  .dt-media::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0) 35%, rgba(0, 0, 0, 0.55) 70%, rgba(0, 0, 0, 0.85) 100%);
+    pointer-events: none;
+  }
+  .dt-media iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  .dt-hero.has-backdrop .dt-info {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 0 22px 16px;
+    color: white;
+  }
+  .dt-hero.has-backdrop .dt-sub,
+  .dt-hero.has-backdrop .dt-meta { color: rgba(255, 255, 255, 0.78); }
+  /* Playing: the player takes the full 16:9 and the title drops below it
+     (text over a live player would sit on top of its controls). */
+  .dt-hero.is-playing .dt-media { aspect-ratio: 16 / 9; }
+  .dt-hero.is-playing .dt-media::after { display: none; }
+  .dt-hero.is-playing .dt-info { position: static; padding: 14px 22px 0; color: var(--text); }
+  .dt-hero.is-playing .dt-sub, .dt-hero.is-playing .dt-meta { color: var(--text-secondary); }
+
+  .dt-hero.no-backdrop { display: flex; gap: 16px; align-items: flex-end; padding: 22px 22px 0; }
+  .dt-hero.no-backdrop .dt-media { display: none; }
+  .dt-hero.no-backdrop.is-playing { display: block; padding: 0; }
+  .dt-hero.no-backdrop.is-playing .dt-media { display: block; }
+  .dt-hero.no-backdrop.is-playing .dt-poster { display: none; }
+  .dt-poster {
+    width: 92px;
+    aspect-ratio: 2 / 3;
+    height: auto;
+    border-radius: var(--radius-sm);
+    object-fit: cover;
+    flex-shrink: 0;
+    background: var(--border);
+  }
+  .dt-hero.has-backdrop .dt-poster { display: none; }
+  .dt-info { min-width: 0; flex: 1; padding-right: 40px; }
+  .dt-title { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; margin: 0; }
+  .dt-sub { font-size: 13px; color: var(--text-secondary); margin-top: 3px; }
+  .dt-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    margin-top: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+  .dt-meta > span + span::before { content: "·"; margin-right: 8px; opacity: 0.6; }
+  .dt-cert {
+    border: 1px solid currentColor;
+    border-radius: 4px;
+    padding: 0 5px;
+    font-size: 11.5px;
+    line-height: 16px;
+  }
+  .dt-meta .rating-badge { gap: 4px; }
+
+  .dt-body { padding: 14px 22px 22px; }
+
+  .dt-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .dt-actions .btn-secondary, .dt-actions .btn-primary { padding: 9px 16px; font-size: 13px; display: inline-flex; align-items: center; gap: 7px; }
+  .dt-actions .btn-primary svg { width: 14px; height: 14px; }
+  .dt-actions .dt-download-meta { font-weight: 500; opacity: 0.85; }
+  .dt-status-pill {
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: var(--radius-pill);
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .dt-trailer-pick { max-width: 100%; margin-top: 10px; }
+
+  .dt-cols { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 22px; margin-top: 18px; }
+  .dt-tagline { font-size: 13.5px; font-style: italic; color: var(--text-secondary); margin: 0 0 6px; }
+  .dt-overview {
+    font-size: 14px;
+    line-height: 1.55;
+    margin: 0;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 5;
+    -webkit-box-orient: vertical;
+  }
+  .dt-overview.is-expanded { -webkit-line-clamp: unset; display: block; }
+  .dt-facts { font-size: 12.5px; line-height: 1.5; color: var(--text); }
+  .dt-facts div + div { margin-top: 5px; }
+  .dt-facts .k { color: var(--text-tertiary); }
+  .dt-facts a { color: var(--accent); text-decoration: none; font-weight: 600; }
+  .dt-facts a:hover { text-decoration: underline; }
+  .dt-status { font-size: 12.5px; color: var(--text-tertiary); }
+  .dt-status.is-error { color: var(--danger); }
+  .dt-skeleton { height: 12px; border-radius: 6px; background: var(--border); margin-top: 9px; animation: dt-pulse 1.2s ease-in-out infinite; }
+  @keyframes dt-pulse { 50% { opacity: 0.45; } }
+
+  .dt-section { margin-top: 22px; }
+  .dt-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+  .dt-link-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent);
+  }
+  .dt-link-btn:hover { text-decoration: underline; }
+
+  .dt-row {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+    align-items: flex-start;
+  }
+  .dt-row::-webkit-scrollbar { display: none; }
+  .dt-person { width: 76px; flex-shrink: 0; text-align: center; text-decoration: none; color: inherit; scroll-snap-align: start; }
+  .dt-avatar {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto;
+    border-radius: 50%;
+    object-fit: cover;
+    background: var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-tertiary);
+    font-size: 20px;
+    font-weight: 600;
+  }
+  .dt-person:hover .dt-avatar { box-shadow: 0 0 0 2px var(--accent); }
+  .dt-person-name { font-size: 11.5px; font-weight: 600; margin-top: 6px; line-height: 1.25; }
+  .dt-person-role {
+    font-size: 10.5px;
+    color: var(--text-secondary);
+    margin-top: 1px;
+    line-height: 1.25;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  .dt-seasons { display: flex; flex-wrap: wrap; gap: 6px; }
+  .dt-chip {
+    padding: 4px 10px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--border-strong);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+  .dt-chip b { color: var(--text); font-weight: 600; }
+
+  .dt-releases { border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+  .dt-release {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border-top: 1px solid var(--border);
+  }
+  .dt-release:first-child { border-top: none; }
+  .dt-release.is-current { background: var(--accent-soft); }
+  .dt-release-main { flex: 1; min-width: 0; }
+  .dt-release-tags { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+  .dt-tag {
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: var(--border);
+    color: var(--text-secondary);
+  }
+  .dt-tag.is-res { background: var(--accent); color: white; }
+  .dt-release-title {
+    font-size: 11.5px;
+    color: var(--text-tertiary);
+    margin-top: 3px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .dt-release-stats { font-size: 12px; color: var(--text-secondary); white-space: nowrap; text-align: right; }
+  .dt-release-stats .seeders { color: var(--success); font-weight: 600; }
+
+  .dt-rec { display: flex; flex-direction: column; justify-content: flex-start; width: 96px; flex-shrink: 0; cursor: pointer; scroll-snap-align: start; background: none; border: none; padding: 0; text-align: left; color: inherit; font-weight: 400; border-radius: 0; }
+  .dt-rec img { width: 96px; aspect-ratio: 2 / 3; border-radius: var(--radius-sm); object-fit: cover; background: var(--border); display: block; transition: transform 0.15s; }
+  .dt-rec:hover img { transform: scale(1.03); }
+  .dt-rec-title { font-size: 11.5px; font-weight: 600; margin-top: 5px; line-height: 1.25; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .dt-rec-year { font-size: 11px; color: var(--text-tertiary); }
+
+  @media (max-width: 640px) {
+    /* Bottom sheet */
+    #detailsModal.is-open { align-items: flex-end; padding: 0; }
+    #detailsModal .details-box {
+      max-height: 94dvh;
+      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+      border-bottom: none;
+      padding-bottom: env(safe-area-inset-bottom);
+      animation: dt-sheet-in 0.22s ease-out;
+    }
+    .dt-media { aspect-ratio: 16 / 9; }
+    .dt-hero.has-backdrop .dt-info { padding: 0 16px 12px; }
+    .dt-hero.is-playing .dt-info { padding: 12px 16px 0; }
+    .dt-hero.no-backdrop { padding: 18px 16px 0; }
+    .dt-title { font-size: 20px; }
+    .dt-body { padding: 12px 16px 18px; }
+    .dt-cols { grid-template-columns: 1fr; gap: 14px; }
+    .dt-actions > * { flex: 1 1 auto; justify-content: center; }
+    .dt-release-title { display: none; }
+    .dt-facts .dt-minor { display: none; }
+  }
+  @keyframes dt-sheet-in { from { transform: translateY(30px); opacity: 0.6; } to { transform: none; opacity: 1; } }
+
   /* ---------- Settings ---------- */
 
   /* A deliberate spacing scale, largest to smallest, so the eye can tell
@@ -1497,6 +1779,14 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="detailsModal">
+  <div class="modal-box details-box" role="dialog" aria-modal="true" aria-label="Details">
+    <button type="button" class="dt-topbtn dt-back" id="detailsBack" aria-label="Back" title="Back" hidden><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <button type="button" class="dt-topbtn dt-close" id="detailsClose" aria-label="Close" title="Close"></button>
+    <div id="detailsBody"></div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="confirmModal">
   <div class="modal-box confirm-box">
     <div class="modal-title" id="confirmModalTitle">Are you sure?</div>
@@ -1739,10 +2029,16 @@ function handleGo() {
 }
 
 document.addEventListener("click", (e) => {
-  if (!e.target.closest(".searchbar")) closeSearchDropdown();
+  // A details popup opened from a search result sits outside .searchbar -
+  // clicking around in it shouldn't close the results underneath.
+  if (!e.target.closest(".searchbar, .modal-overlay")) closeSearchDropdown();
 });
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") { closeSearchDropdown(); closeUploadModal(); closeSettings(); closeConfirm(false); }
+  if (e.key !== "Escape") return;
+  // One layer at a time: Escape in a popup opened from search results
+  // closes just the popup, not the results list too.
+  if (detailsModal.classList.contains("is-open")) { closeDetails(); return; }
+  closeSearchDropdown(); closeUploadModal(); closeSettings(); closeConfirm(false);
 });
 
 goBtn.addEventListener("click", handleGo);
@@ -1932,6 +2228,11 @@ function render(torrents) {
     const resumeBtn = div.querySelector(".resume-btn");
     if (resumeBtn) resumeBtn.addEventListener("click", () => resumeTorrent(t.id));
     div.querySelector(".remove-btn").addEventListener("click", (e) => removeTorrent(t.id, e.shiftKey));
+    if (t.has_metadata) {
+      div.addEventListener("click", (e) => {
+        if (!e.target.closest("button")) openDetails({ title: t.name }, t);
+      });
+    }
 
     listEl.appendChild(div);
   });
@@ -2469,6 +2770,9 @@ function buildResultCard(r, container, allResults, emptyMessage) {
     e.stopPropagation();
     addSearchResult(r, actionsEl.querySelector("select").value, actionsEl, container, allResults, emptyMessage);
   });
+  div.addEventListener("click", (e) => {
+    if (!e.target.closest("button, select, a")) openDetails(r);
+  });
   return div;
 }
 
@@ -2490,19 +2794,24 @@ function renderSearchResults(results) {
   renderResultCards(searchDropdown, results, "No results found.");
 }
 
-async function addSearchResult(result, category, actionsEl, container, allResults, emptyMessage) {
-  try { localStorage.setItem("torrenttube-category", category); } catch (e) {}
-  actionsEl.innerHTML = `<span class="hint" style="margin:0; padding:0; border:none;">Adding...</span>`;
+// Adds a search/Discover result to Downloads; shared by the card's own
+// Download button and the one in the details popup.
+async function postSearchResult(result, category) {
+  rememberCategory(category);
   const body = { category };
   if (result.magnet) body.magnet = result.magnet;
   else body.download_link = result.download_link;
-
   const res = await fetch("/api/torrents", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body)
   });
-  const data = await res.json();
+  return res.json();
+}
+
+async function addSearchResult(result, category, actionsEl, container, allResults, emptyMessage) {
+  actionsEl.innerHTML = `<span class="hint" style="margin:0; padding:0; border:none;">Adding...</span>`;
+  const data = await postSearchResult(result, category);
   if (data.error) {
     showToast(data.error, true);
     renderResultCards(container, allResults, emptyMessage);
@@ -2512,6 +2821,456 @@ async function addSearchResult(result, category, actionsEl, container, allResult
   showToast(`"${result.title}" added to ${category}`);
   refresh();
 }
+
+// ---------- Details popup ----------
+// Clicking any card opens this. It paints straight away from what the card
+// already has (title, poster), then fills in the full TMDB record, and in
+// parallel looks up every other release of the same title on the tracker
+// so the best one can be picked (or downloaded straight from "More like
+// this", which has no release of its own). The hero is rendered separately
+// from the body, so body updates never restart a playing trailer.
+
+const detailsModal = document.getElementById("detailsModal");
+const detailsBody = document.getElementById("detailsBody");
+const detailsClose = document.getElementById("detailsClose");
+const detailsBack = document.getElementById("detailsBack");
+const PLAY_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7-11-7z"/></svg>`;
+const STOP_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>`;
+const RELEASES_SHOWN = 5;
+
+let detailsRequestId = 0;
+let detailsState = null;
+let detailsHistory = [];
+const detailsCache = new Map();
+const releasesCache = new Map();
+
+function formatRuntime(mins) {
+  if (!mins) return "";
+  const h = Math.floor(mins / 60), m = mins % 60;
+  return h ? `${h}h${m ? ` ${m}m` : ""}` : `${m}m`;
+}
+
+function formatDate(str) {
+  if (!str) return "";
+  const d = new Date(str);
+  return isNaN(d) ? "" : d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
+function formatMoney(n) {
+  try {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 1 }).format(n);
+  } catch (e) {
+    return `$${n}`;
+  }
+}
+
+function languageName(code) {
+  let name = null;
+  try { name = languageNames?.of(code); } catch (e) {}
+  return name && name !== code ? name : (code || "");
+}
+
+function youtubeSearchUrl(query) {
+  return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+}
+
+// Tracker titles have no structure, but the bits that tell releases apart
+// (resolution, source, HDR, dub, season) are standard enough to pick out.
+function releaseTags(title) {
+  const tags = [];
+  const res = /2160p|\b4k\b|\buhd\b/i.test(title) ? "4K" : /1080[pi]/i.test(title) ? "1080p"
+    : /720p/i.test(title) ? "720p" : /480p|dvdrip|\bsd\b/i.test(title) ? "SD" : "";
+  if (res) tags.push({ label: res, res: true });
+  const season = title.match(/\bS(\d{1,2})(?:E\d+)?\b|сезон\s*(\d{1,2})|(\d{1,2})\s*сезон/i);
+  if (season) tags.push({ label: `S${Number(season[1] || season[2] || season[3])}` });
+  const source = title.match(/\b(remux|bdremux|blu-?ray|bdrip|web-?dl|web-?rip|hdtv|hdrip|dvdrip|camrip)\b/i);
+  if (source) tags.push({ label: source[1].toUpperCase().replace("BLU-RAY", "BLURAY") });
+  if (/\bhdr(10)?\+?\b/i.test(title)) tags.push({ label: "HDR" });
+  if (/dolby\s?vision|\bdv\b/i.test(title)) tags.push({ label: "DV" });
+  if (/\bukr\b|укр|українськ/i.test(title)) tags.push({ label: "UKR" });
+  return tags;
+}
+
+function releaseKey(r) {
+  return r.download_link || r.magnet || r.title;
+}
+
+// Picks the folder the way the server's guess_category does - by what the
+// category's own name hints at - so it still works if they're renamed.
+function categoryForKind(kind) {
+  const find = (...hints) => currentCategories.find(c => hints.some(h => c.toLowerCase().includes(h)));
+  if (kind === "Cartoon") return find("cartoon", "anim");
+  if (kind === "TV show") return find("tv", "show", "series");
+  if (kind === "Movie") return find("movie");
+  return null;
+}
+
+// Best-effort searchable title from a raw tracker/torrent name, for when
+// TMDB didn't match - "Дюна / Dune (2021) BDRip" -> "Дюна".
+function roughTitle(raw) {
+  return (raw || "").split("/")[0].split("|")[0].replace(/[\[(].*$/, "").replace(/[._]/g, " ")
+    .replace(/\b(19|20)\d{2}\b.*$/, "").trim() || raw;
+}
+
+function openDetails(item, torrent = null, { push = false } = {}) {
+  if (push && detailsState) detailsHistory.push({ item: detailsState.item, torrent: detailsState.torrent });
+  if (!push) detailsHistory = [];
+  detailsBack.hidden = detailsHistory.length === 0;
+
+  const requestId = ++detailsRequestId;
+  detailsState = {
+    item, torrent,
+    data: { title: item.clean_title || item.title, poster: item.poster, rating: item.rating, overview: item.overview },
+    loading: true, error: "",
+    trailers: [], trailerSource: null, activeTrailer: null, playing: false, findingTrailer: false, noTrailer: false,
+    releases: null, showAllReleases: false, added: new Set(),
+    category: null,
+  };
+  renderDetailsHero();
+  renderDetailsBody();
+  detailsModal.classList.add("is-open");
+  detailsModal.querySelector(".modal-box").scrollTop = 0;
+
+  const cacheKey = item.tmdb_id && item.media_type ? `${item.media_type}:${item.tmdb_id}` : `title:${item.title}`;
+  const params = item.tmdb_id && item.media_type
+    ? `type=${encodeURIComponent(item.media_type)}&id=${encodeURIComponent(item.tmdb_id)}`
+    : `title=${encodeURIComponent(item.title)}`;
+  const request = detailsCache.get(cacheKey) || fetch(`/api/details?${params}`).then(res => res.json());
+  detailsCache.set(cacheKey, request);
+  request
+    .then(data => {
+      if (requestId !== detailsRequestId) return;
+      if (data.error) throw new Error(data.error);
+      Object.assign(detailsState, { data, loading: false, trailers: data.trailers || [], trailerSource: "tmdb" });
+      renderDetailsHero();
+      renderDetailsBody();
+      loadReleases(data.title, requestId);
+    })
+    .catch(e => {
+      detailsCache.delete(cacheKey);
+      if (requestId !== detailsRequestId) return;
+      Object.assign(detailsState, { loading: false, error: e.message || "Couldn't load details" });
+      renderDetailsBody();
+      loadReleases(item.clean_title || roughTitle(item.title), requestId);
+    });
+}
+
+function closeDetails() {
+  detailsModal.classList.remove("is-open");
+  detailsRequestId++;          // drop any response still in flight
+  detailsBody.innerHTML = "";  // also stops a playing trailer
+  detailsState = null;
+  detailsHistory = [];
+}
+
+function detailsGoBack() {
+  const prev = detailsHistory.pop();
+  if (!prev) return;
+  const history = detailsHistory;
+  openDetails(prev.item, prev.torrent);
+  detailsHistory = history;
+  detailsBack.hidden = detailsHistory.length === 0;
+}
+
+// Does a tracker row belong to this title? The tracker search is by name,
+// so "Дюна" also returns "Дюна: Частина друга (2024)" - the year tells
+// them apart (±1 for festival vs. release year; a show's whole run).
+function releaseMatches(r, d) {
+  const years = (r.title.match(/\b(19|20)\d{2}\b/g) || []).map(Number);
+  if (!d.year || !years.length) return true;
+  const start = Number(d.year);
+  if (d.media_type === "tv") {
+    const end = d.last_air_date ? Number(d.last_air_date.slice(0, 4)) : new Date().getFullYear();
+    return years.some(y => y >= start - 1 && y <= end + 1);
+  }
+  return years.some(y => Math.abs(y - start) <= 1);
+}
+
+async function loadReleases(query, requestId) {
+  if (!searchEnabled || !query) { detailsState.releases = []; renderDetailsBody(); return; }
+  detailsState.releases = "loading";
+  renderDetailsBody();
+  let rows = [];
+  try {
+    const request = releasesCache.get(query) || fetch(`/api/search?q=${encodeURIComponent(query)}&enrich=0`).then(res => res.json());
+    releasesCache.set(query, request);
+    const data = await request;
+    if (data.error) { releasesCache.delete(query); throw new Error(data.error); }
+    rows = data.results || [];
+  } catch (e) {
+    releasesCache.delete(query);
+  }
+  if (requestId !== detailsRequestId) return;
+  const { item, data: d } = detailsState;
+  const current = item.size_label ? releaseKey(item) : null;
+  rows = rows.filter(r => releaseKey(r) !== current && releaseMatches(r, d));
+  rows.sort((a, b) => b.seeders - a.seeders);
+  detailsState.releases = current ? [item, ...rows] : rows;
+  renderDetailsBody();
+}
+
+// The release the big Download button grabs: the one clicked, or - for a
+// title opened from "More like this" or Downloads - the best-seeded match.
+function primaryRelease() {
+  const { item, releases } = detailsState;
+  if (item.size_label) return item;
+  return Array.isArray(releases) ? releases.find(r => r.seeders > 0) || releases[0] || null : null;
+}
+
+async function findYoutubeTrailers() {
+  const { data: d, item } = detailsState;
+  const requestId = detailsRequestId;
+  detailsState.findingTrailer = true;
+  renderDetailsBody();
+  let videos = [];
+  try {
+    const title = d.title || item.clean_title || item.title;
+    const res = await fetch(`/api/trailer?title=${encodeURIComponent(title)}&year=${encodeURIComponent(d.year || "")}`);
+    videos = (await res.json()).videos || [];
+  } catch (e) {}
+  if (requestId !== detailsRequestId) return;
+  Object.assign(detailsState, { findingTrailer: false, trailers: videos, trailerSource: "youtube", noTrailer: !videos.length });
+  if (videos.length) playTrailer(videos[0].key);
+  else renderDetailsBody();
+}
+
+// The YouTube player only loads once asked for - no third-party iframe
+// (or its cookies/requests) just for opening the popup.
+function playTrailer(key) {
+  Object.assign(detailsState, { activeTrailer: key, playing: true });
+  renderDetailsHero();
+  renderDetailsBody();
+}
+
+function stopTrailer() {
+  detailsState.playing = false;
+  renderDetailsHero();
+  renderDetailsBody();
+}
+
+function renderDetailsHero() {
+  const { data: d, playing, activeTrailer } = detailsState;
+  let hero = document.getElementById("dtHero");
+  if (!hero) {
+    detailsBody.innerHTML = `<div class="dt-hero" id="dtHero"></div><div class="dt-body" id="dtBody"></div>`;
+    hero = document.getElementById("dtHero");
+  }
+  const meta = [];
+  if (d.rating > 0) meta.push(`<span class="rating-badge" title="${d.vote_count ? `${d.vote_count.toLocaleString()} votes on TMDB` : "TMDB rating"}">${ICONS.star}${d.rating.toFixed(1)}</span>`);
+  if (d.year) {
+    const end = d.media_type === "tv" && d.last_air_date ? d.last_air_date.slice(0, 4) : "";
+    meta.push(`<span>${d.media_type === "tv" ? `${d.year}–${d.in_production ? "" : (end !== d.year ? end : "")}` : d.year}</span>`);
+  }
+  if (d.media_type === "tv" && d.seasons) meta.push(`<span>${d.seasons} season${d.seasons === 1 ? "" : "s"}</span>`);
+  else if (d.runtime) meta.push(`<span>${formatRuntime(d.runtime)}</span>`);
+  if (d.certification) meta.push(`<span><span class="dt-cert">${escapeHtml(d.certification)}</span></span>`);
+  if (d.kind) meta.push(`<span>${escapeHtml(d.kind)}</span>`);
+
+  const hasBackdrop = !!d.backdrop;
+  hero.className = `dt-hero ${hasBackdrop ? "has-backdrop" : "no-backdrop"}${playing ? " is-playing" : ""}`;
+  hero.innerHTML = `
+    <div class="dt-media" style="${hasBackdrop && !playing ? `background-image:url('${escapeHtml(d.backdrop)}')` : ""}">
+      ${playing ? `<iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(activeTrailer)}?autoplay=1&rel=0" title="Trailer" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>` : ""}
+    </div>
+    ${d.poster ? `<img class="dt-poster" src="${escapeHtml(d.poster)}" alt="">` : `<div class="dt-poster result-poster-fallback">${ICONS.download}</div>`}
+    <div class="dt-info">
+      <h2 class="dt-title">${escapeHtml(d.title)}</h2>
+      ${d.original_title && d.original_title !== d.title ? `<div class="dt-sub">${escapeHtml(d.original_title)}</div>` : ""}
+      ${meta.length ? `<div class="dt-meta">${meta.join("")}</div>` : ""}
+    </div>`;
+}
+
+function renderDetailsBody() {
+  const body = document.getElementById("dtBody");
+  if (!body || !detailsState) return;
+  const s = detailsState, d = s.data, item = s.item;
+
+  // --- actions ---
+  const actions = [];
+  if (s.playing) {
+    actions.push(`<button type="button" class="btn-secondary" data-act="stop-trailer">${STOP_ICON}Close trailer</button>`);
+  } else if (s.noTrailer) {
+    const q = [d.title || item.title, d.year, "trailer"].filter(Boolean).join(" ");
+    actions.push(`<a class="btn-secondary" href="${escapeHtml(youtubeSearchUrl(q))}" target="_blank" rel="noopener">${PLAY_ICON}Search YouTube</a>`);
+  } else {
+    actions.push(`<button type="button" class="btn-secondary" data-act="trailer"${s.findingTrailer ? " disabled" : ""}>${PLAY_ICON}${s.findingTrailer ? "Finding trailer…" : "Trailer"}</button>`);
+  }
+  if (s.torrent) {
+    const t = s.torrent;
+    const done = t.state === "finished" || t.state === "seeding";
+    actions.push(`<span class="dt-status-pill">${done ? "Downloaded" : `Downloading · ${t.progress}%`}${t.category ? ` · ${escapeHtml(t.category)}` : ""}</span>`);
+  } else {
+    const best = primaryRelease();
+    if (!s.category) {
+      const preferred = item.suggested_category || categoryForKind(d.kind);
+      s.category = currentCategories.includes(preferred) ? preferred : getDefaultCategory();
+    }
+    const added = best && s.added.has(releaseKey(best));
+    const label = !best
+      ? (s.releases === "loading" || s.loading ? "Finding releases…" : "No releases found")
+      : added ? "Added" : "Download";
+    const bestMeta = best ? [releaseTags(best.title).find(t => t.res)?.label, best.size_label].filter(Boolean).join(" · ") : "";
+    actions.push(`<button type="button" class="btn-primary btn-pill" data-act="download-best"${!best || added ? " disabled" : ""}>${added ? ICONS.check : ICONS.download}${label}${best && !added && bestMeta ? ` <span class="dt-download-meta">${escapeHtml(bestMeta)}</span>` : ""}</button>`);
+    actions.push(`<select class="inline-category-select" data-act="category" title="Download to">${currentCategories.map(c =>
+      `<option value="${escapeHtml(c)}"${c === s.category ? " selected" : ""}>${escapeHtml(c)}</option>`).join("")}</select>`);
+  }
+  const trailerPick = s.playing && s.trailers.length > 1
+    ? `<select class="inline-category-select dt-trailer-pick" data-act="pick-trailer">${s.trailers.map(t =>
+        `<option value="${escapeHtml(t.key)}"${t.key === s.activeTrailer ? " selected" : ""}>${escapeHtml(t.name)}${t.lang ? ` (${escapeHtml(t.lang.toUpperCase())})` : ""}</option>`).join("")}</select>`
+    : "";
+
+  // --- overview + facts ---
+  const facts = [];
+  // Minor facts are dropped on phones, where the list would otherwise
+  // push cast and releases a whole screen down.
+  const fact = (k, v, minor) => { if (v) facts.push(`<div${minor ? ` class="dt-minor"` : ""}><span class="k">${escapeHtml(k)}:</span> ${v}</div>`); };
+  fact("Genres", escapeHtml((d.genres || []).join(", ")));
+  (d.facts || []).forEach(f => fact(f.label, escapeHtml(f.names.join(", "))));
+  if (d.next_episode) fact("Next episode", escapeHtml(`S${d.next_episode.season}E${d.next_episode.episode} · ${formatDate(d.next_episode.date)}`));
+  else if (d.media_type === "tv" && d.status) fact("Status", escapeHtml(d.status));
+  if (d.media_type === "movie" && d.release_date) fact("Released", escapeHtml(formatDate(d.release_date)), true);
+  fact("Country", escapeHtml((d.countries || []).slice(0, 2).join(", ")));
+  if (d.original_language) fact("Language", escapeHtml(languageName(d.original_language)), true);
+  fact("Collection", escapeHtml(d.collection || ""), true);
+  if (d.budget || d.revenue) fact("Budget / box office", escapeHtml([d.budget ? formatMoney(d.budget) : "?", d.revenue ? formatMoney(d.revenue) : "?"].join(" / ")), true);
+  const links = [];
+  if (d.imdb_id) links.push(`<a href="https://www.imdb.com/title/${encodeURIComponent(d.imdb_id)}/" target="_blank" rel="noopener">IMDb</a>`);
+  if (d.tmdb_url) links.push(`<a href="${escapeHtml(d.tmdb_url)}" target="_blank" rel="noopener">TMDB</a>`);
+  if (item.details_link) links.push(`<a href="${escapeHtml(item.details_link)}" target="_blank" rel="noopener">Tracker</a>`);
+  if (d.homepage) links.push(`<a href="${escapeHtml(d.homepage)}" target="_blank" rel="noopener">Website</a>`);
+  if (links.length) fact("Links", links.join(" · "));
+
+  let overview;
+  if (s.loading) overview = `<div class="dt-skeleton" style="width:95%"></div><div class="dt-skeleton" style="width:88%"></div><div class="dt-skeleton" style="width:60%"></div>`;
+  else overview = `${d.tagline ? `<p class="dt-tagline">${escapeHtml(d.tagline)}</p>` : ""}
+    ${d.overview ? `<p class="dt-overview">${escapeHtml(d.overview)}</p><button type="button" class="dt-link-btn" data-act="more" hidden>More</button>` : ""}
+    ${s.error ? `<div class="dt-status is-error">${escapeHtml(s.error)}</div>` : ""}`;
+
+  // --- cast & crew ---
+  const people = (d.people || []).map(p => `
+    <a class="dt-person" href="https://www.themoviedb.org/person/${encodeURIComponent(p.id)}" target="_blank" rel="noopener" title="${escapeHtml(p.name)}">
+      ${p.photo ? `<img class="dt-avatar" src="${escapeHtml(p.photo)}" alt="" loading="lazy">` : `<div class="dt-avatar">${escapeHtml((p.name || "?").charAt(0))}</div>`}
+      <div class="dt-person-name">${escapeHtml(p.name)}</div>
+      ${p.role ? `<div class="dt-person-role">${escapeHtml(p.role)}</div>` : ""}
+    </a>`).join("");
+
+  // --- seasons ---
+  const seasons = (d.season_list || []).map(se =>
+    `<span class="dt-chip"><b>S${se.number}</b>${se.year ? ` · ${se.year}` : ""}${se.episodes ? ` · ${se.episodes} ep.` : ""}</span>`).join("");
+
+  // --- releases ---
+  let releases = "";
+  if (s.releases === "loading") {
+    releases = `<div class="dt-status">Searching the tracker…</div>`;
+  } else if (Array.isArray(s.releases) && s.releases.length) {
+    const shown = s.showAllReleases ? s.releases : s.releases.slice(0, RELEASES_SHOWN);
+    releases = `<div class="dt-releases">${shown.map((r, i) => {
+      const key = releaseKey(r);
+      const tags = releaseTags(r.title).map(t => `<span class="dt-tag${t.res ? " is-res" : ""}">${escapeHtml(t.label)}</span>`).join("");
+      const isCurrent = item.size_label && key === releaseKey(item);
+      const added = s.added.has(key);
+      return `<div class="dt-release${isCurrent ? " is-current" : ""}">
+        <div class="dt-release-main">
+          <div class="dt-release-tags">${tags}${isCurrent ? `<span class="dt-tag">This release</span>` : ""}</div>
+          <div class="dt-release-title" title="${escapeHtml(r.title)}">${escapeHtml(r.title)}</div>
+        </div>
+        <div class="dt-release-stats">${escapeHtml(r.size_label)}<br><span class="seeders">${r.seeders}</span> seeds</div>
+        <button type="button" class="action-btn" data-act="download-release" data-index="${i}" title="Download this release"${added ? " disabled" : ""}>${added ? ICONS.check : ICONS.download}</button>
+      </div>`;
+    }).join("")}</div>`;
+  } else if (Array.isArray(s.releases) && searchEnabled) {
+    releases = `<div class="dt-status">No releases of this title found on the tracker.</div>`;
+  }
+  const releasesHead = searchEnabled ? `<div class="dt-section-head"><div class="section-label">Releases${Array.isArray(s.releases) && s.releases.length ? ` · ${s.releases.length}` : ""}</div>
+    ${Array.isArray(s.releases) && s.releases.length > RELEASES_SHOWN
+      ? `<button type="button" class="dt-link-btn" data-act="toggle-releases">${s.showAllReleases ? "Show fewer" : "Show all"}</button>` : ""}</div>` : "";
+
+  // --- more like this ---
+  const recs = (d.recommendations || []).map((r, i) => `
+    <button type="button" class="dt-rec" data-act="rec" data-index="${i}" title="${escapeHtml(r.title)}">
+      <img src="${escapeHtml(r.poster)}" alt="" loading="lazy">
+      <div class="dt-rec-title">${escapeHtml(r.title)}</div>
+      <div class="dt-rec-year">${escapeHtml(r.year || "")}${r.rating > 0 ? ` · ★ ${r.rating.toFixed(1)}` : ""}</div>
+    </button>`).join("");
+
+  body.innerHTML = `
+    <div class="dt-actions">${actions.join("")}</div>
+    ${trailerPick}
+    <div class="dt-cols">
+      <div>${overview}</div>
+      ${facts.length ? `<div class="dt-facts">${facts.join("")}</div>` : ""}
+    </div>
+    ${people ? `<div class="dt-section"><div class="dt-section-head"><div class="section-label">Cast &amp; crew</div></div><div class="dt-row">${people}</div></div>` : ""}
+    ${seasons ? `<div class="dt-section"><div class="dt-section-head"><div class="section-label">Seasons</div></div><div class="dt-seasons">${seasons}</div></div>` : ""}
+    ${releasesHead || releases ? `<div class="dt-section">${releasesHead}${releases}</div>` : ""}
+    ${recs ? `<div class="dt-section"><div class="dt-section-head"><div class="section-label">More like this</div></div><div class="dt-row">${recs}</div></div>` : ""}
+  `;
+
+  // Only offer "More" when the clamp actually cut something off.
+  const overviewEl = body.querySelector(".dt-overview");
+  const moreBtn = body.querySelector('[data-act="more"]');
+  if (overviewEl && moreBtn && overviewEl.scrollHeight > overviewEl.clientHeight + 2) moreBtn.hidden = false;
+  // A dead profile photo falls back to the initial, same as having none.
+  body.querySelectorAll("img.dt-avatar").forEach(img => img.addEventListener("error", () => {
+    const div = document.createElement("div");
+    div.className = "dt-avatar";
+    div.textContent = (img.closest(".dt-person").title || "?").charAt(0);
+    img.replaceWith(div);
+  }));
+}
+
+async function downloadRelease(release) {
+  const s = detailsState;
+  const key = releaseKey(release);
+  s.added.add(key);
+  renderDetailsBody();
+  try {
+    const data = await postSearchResult(release, s.category);
+    if (data.error) throw new Error(data.error);
+    showToast(`"${s.data.title || release.title}" added to ${s.category}`);
+    refresh();
+  } catch (e) {
+    s.added.delete(key);
+    showToast(e.message || "Couldn't add this torrent", true);
+    if (detailsState === s) renderDetailsBody();
+  }
+}
+
+detailsBody.addEventListener("click", (e) => {
+  const el = e.target.closest("[data-act]");
+  if (!el || !detailsState) return;
+  const s = detailsState;
+  switch (el.dataset.act) {
+    case "trailer":
+      if (s.trailers.length) playTrailer(s.activeTrailer || s.trailers[0].key);
+      else findYoutubeTrailers();
+      break;
+    case "stop-trailer": stopTrailer(); break;
+    case "download-best": { const best = primaryRelease(); if (best) downloadRelease(best); break; }
+    case "download-release": downloadRelease((s.showAllReleases ? s.releases : s.releases.slice(0, RELEASES_SHOWN))[Number(el.dataset.index)]); break;
+    case "toggle-releases": s.showAllReleases = !s.showAllReleases; renderDetailsBody(); break;
+    case "more": {
+      const overviewEl = detailsBody.querySelector(".dt-overview");
+      const expanded = overviewEl.classList.toggle("is-expanded");
+      el.textContent = expanded ? "Less" : "More";
+      break;
+    }
+    case "rec": {
+      const r = s.data.recommendations[Number(el.dataset.index)];
+      openDetails({ title: r.title, clean_title: r.title, tmdb_id: r.tmdb_id, media_type: r.media_type, poster: r.poster, rating: r.rating }, null, { push: true });
+      break;
+    }
+  }
+});
+detailsBody.addEventListener("change", (e) => {
+  const el = e.target.closest("[data-act]");
+  if (!el || !detailsState) return;
+  if (el.dataset.act === "category") detailsState.category = el.value;
+  if (el.dataset.act === "pick-trailer") playTrailer(el.value);
+});
+detailsBack.addEventListener("click", detailsGoBack);
+detailsClose.addEventListener("click", closeDetails);
+detailsModal.addEventListener("click", e => { if (e.target === detailsModal) closeDetails(); });
 
 // Keeps the Discover panel's fixed height in sync with the real (sticky)
 // header height, same pattern Music Tube uses for its queue panel.
