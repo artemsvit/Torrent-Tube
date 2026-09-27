@@ -618,17 +618,25 @@ DISCOVER_FEEDS = [
     {"id": "movies", "label": "Movies", "groups": ["movies"]},
     {"id": "cartoons", "label": "Cartoons", "groups": ["cartoons"]},
     {"id": "tv", "label": "TV Shows", "groups": ["tv"]},
+    {"id": "docs", "label": "Documentaries", "groups": ["docs"]},
+    {"id": "ukrainian", "label": "Ukrainian", "groups": ["ukrainian"]},
 ]
 DISCOVER_FEEDS_BY_ID = {f["id"]: f for f in DISCOVER_FEEDS}
 
-# Matched as lowercase substrings of a section name, first rule wins - so
-# "Мультсеріали" is a cartoon before it's a series, and "Документальні
-# фільми" is skipped before it's a film. Ukrainian/Russian/English since
-# that's what trackers here name their sections in.
-SECTION_RULES = [
-    (None, ("документ", "documentary", "архів", "архив", "archive", "трейлер", "trailer",
-            "короткометраж", "аматорськ", "субтитр", "sport", "спорт", "концерт", "кліп")),
-    ("new", ("новинк", "новинки", "new release", "new movies")),
+# Matched as lowercase substrings of a section name. Ukrainian/Russian/
+# English since that's what trackers here name their sections in.
+SKIP_WORDS = ("архів", "архив", "archive", "трейлер", "trailer", "короткометраж",
+              "аматорськ", "субтитр", "sport", "спорт", "концерт", "кліп")
+DOCS_WORDS = ("документ", "documentary", "bbc", "discovery", "national geographic", "history channel")
+# "Ukrainian" means made in Ukraine, not just dubbed - most sections on
+# these trackers are Ukrainian-dubbed, and "HD українською" would pull in
+# everything. So it takes "українськ..." plus a video word ("Українські
+# фільми", "Українське кіно"), leaving out books, music, subtitles, etc.
+UKRAINIAN_WORDS = ("українськ", "украинск")
+VIDEO_WORDS = ("фільм", "фильм", "кіно", "кино", "серіал", "сериал", "мультф", "мультс", "документ")
+# First match wins, so "Мультсеріали" is a cartoon before it's a series.
+KIND_RULES = [
+    ("new", ("новинк", "new release", "new movies")),
     ("cartoons", ("мультф", "мультс", "мультик", "cartoon", "animation", "animated", "анімаці")),
     ("tv", ("серіал", "сериал", "series", "tv show")),
     ("movies", ("фільм", "фильм", "кіно", "кино", "film", "movie")),
@@ -644,12 +652,23 @@ HD_RE = re.compile(r"\bU?HD\b|1080|2160|4K", re.I)
 INDEXER_CAPS_CACHE = {"at": 0, "key": None, "value": None}
 
 
-def classify_section(name: str):
+def classify_section(name: str) -> list:
+    """Every feed group a section belongs to - "Українські фільми HD" is
+    both Ukrainian and Movies. Documentaries only feed their own tab."""
     lower = name.lower()
-    for group, words in SECTION_RULES:
+    if any(w in lower for w in SKIP_WORDS):
+        return []
+    groups = []
+    # "...українською" is "in Ukrainian" (dubbed), not made in Ukraine.
+    made_in_ua = any(w in lower.replace("українською", "") for w in UKRAINIAN_WORDS)
+    if made_in_ua and any(w in lower for w in VIDEO_WORDS):
+        groups.append("ukrainian")
+    if any(w in lower for w in DOCS_WORDS):
+        return groups + ["docs"]
+    for group, words in KIND_RULES:
         if any(w in lower for w in words):
-            return group
-    return None
+            return groups + [group]
+    return groups
 
 
 def indexer_sections():
@@ -676,8 +695,7 @@ def indexer_sections():
             cat_id, name = cat.get("id") or "", (cat.get("name") or "").strip(" |-")
             if not cat_id.isdigit() or int(cat_id) < 100000:
                 continue  # standard categories are only the fallback below
-            group = classify_section(name)
-            if group:
+            for group in classify_section(name):
                 groups.setdefault(group, []).append((cat_id, name))
         for group, cats in groups.items():
             # HD sections first, then one of each distinct name (trackers
