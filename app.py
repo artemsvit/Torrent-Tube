@@ -396,8 +396,12 @@ def extract_title_and_year(raw_title: str):
     year_match = re.search(r"(19|20)\d{2}", raw_title)
     year = year_match.group(0) if year_match else None
 
-    parts = raw_title.split("/")
-    candidate = max(parts, key=lambda p: sum(c.isascii() and c.isalpha() for c in p)) if len(parts) > 1 else raw_title
+    # Names come before the "(year" / "|" - past it, a "/" is release info
+    # ("4xUkr/Eng | Sub Ukr/Eng [Remastered, ...]"), and that tail must not
+    # win the most-English-part pick below.
+    head = re.split(r"\(\s*(?:19|20)\d{2}|\|", raw_title)[0].strip() or raw_title
+    parts = head.split("/")
+    candidate = max(parts, key=lambda p: sum(c.isascii() and c.isalpha() for c in p)) if len(parts) > 1 else head
     candidate = candidate.split("|")[0]
     candidate = re.split(r"\(\s*(19|20)\d{2}", candidate)[0]
     candidate = re.sub(r"[\[\(].*", "", candidate)
@@ -765,9 +769,49 @@ def search_torrents():
     results = results[:150]
     # The details popup's "Releases" list only needs the tracker rows
     # themselves - skip the per-row TMDB lookups there.
-    if request.args.get("enrich") != "0":
-        enrich_with_tmdb(results)
-    return jsonify({"results": results})
+    if request.args.get("enrich") == "0":
+        return jsonify({"results": results})
+    return jsonify({"results": group_releases(results)})
+
+
+RELEASE_FIELDS = ("title", "size", "size_label", "seeders", "peers", "magnet", "download_link", "details_link", "pub_date")
+
+
+def group_releases(results):
+    """One card per title instead of one per tracker row: a search for a
+    film returns every rip of it (1080p, 4K, remux, each dub) as separate
+    rows. Rows are grouped by their cleaned-up title + year, the best-seeded
+    row of each group is TMDB-enriched and becomes the card, and the rest
+    ride along in "releases" for the details popup to offer. Groups that
+    TMDB resolves to the same title (say "Термінатор 2" and "Terminator 2"
+    from two trackers) are merged afterwards."""
+    groups = {}
+    for r in results:  # already sorted by seeders, so each group's first row is its best
+        title, base, year = extract_title_and_year(r["title"])
+        # Punctuation-blind, so "Terminator 2. Judgment Day" and
+        # "Terminator 2: Judgment Day" land in the same group.
+        key = (re.sub(r"[\W_]+", " ", (base or title or r["title"]).lower()).strip(), year)
+        groups.setdefault(key, []).append(r)
+
+    cards = []
+    for rows in groups.values():
+        card = dict(rows[0])
+        card["releases"] = [{k: row.get(k) for k in RELEASE_FIELDS} for row in rows]
+        cards.append(card)
+    enrich_with_tmdb(cards)
+
+    merged = {}
+    for card in cards:
+        key = (card.get("media_type"), card.get("tmdb_id")) if card.get("tmdb_id") else id(card)
+        if key in merged:
+            merged[key]["releases"].extend(card["releases"])
+        else:
+            merged[key] = card
+    cards = list(merged.values())
+    for card in cards:
+        card["releases"].sort(key=lambda r: r["seeders"], reverse=True)
+    cards.sort(key=lambda c: c["releases"][0]["seeders"], reverse=True)
+    return cards
 
 
 # ---------- Discover ----------

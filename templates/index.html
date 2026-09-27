@@ -772,6 +772,17 @@
     white-space: nowrap;
     letter-spacing: -0.005em;
   }
+  .release-count {
+    display: inline-block;
+    margin-left: 4px;
+    padding: 1px 7px;
+    border-radius: var(--radius-pill);
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 10.5px;
+    font-weight: 600;
+    vertical-align: 1px;
+  }
   .item-sub {
     font-size: 11.5px;
     color: var(--text-secondary);
@@ -932,6 +943,10 @@
     overflow-x: hidden;
     scrollbar-width: thin;
   }
+  /* Zero-height sticky strip holding Back/Close, so both stay pinned to
+     the top of the popup however far it's scrolled (they used to scroll
+     away with the hero). */
+  .dt-topbar { position: sticky; top: 0; height: 0; z-index: 6; }
   .dt-topbtn {
     position: absolute;
     top: 12px;
@@ -981,6 +996,38 @@
     pointer-events: none;
   }
   .dt-media iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  /* Unmute pill for when the browser only allowed the trailer to start
+     muted (Safari blocks autoplay with sound in embedded players). */
+  /* Sits in the black strip above the player, left of Close. */
+  .dt-unmute {
+    position: absolute;
+    right: 56px;
+    top: -44px;
+    height: 32px;
+    z-index: 3;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 14px;
+    border-radius: var(--radius-pill);
+    background: rgba(255, 255, 255, 0.16);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: white;
+    font-size: 12.5px;
+    font-weight: 600;
+  }
+  .dt-unmute:hover { background: rgba(255, 255, 255, 0.26); }
+  .dt-unmute[hidden] { display: none; }
+  /* body's desktop zoom (--ui-zoom) isn't passed on to an iframe's own
+     content in Safari - YouTube lays out for a 12% bigger box and the
+     frame shows it cropped at the right/bottom. Undo the zoom on the
+     iframe itself so it renders 1:1. Its 100% width/height still resolve
+     against the (zoomed) box - zoom doesn't scale percentages - so it
+     keeps exactly the visible size. */
+  @media (min-width: 641px) {
+    .dt-media iframe { zoom: calc(1 / var(--ui-zoom)); }
+  }
   .dt-hero.has-backdrop .dt-info {
     position: absolute;
     left: 0;
@@ -994,6 +1041,9 @@
   /* Playing: the player takes the full 16:9 and the title drops below it
      (text over a live player would sit on top of its controls). */
   .dt-hero.is-playing .dt-media { aspect-ratio: 16 / 9; }
+  /* A black strip above the player for Back/Close to sit in - over the
+     player itself they'd cover YouTube's own top-right controls. */
+  .dt-hero.is-playing { padding-top: 56px; background: #000; }
   .dt-hero.is-playing .dt-media::after { display: none; }
   .dt-hero.is-playing .dt-info { position: static; padding: 14px 22px 0; color: var(--text); }
   .dt-hero.is-playing .dt-sub, .dt-hero.is-playing .dt-meta { color: var(--text-secondary); }
@@ -1037,7 +1087,11 @@
 
   .dt-body { padding: 14px 22px 22px; }
 
-  .dt-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  /* Two rows: watch (trailer + which trailer), then get (download + which
+     folder) - each pair reads as one control group. */
+  .dt-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+  .dt-actions-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: 100%; }
+  .dt-actions-row .inline-category-select { max-width: 260px; text-overflow: ellipsis; }
   .dt-actions .btn-secondary, .dt-actions .btn-primary { padding: 9px 16px; font-size: 13px; display: inline-flex; align-items: center; gap: 7px; }
   .dt-actions .btn-primary svg { width: 14px; height: 14px; }
   .dt-actions .dt-download-meta { font-weight: 500; opacity: 0.85; }
@@ -1049,7 +1103,6 @@
     background: var(--accent-soft);
     color: var(--accent);
   }
-  .dt-trailer-pick { max-width: 100%; margin-top: 10px; }
 
   .dt-cols { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 22px; margin-top: 18px; }
   .dt-tagline { font-size: 13.5px; font-style: italic; color: var(--text-secondary); margin: 0 0 6px; }
@@ -1190,7 +1243,14 @@
     .dt-title { font-size: 20px; }
     .dt-body { padding: 12px 16px 18px; }
     .dt-cols { grid-template-columns: 1fr; gap: 14px; }
-    .dt-actions > * { flex: 1 1 auto; justify-content: center; }
+    .dt-actions { align-items: stretch; }
+    .dt-actions-row { flex-wrap: nowrap; }
+    .dt-actions-row > * { flex: 1 1 0; min-width: 0; justify-content: center; }
+    .dt-actions-row .inline-category-select { max-width: none; }
+    /* Download carries its size/quality - give it the room, one line. */
+    .dt-actions-row > .btn-primary { flex-grow: 2; white-space: nowrap; }
+    .dt-actions-row > [data-act="category"] { flex: 0 0 auto; }
+    .dt-actions-row > .btn-primary .dt-download-meta { overflow: hidden; text-overflow: ellipsis; }
     .dt-release-title { display: none; }
     .dt-facts .dt-minor { display: none; }
   }
@@ -1781,8 +1841,10 @@
 
 <div class="modal-overlay" id="detailsModal">
   <div class="modal-box details-box" role="dialog" aria-modal="true" aria-label="Details">
+    <div class="dt-topbar">
     <button type="button" class="dt-topbtn dt-back" id="detailsBack" aria-label="Back" title="Back" hidden><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
     <button type="button" class="dt-topbtn dt-close" id="detailsClose" aria-label="Close" title="Close"></button>
+    </div>
     <div id="detailsBody"></div>
   </div>
 </div>
@@ -2746,7 +2808,7 @@ function buildResultCard(r, container, allResults, emptyMessage) {
       ${poster}
       <div class="item-meta">
         <div class="item-title">${escapeHtml(r.clean_title || r.title)}</div>
-        <div class="item-sub">${r.size_label} &middot; ${formatSeedPeers(r.seeders, r.peers)} ${rating}</div>
+        <div class="item-sub">${r.size_label} &middot; ${formatSeedPeers(r.seeders, r.peers)} ${rating}${r.releases && r.releases.length > 1 ? `<span class="release-count" title="Pick one in the details">${r.releases.length} versions</span>` : ""}</div>
         ${r.overview ? `<div class="item-overview">${escapeHtml(r.overview)}</div>` : ""}
         ${r.overview && r.overview.length > 100 ? `<button type="button" class="overview-toggle">Show more</button>` : ""}
       </div>
@@ -2835,6 +2897,7 @@ const detailsBody = document.getElementById("detailsBody");
 const detailsClose = document.getElementById("detailsClose");
 const detailsBack = document.getElementById("detailsBack");
 const PLAY_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7-11-7z"/></svg>`;
+const UNMUTE_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z" fill="currentColor"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg>`;
 const STOP_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>`;
 const RELEASES_SHOWN = 5;
 
@@ -2891,8 +2954,10 @@ function releaseTags(title) {
   return tags;
 }
 
+// The tracker page link first: Jackett re-signs download links on every
+// request, so the same release from two searches has two different ones.
 function releaseKey(r) {
-  return r.download_link || r.magnet || r.title;
+  return r.details_link || r.magnet || r.download_link || r.title;
 }
 
 // Picks the folder the way the server's guess_category does - by what the
@@ -2923,7 +2988,7 @@ function openDetails(item, torrent = null, { push = false } = {}) {
     data: { title: item.clean_title || item.title, poster: item.poster, rating: item.rating, overview: item.overview },
     loading: true, error: "",
     trailers: [], trailerSource: null, activeTrailer: null, playing: false, findingTrailer: false, noTrailer: false,
-    releases: null, showAllReleases: false, added: new Set(),
+    releases: item.releases || null, showAllReleases: false, added: new Set(),
     category: null,
   };
   renderDetailsHero();
@@ -2987,8 +3052,11 @@ function releaseMatches(r, d) {
 }
 
 async function loadReleases(query, requestId) {
-  if (!searchEnabled || !query) { detailsState.releases = []; renderDetailsBody(); return; }
-  detailsState.releases = "loading";
+  // A grouped search card already carries every version of its title -
+  // show those straight away, then add whatever the title search finds.
+  const own = detailsState.item.releases || [];
+  if (!searchEnabled || !query) { detailsState.releases = own; renderDetailsBody(); return; }
+  detailsState.releases = own.length ? own : "loading";
   renderDetailsBody();
   let rows = [];
   try {
@@ -3003,7 +3071,9 @@ async function loadReleases(query, requestId) {
   if (requestId !== detailsRequestId) return;
   const { item, data: d } = detailsState;
   const current = item.size_label ? releaseKey(item) : null;
-  rows = rows.filter(r => releaseKey(r) !== current && releaseMatches(r, d));
+  const known = new Set([current, ...own.map(releaseKey)]);
+  rows = rows.filter(r => !known.has(releaseKey(r)) && releaseMatches(r, d));
+  rows = [...own.filter(r => releaseKey(r) !== current), ...rows];
   rows.sort((a, b) => b.seeders - a.seeders);
   detailsState.releases = current ? [item, ...rows] : rows;
   renderDetailsBody();
@@ -3040,10 +3110,62 @@ function playTrailer(key) {
   Object.assign(detailsState, { activeTrailer: key, playing: true });
   renderDetailsHero();
   renderDetailsBody();
+  mountTrailerPlayer(key);
+}
+
+let youtubeApiPromise = null;
+function loadYouTubeApi() {
+  if (window.YT && window.YT.Player) return Promise.resolve();
+  if (!youtubeApiPromise) {
+    youtubeApiPromise = new Promise((resolve, reject) => {
+      const prev = window.onYouTubeIframeAPIReady;
+      window.onYouTubeIframeAPIReady = () => { if (prev) prev(); resolve(); };
+      const script = document.createElement("script");
+      script.src = "https://www.youtube.com/iframe_api";
+      script.onerror = () => { youtubeApiPromise = null; reject(new Error("YouTube player didn't load")); };
+      document.head.appendChild(script);
+    });
+  }
+  return youtubeApiPromise;
+}
+
+// Starts the trailer through YouTube's player API instead of a plain
+// autoplay=1 embed, which Safari ignores (no autoplay with sound in an
+// embedded player): ask it to play, and if the browser still holds it
+// back, play muted - always allowed - with an Unmute button over it.
+async function mountTrailerPlayer(key) {
+  const s = detailsState;
+  try { await loadYouTubeApi(); } catch (e) { return; }
+  const mount = document.getElementById("dtPlayer");
+  if (!mount || detailsState !== s || s.activeTrailer !== key || !s.playing) return;
+  const unmuteBtn = document.getElementById("dtUnmute");
+  s.player = new YT.Player(mount, {
+    host: "https://www.youtube-nocookie.com",
+    videoId: key,
+    playerVars: { autoplay: 1, rel: 0, playsinline: 1 },
+    events: {
+      onReady: (e) => {
+        e.target.playVideo();
+        setTimeout(() => {
+          if (s.player !== e.target || !document.body.contains(e.target.getIframe())) return;
+          const state = e.target.getPlayerState();
+          if (state === YT.PlayerState.PLAYING || state === YT.PlayerState.BUFFERING) return;
+          e.target.mute();
+          e.target.playVideo();
+          if (unmuteBtn) unmuteBtn.hidden = false;
+        }, 1200);
+      },
+      onStateChange: (e) => {
+        // Unmuting from YouTube's own volume control hides our pill too.
+        if (unmuteBtn && !unmuteBtn.hidden && e.target.isMuted && !e.target.isMuted()) unmuteBtn.hidden = true;
+      },
+    },
+  });
 }
 
 function stopTrailer() {
   detailsState.playing = false;
+  detailsState.player = null;
   renderDetailsHero();
   renderDetailsBody();
 }
@@ -3070,7 +3192,7 @@ function renderDetailsHero() {
   hero.className = `dt-hero ${hasBackdrop ? "has-backdrop" : "no-backdrop"}${playing ? " is-playing" : ""}`;
   hero.innerHTML = `
     <div class="dt-media" style="${hasBackdrop && !playing ? `background-image:url('${escapeHtml(d.backdrop)}')` : ""}">
-      ${playing ? `<iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(activeTrailer)}?autoplay=1&rel=0" title="Trailer" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>` : ""}
+      ${playing ? `<div id="dtPlayer"></div><button type="button" class="dt-unmute" id="dtUnmute" data-act="unmute" hidden>${UNMUTE_ICON}Tap to unmute</button>` : ""}
     </div>
     ${d.poster ? `<img class="dt-poster" src="${escapeHtml(d.poster)}" alt="">` : `<div class="dt-poster result-poster-fallback">${ICONS.download}</div>`}
     <div class="dt-info">
@@ -3085,16 +3207,24 @@ function renderDetailsBody() {
   if (!body || !detailsState) return;
   const s = detailsState, d = s.data, item = s.item;
 
-  // --- actions ---
-  const actions = [];
+  // --- actions: row 1 = watch (trailer + which one), row 2 = download ---
+  const watch = [];
   if (s.playing) {
-    actions.push(`<button type="button" class="btn-secondary" data-act="stop-trailer">${STOP_ICON}Close trailer</button>`);
+    watch.push(`<button type="button" class="btn-secondary" data-act="stop-trailer">${STOP_ICON}Stop trailer</button>`);
   } else if (s.noTrailer) {
     const q = [d.title || item.title, d.year, "trailer"].filter(Boolean).join(" ");
-    actions.push(`<a class="btn-secondary" href="${escapeHtml(youtubeSearchUrl(q))}" target="_blank" rel="noopener">${PLAY_ICON}Search YouTube</a>`);
+    watch.push(`<a class="btn-secondary" href="${escapeHtml(youtubeSearchUrl(q))}" target="_blank" rel="noopener">${PLAY_ICON}Search YouTube</a>`);
   } else {
-    actions.push(`<button type="button" class="btn-secondary" data-act="trailer"${s.findingTrailer ? " disabled" : ""}>${PLAY_ICON}${s.findingTrailer ? "Finding trailer…" : "Trailer"}</button>`);
+    watch.push(`<button type="button" class="btn-secondary" data-act="trailer"${s.findingTrailer || s.loading ? " disabled" : ""}>${PLAY_ICON}${s.findingTrailer ? "Finding trailer…" : "Play trailer"}</button>`);
   }
+  // Which trailer: always offered once there's any, not just mid-play -
+  // picking one plays it.
+  if (s.trailers.length) {
+    const selected = s.activeTrailer || s.trailers[0].key;
+    watch.push(`<select class="inline-category-select" data-act="pick-trailer" title="Choose a trailer">${s.trailers.map(t =>
+      `<option value="${escapeHtml(t.key)}"${t.key === selected ? " selected" : ""}>${escapeHtml(t.name)}${t.lang ? ` (${escapeHtml(t.lang.toUpperCase())})` : ""}</option>`).join("")}</select>`);
+  }
+  const actions = [];
   if (s.torrent) {
     const t = s.torrent;
     const done = t.state === "finished" || t.state === "seeding";
@@ -3114,10 +3244,6 @@ function renderDetailsBody() {
     actions.push(`<select class="inline-category-select" data-act="category" title="Download to">${currentCategories.map(c =>
       `<option value="${escapeHtml(c)}"${c === s.category ? " selected" : ""}>${escapeHtml(c)}</option>`).join("")}</select>`);
   }
-  const trailerPick = s.playing && s.trailers.length > 1
-    ? `<select class="inline-category-select dt-trailer-pick" data-act="pick-trailer">${s.trailers.map(t =>
-        `<option value="${escapeHtml(t.key)}"${t.key === s.activeTrailer ? " selected" : ""}>${escapeHtml(t.name)}${t.lang ? ` (${escapeHtml(t.lang.toUpperCase())})` : ""}</option>`).join("")}</select>`
-    : "";
 
   // --- overview + facts ---
   const facts = [];
@@ -3194,8 +3320,10 @@ function renderDetailsBody() {
     </button>`).join("");
 
   body.innerHTML = `
-    <div class="dt-actions">${actions.join("")}</div>
-    ${trailerPick}
+    <div class="dt-actions">
+      <div class="dt-actions-row">${watch.join("")}</div>
+      <div class="dt-actions-row">${actions.join("")}</div>
+    </div>
     <div class="dt-cols">
       <div>${overview}</div>
       ${facts.length ? `<div class="dt-facts">${facts.join("")}</div>` : ""}
@@ -3246,6 +3374,7 @@ detailsBody.addEventListener("click", (e) => {
       else findYoutubeTrailers();
       break;
     case "stop-trailer": stopTrailer(); break;
+    case "unmute": if (s.player) { s.player.unMute(); s.player.setVolume(100); } el.hidden = true; break;
     case "download-best": { const best = primaryRelease(); if (best) downloadRelease(best); break; }
     case "download-release": downloadRelease((s.showAllReleases ? s.releases : s.releases.slice(0, RELEASES_SHOWN))[Number(el.dataset.index)]); break;
     case "toggle-releases": s.showAllReleases = !s.showAllReleases; renderDetailsBody(); break;
