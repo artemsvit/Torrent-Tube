@@ -1,3 +1,4 @@
+import email.utils
 import json
 import os
 import re
@@ -309,6 +310,8 @@ def update_settings():
     TMDB_API_KEY = SETTINGS["tmdb_api_key"]
     TMDB_LANGUAGE = SETTINGS["tmdb_language"] or "uk-UA"
     TMDB_CACHE.clear()
+    DISCOVER_QUERY_CACHE.clear()
+    INDEXER_CAPS_CACHE["key"] = None
 
     apply_session_limits()
     with LOCK:
@@ -529,17 +532,17 @@ def format_size(num_bytes: int) -> str:
     return f"{size:.1f} TB"
 
 
-def jackett_query(q: str = None, cat: str = None):
-    """Hits Jackett's Torznab proxy for the configured indexer and returns
-    parsed (but not yet TMDB-enriched) result dicts. A blank `q` isn't a
-    no-op search - most trackers (this one included) treat it as "give me
-    the latest uploads", which is what the Discover feeds ride on."""
+def jackett_query(q: str = None, cat: str = None, indexer: str = None):
+    """Hits Jackett's Torznab proxy for the configured indexer (or the one
+    given) and returns parsed (but not yet TMDB-enriched) result dicts. A
+    blank `q` isn't a no-op search - most trackers treat it as "give me the
+    latest uploads", which is what the Discover feeds ride on."""
     params = {"apikey": JACKETT_API_KEY, "t": "search"}
     if q:
         params["q"] = q
     if cat:
         params["cat"] = cat
-    url = f"{JACKETT_URL}/api/v2.0/indexers/{JACKETT_INDEXER}/results/torznab/api?{urllib.parse.urlencode(params)}"
+    url = f"{JACKETT_URL}/api/v2.0/indexers/{indexer or JACKETT_INDEXER}/results/torznab/api?{urllib.parse.urlencode(params)}"
     req = urllib.request.Request(url, headers={"User-Agent": "TorrentTube"})
     with urllib.request.urlopen(req, timeout=25) as resp:
         data = resp.read()
@@ -598,26 +601,119 @@ def search_torrents():
 
 
 # ---------- Discover ----------
-# A browsable catalog instead of a reactive search: each feed below maps to
-# a specific section of the mazepa forum (Jackett's own indexer definition
-# exposes the tracker's forum ids as custom Torznab categories, numbered
-# 100000 + the forum id - e.g. "Новинки фільмів UHD/HD", forum id 175, is
-# Torznab category 100175). Querying with cat= and no q returns that
-# section's latest uploads.
+# A browsable catalog instead of a reactive search. Every tracker numbers
+# its own sections differently (Jackett exposes them as custom Torznab
+# categories, 100000 + the tracker's forum id - mazepa's 100012 is "Movies
+# HD", toloka's 100012 is wallpapers), so nothing here is hard-coded per
+# tracker. Instead each configured indexer's own category list is read from
+# Jackett and sorted into feeds by section *name* ("Мультфільми HD",
+# "Серіали", "Новинки фільмів", ...). Querying a category with no q
+# returns that section's latest uploads (~50-90 rows, no offset support).
 DISCOVER_FEEDS = [
-    # The dedicated "new films" forum (100175) alone maxes out at ~50 raw
-    # rows per request and collapses to ~20 distinct movies after the
-    # per-movie dedup below - same single-category ceiling "Popular" avoids
-    # by fanning out across categories. Do the same here: merge in the
-    # regular Movies/Cartoons/TV Shows categories too (sorted by pub_date,
-    # so it's still "newest first", not seeder count) for real breadth.
-    {"id": "new", "label": "New", "cats": ["100175", "100012", "100147", "100041", "100155", "100044", "100152"]},
-    {"id": "popular", "label": "Popular", "cats": ["100012", "100147", "100041", "100155", "100044", "100152"], "sort": "seeders"},
-    {"id": "movies", "label": "Movies", "cats": ["100012", "100147"]},
-    {"id": "cartoons", "label": "Cartoons", "cats": ["100041", "100155"]},
-    {"id": "tv", "label": "TV Shows", "cats": ["100044", "100152"]},
+    # "New" and "Popular" span every group, so they're wide rather than
+    # capped at one section's ~50 rows; New also pulls any dedicated
+    # "new releases" sections a tracker has.
+    {"id": "new", "label": "New", "groups": ["new", "movies", "cartoons", "tv"]},
+    {"id": "popular", "label": "Popular", "groups": ["movies", "cartoons", "tv"], "sort": "seeders"},
+    {"id": "movies", "label": "Movies", "groups": ["movies"]},
+    {"id": "cartoons", "label": "Cartoons", "groups": ["cartoons"]},
+    {"id": "tv", "label": "TV Shows", "groups": ["tv"]},
 ]
 DISCOVER_FEEDS_BY_ID = {f["id"]: f for f in DISCOVER_FEEDS}
+
+# Matched as lowercase substrings of a section name, first rule wins - so
+# "Мультсеріали" is a cartoon before it's a series, and "Документальні
+# фільми" is skipped before it's a film. Ukrainian/Russian/English since
+# that's what trackers here name their sections in.
+SECTION_RULES = [
+    (None, ("документ", "documentary", "архів", "архив", "archive", "трейлер", "trailer",
+            "короткометраж", "аматорськ", "субтитр", "sport", "спорт", "концерт", "кліп")),
+    ("new", ("новинк", "новинки", "new release", "new movies")),
+    ("cartoons", ("мультф", "мультс", "мультик", "cartoon", "animation", "animated", "анімаці")),
+    ("tv", ("серіал", "сериал", "series", "tv show")),
+    ("movies", ("фільм", "фильм", "кіно", "кино", "film", "movie")),
+]
+# Sections a tracker splits by quality - when HD/UHD versions exist, the
+# SD/DVD ones are just the same titles in worse quality.
+LOW_QUALITY_RE = re.compile(r"\bSD\b|DVD", re.I)
+# Standard Newznab categories, for trackers without named sections.
+STANDARD_GROUPS = {"movies": ["2000"], "tv": ["5000"]}
+MAX_CATS_PER_GROUP = 5
+HD_RE = re.compile(r"\bU?HD\b|1080|2160|4K", re.I)
+
+INDEXER_CAPS_CACHE = {"at": 0, "key": None, "value": None}
+
+
+def classify_section(name: str):
+    lower = name.lower()
+    for group, words in SECTION_RULES:
+        if any(w in lower for w in words):
+            return group
+    return None
+
+
+def indexer_sections():
+    """{indexer_id: {group: [category ids]}} for every configured indexer
+    (or just the selected one), from Jackett's own capability list. Cached
+    10 min - it only changes when an indexer is added in Jackett."""
+    cache_key = (JACKETT_URL, JACKETT_API_KEY, JACKETT_INDEXER)
+    if INDEXER_CAPS_CACHE["key"] == cache_key and time.time() - INDEXER_CAPS_CACHE["at"] < 600:
+        return INDEXER_CAPS_CACHE["value"]
+
+    params = {"apikey": JACKETT_API_KEY, "t": "indexers", "configured": "true"}
+    url = f"{JACKETT_URL}/api/v2.0/indexers/all/results/torznab/api?{urllib.parse.urlencode(params)}"
+    req = urllib.request.Request(url, headers={"User-Agent": "TorrentTube"})
+    with urllib.request.urlopen(req, timeout=8) as resp:
+        root = ET.fromstring(resp.read())
+
+    sections = {}
+    for ix in root.findall("indexer"):
+        ix_id = ix.get("id")
+        if not ix_id or (JACKETT_INDEXER not in ("", "all") and ix_id != JACKETT_INDEXER):
+            continue
+        groups = {}
+        for cat in ix.iter("category"):
+            cat_id, name = cat.get("id") or "", (cat.get("name") or "").strip(" |-")
+            if not cat_id.isdigit() or int(cat_id) < 100000:
+                continue  # standard categories are only the fallback below
+            group = classify_section(name)
+            if group:
+                groups.setdefault(group, []).append((cat_id, name))
+        for group, cats in groups.items():
+            # HD sections first, then one of each distinct name (trackers
+            # repeat e.g. "Мультсеріали" under several parent sections -
+            # without this those duplicates use up the whole cap).
+            good = [c for c in cats if not LOW_QUALITY_RE.search(c[1])] or cats
+            good.sort(key=lambda c: not HD_RE.search(c[1]))
+            picked, names = [], set()
+            for cid, name in good:
+                if name.lower() not in names:
+                    names.add(name.lower())
+                    picked.append(cid)
+            groups[group] = picked[:MAX_CATS_PER_GROUP]
+        for group, cats in STANDARD_GROUPS.items():
+            groups.setdefault(group, cats)
+        sections[ix_id] = groups
+
+    INDEXER_CAPS_CACHE.update(at=time.time(), key=cache_key, value=sections)
+    return sections
+
+
+# Discover re-opens the same feeds constantly (and New/Popular overlap with
+# the others), while a tracker's latest uploads only change every few
+# minutes - so a section's rows are reused for 5 min instead of re-scraped.
+DISCOVER_QUERY_CACHE = {}
+DISCOVER_QUERY_TTL = 300
+
+
+def cached_section_query(indexer: str, cat: str):
+    key = (JACKETT_URL, indexer, cat)
+    hit = DISCOVER_QUERY_CACHE.get(key)
+    if hit and time.time() - hit[0] < DISCOVER_QUERY_TTL:
+        return [dict(r) for r in hit[1]]
+    rows = jackett_query(cat=cat, indexer=indexer)
+    DISCOVER_QUERY_CACHE[key] = (time.time(), rows)
+    return [dict(r) for r in rows]
 
 
 @app.route("/api/discover/feeds")
@@ -634,26 +730,34 @@ def discover_torrents():
     if not feed:
         return jsonify({"error": "Unknown feed"}), 400
 
-    # This indexer's Torznab endpoint caps out at ~50 items per request and
-    # doesn't honor an offset (confirmed: offset=20 comes back empty rather
-    # than the next page) - so there's no real "page 2" to ask for. But a
-    # feed spanning multiple categories (e.g. Movies = HD + UHD) can be
-    # queried per-category instead of combined: each subcategory request
-    # gets its OWN ~50-item cap, and in practice the HD and UHD listings
-    # barely overlap (confirmed live: 50 + 50 merged to ~100 unique items,
-    # not ~50). Firing those requests in parallel and deduping the merged
-    # set is effectively "the next page", without pretending Jackett
-    # supports pagination it doesn't.
-    def fetch_one(cat):
+    try:
+        sections = indexer_sections()
+    except Exception:
+        return jsonify({"error": "Couldn't reach the search service"}), 502
+
+    # Trackers cap out at ~50-90 items per request and don't honor an
+    # offset - so there's no real "page 2" to ask for. But each section
+    # (Movies HD, Movies UHD, ...) gets its OWN cap and they barely overlap,
+    # so querying every matching section of every indexer in parallel and
+    # deduping the merged set is effectively the next page, without
+    # pretending Jackett supports pagination it doesn't.
+    requests_ = []
+    for ix_id, groups in sections.items():
+        for group in feed["groups"]:
+            for cat in groups.get(group, []):
+                if (ix_id, cat) not in requests_:
+                    requests_.append((ix_id, cat))
+
+    def fetch_one(pair):
         try:
-            return jackett_query(cat=cat)
+            return cached_section_query(*pair)
         except Exception:
             return []
 
-    if not feed["cats"]:
-        return jsonify({"error": "Couldn't reach the search service"}), 502
-    with ThreadPoolExecutor(max_workers=len(feed["cats"])) as ex:
-        batches = list(ex.map(fetch_one, feed["cats"]))
+    if not requests_:
+        return jsonify({"results": []})
+    with ThreadPoolExecutor(max_workers=min(16, len(requests_))) as ex:
+        batches = list(ex.map(fetch_one, requests_))
 
     seen = set()
     results = []
@@ -700,8 +804,17 @@ def discover_torrents():
     if feed.get("sort") == "seeders":
         results.sort(key=lambda r: r["seeders"], reverse=True)
     else:
-        results.sort(key=lambda r: r["pub_date"], reverse=True)
+        results.sort(key=lambda r: pub_timestamp(r["pub_date"]), reverse=True)
     return jsonify({"results": results})
+
+
+def pub_timestamp(pub_date: str) -> float:
+    """Torznab pubDate is RFC 822 ("Sat, 26 Sep 2026 ...") - sorting the raw
+    string orders by weekday name, which is wrong once feeds are merged."""
+    try:
+        return email.utils.parsedate_to_datetime(pub_date).timestamp()
+    except Exception:
+        return 0
 
 
 @app.route("/api/discover/enrich", methods=["POST"])
