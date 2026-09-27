@@ -996,87 +996,6 @@
     pointer-events: none;
   }
   .dt-media iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
-  /* Round play/stop button - the banner's centre play button, and the
-     same button again at the head of the trailer block (where it turns
-     into Stop while a trailer plays). */
-  .dt-round-btn {
-    width: 44px;
-    height: 44px;
-    flex-shrink: 0;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    background: rgba(0, 0, 0, 0.72);
-    border: 1.5px solid rgba(255, 255, 255, 0.7);
-    color: white;
-    cursor: pointer;
-    transition: transform 0.15s, background 0.15s;
-  }
-  .dt-round-btn:hover { background: rgba(0, 0, 0, 0.88); }
-  .dt-round-btn svg { width: 16px; height: 16px; }
-  .dt-round-btn[data-act="trailer"] svg { margin-left: 2px; }
-  .dt-round-btn .spinner-ring { width: 16px; height: 16px; border-width: 2px; }
-  .dt-round-btn:disabled { cursor: default; }
-  .dt-unmute {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    height: 30px;
-    padding: 0 12px;
-    flex-shrink: 0;
-    border-radius: var(--radius-pill);
-    border: none;
-    background: var(--accent);
-    color: white;
-    font-size: 12px;
-    font-weight: 600;
-    font-family: inherit;
-    cursor: pointer;
-  }
-  .dt-unmute svg { width: 12px; height: 12px; }
-
-  /* Trailer block, right under the banner: play/stop, then every trailer
-     found as a chip - all visible at once, one tap plays it, the playing
-     one highlighted. Chips scroll sideways when there are many. */
-  .dt-trailers {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 14px;
-    padding: 10px 12px;
-    min-width: 0;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--surface);
-  }
-  .dt-trailers-main { flex: 1; min-width: 0; }
-  .dt-trailers-label { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-tertiary); margin-bottom: 6px; }
-  .dt-trailers-empty { font-size: 12.5px; color: var(--text-secondary); }
-  .dt-trailers-empty a { color: var(--accent); font-weight: 600; text-decoration: none; }
-  .dt-trailer-chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; min-width: 0; padding: 1px; }
-  .dt-trailer-chips::-webkit-scrollbar { display: none; }
-  .dt-trailer-chip {
-    flex-shrink: 0;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    height: 30px;
-    padding: 0 12px;
-    border-radius: var(--radius-pill);
-    border: 1px solid var(--border-strong);
-    background: var(--surface);
-    color: var(--text);
-    font-size: 12px;
-    font-weight: 600;
-    font-family: inherit;
-    cursor: pointer;
-    white-space: nowrap;
-  }
-  .dt-trailer-chip svg { width: 10px; height: 10px; }
-  .dt-trailer-chip:hover { border-color: var(--accent); }
-  .dt-trailer-chip.is-active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
   /* body's desktop zoom (--ui-zoom) isn't passed on to an iframe's own
      content in Safari - YouTube lays out for a 12% bigger box and the
      frame shows it cropped at the right/bottom. Undo the zoom on the
@@ -1359,9 +1278,6 @@
     .dt-actions > .btn-primary .dt-download-meta { overflow: hidden; text-overflow: ellipsis; }
     .dt-hero-play-icon { width: 56px; height: 56px; }
     .dt-hero-play { top: 38%; }
-    .dt-trailers { padding: 9px 10px; gap: 10px; }
-    .dt-unmute { width: 34px; height: 34px; padding: 0; justify-content: center; border-radius: 50%; }
-    .dt-unmute-label { display: none; }
     .dt-release-title { display: none; }
     .dt-facts .dt-minor { display: none; }
   }
@@ -3008,8 +2924,6 @@ const detailsBody = document.getElementById("detailsBody");
 const detailsClose = document.getElementById("detailsClose");
 const detailsBack = document.getElementById("detailsBack");
 const PLAY_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7-11-7z"/></svg>`;
-const UNMUTE_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z" fill="currentColor"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg>`;
-const STOP_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>`;
 const RELEASES_SHOWN = 5;
 
 let detailsRequestId = 0;
@@ -3225,51 +3139,12 @@ async function findYoutubeTrailers() {
   else { renderDetailsHero(); renderDetailsBody(); }
 }
 
-function renderTrailerBlock(s) {
-  if (s.loading) return "";
-  const d = s.data;
-  let toggle, main;
-  if (s.playing) {
-    toggle = `<button type="button" class="dt-round-btn" data-act="stop-trailer" aria-label="Stop trailer" title="Stop trailer">${STOP_ICON}</button>`;
-  } else {
-    toggle = `<button type="button" class="dt-round-btn" data-act="trailer" aria-label="Play trailer" title="Play trailer"${s.findingTrailer ? " disabled" : ""}>${s.findingTrailer ? `<span class="spinner-ring"></span>` : PLAY_ICON}</button>`;
-  }
-  if (s.trailers.length) {
-    const labels = trailerLabels(s.trailers);
-    main = `<div class="dt-trailer-chips">${s.trailers.map((t, i) => {
-      const active = s.playing && t.key === s.activeTrailer;
-      return `<button type="button" class="dt-trailer-chip${active ? " is-active" : ""}" data-act="pick-trailer" data-key="${escapeHtml(t.key)}" title="${escapeHtml(t.name)}">${PLAY_ICON}${escapeHtml(labels[i])}</button>`;
-    }).join("")}</div>`;
-  } else if (s.noTrailer) {
-    const q = [d.title || s.item.title, d.year, "trailer"].filter(Boolean).join(" ");
-    toggle = "";
-    main = `<div class="dt-trailers-empty">No trailer found. <a href="${escapeHtml(youtubeSearchUrl(q))}" target="_blank" rel="noopener">Search YouTube ↗</a></div>`;
-  } else {
-    main = `<div class="dt-trailers-empty">${s.findingTrailer ? "Looking for a trailer on YouTube…" : "Find a trailer on YouTube"}</div>`;
-  }
-  const unmute = s.playing && s.needsUnmute
-    ? `<button type="button" class="dt-unmute" data-act="unmute" aria-label="Unmute">${UNMUTE_ICON}<span class="dt-unmute-label">Unmute</span></button>` : "";
-  return `<div class="dt-trailers">${toggle}<div class="dt-trailers-main"><div class="dt-trailers-label">Trailers</div>${main}</div>${unmute}</div>`;
-}
 
-// Short picker labels - "Trailer · EN", "Trailer 2 · EN", "Teaser · UK" -
-// instead of the full YouTube title ("Downton Abbey Season 1 - Official
-// Trailer (HD)"), which stays available as the option's tooltip.
-function trailerLabels(trailers) {
-  const seen = {};
-  return trailers.map(t => {
-    const kind = /teaser|тизер/i.test(t.name || "") ? "Teaser" : "Trailer";
-    const lang = t.lang ? t.lang.toUpperCase() : "";
-    const key = kind + lang;
-    seen[key] = (seen[key] || 0) + 1;
-    return `${kind}${seen[key] > 1 ? ` ${seen[key]}` : ""}${lang ? ` · ${lang}` : ""}`;
-  });
-}
 
 // The YouTube player only loads once asked for - no third-party iframe
 // (or its cookies/requests) just for opening the popup.
 function playTrailer(key) {
-  Object.assign(detailsState, { activeTrailer: key, playing: true, needsUnmute: false });
+  Object.assign(detailsState, { activeTrailer: key, playing: true });
   renderDetailsHero();
   renderDetailsBody();
   mountTrailerPlayer(key);
@@ -3294,7 +3169,8 @@ function loadYouTubeApi() {
 // Starts the trailer through YouTube's player API instead of a plain
 // autoplay=1 embed, which Safari ignores (no autoplay with sound in an
 // embedded player): ask it to play, and if the browser still holds it
-// back, play muted - always allowed - with an Unmute button over it.
+// back, play muted - always allowed - and YouTube's own volume control
+// unmutes it.
 async function mountTrailerPlayer(key) {
   const s = detailsState;
   try { await loadYouTubeApi(); } catch (e) { return; }
@@ -3313,26 +3189,10 @@ async function mountTrailerPlayer(key) {
           if (state === YT.PlayerState.PLAYING || state === YT.PlayerState.BUFFERING) return;
           e.target.mute();
           e.target.playVideo();
-          s.needsUnmute = true;
-          if (detailsState === s) renderDetailsBody();
         }, 1200);
-      },
-      onStateChange: (e) => {
-        // Unmuting from YouTube's own volume control hides our button too.
-        if (s.needsUnmute && e.target.isMuted && !e.target.isMuted()) {
-          s.needsUnmute = false;
-          if (detailsState === s) renderDetailsBody();
-        }
       },
     },
   });
-}
-
-function stopTrailer() {
-  detailsState.playing = false;
-  detailsState.player = null;
-  renderDetailsHero();
-  renderDetailsBody();
 }
 
 function renderDetailsHero() {
@@ -3360,7 +3220,10 @@ function renderDetailsHero() {
   let overlay = "";
   if (playing) {
     overlay = `<div id="dtPlayer"></div>`;
-  } else if (hasBackdrop && !s.loading && !s.noTrailer) {
+  } else if (hasBackdrop && !s.loading && s.noTrailer) {
+    const q = [d.title, d.year, "trailer"].filter(Boolean).join(" ");
+    overlay = `<a class="dt-hero-play" href="${escapeHtml(youtubeSearchUrl(q))}" target="_blank" rel="noopener"><span class="dt-hero-play-icon">${PLAY_ICON}</span>Search YouTube</a>`;
+  } else if (hasBackdrop && !s.loading) {
     overlay = `<button type="button" class="dt-hero-play" data-act="trailer"${s.findingTrailer ? " disabled" : ""} aria-label="Play trailer">
       <span class="dt-hero-play-icon">${s.findingTrailer ? `<span class="spinner-ring"></span>` : PLAY_ICON}</span>${s.findingTrailer ? "Finding trailer…" : "Trailer"}</button>`;
   }
@@ -3382,8 +3245,17 @@ function renderDetailsBody() {
   if (!body || !detailsState) return;
   const s = detailsState, d = s.data, item = s.item;
 
-  // --- actions: Download + folder ---
+  // --- actions: Download + folder. The trailer plays from the banner's
+  // centre button; a title without a banner gets a button here instead. ---
   const actions = [];
+  if (!d.backdrop && !s.playing && !s.loading) {
+    if (s.noTrailer) {
+      const q = [d.title || item.title, d.year, "trailer"].filter(Boolean).join(" ");
+      actions.push(`<a class="btn-secondary" href="${escapeHtml(youtubeSearchUrl(q))}" target="_blank" rel="noopener">${PLAY_ICON}Search YouTube</a>`);
+    } else {
+      actions.push(`<button type="button" class="btn-secondary" data-act="trailer"${s.findingTrailer ? " disabled" : ""}>${PLAY_ICON}${s.findingTrailer ? "Finding trailer…" : "Trailer"}</button>`);
+    }
+  }
   if (s.torrent) {
     const t = s.torrent;
     const done = t.state === "finished" || t.state === "seeding";
@@ -3481,7 +3353,6 @@ function renderDetailsBody() {
     </button>`).join("");
 
   body.innerHTML = `
-    ${renderTrailerBlock(s)}
     <div class="dt-actions">${actions.join("")}</div>
     <div class="dt-cols">
       <div>${overview}</div>
@@ -3492,13 +3363,6 @@ function renderDetailsBody() {
     ${releasesHead || releases ? `<div class="dt-section">${releasesHead}${releases}</div>` : ""}
     ${recs ? `<div class="dt-section"><div class="dt-section-head"><div class="section-label">More like this</div></div><div class="dt-row">${recs}</div></div>` : ""}
   `;
-
-  // Keep the playing trailer's chip in view in a sideways-scrolled row.
-  const activeChip = body.querySelector(".dt-trailer-chip.is-active");
-  if (activeChip) {
-    const row = activeChip.parentElement;
-    row.scrollLeft = Math.max(0, activeChip.offsetLeft - row.offsetLeft - 8);
-  }
 
   // Only offer "More" when the clamp actually cut something off.
   const overviewEl = body.querySelector(".dt-overview");
@@ -3538,18 +3402,6 @@ detailsBody.addEventListener("click", (e) => {
     case "trailer":
       if (s.trailers.length) playTrailer(s.activeTrailer || s.trailers[0].key);
       else findYoutubeTrailers();
-      break;
-    case "stop-trailer": stopTrailer(); break;
-    case "pick-trailer":
-      if (!(s.playing && s.activeTrailer === el.dataset.key)) {
-        playTrailer(el.dataset.key);
-        detailsModal.querySelector(".modal-box").scrollTo({ top: 0, behavior: "smooth" });
-      }
-      break;
-    case "unmute":
-      if (s.player) { s.player.unMute(); s.player.setVolume(100); }
-      s.needsUnmute = false;
-      renderDetailsBody();
       break;
     case "download-best": { const best = primaryRelease(); if (best) downloadRelease(best); break; }
     case "download-release": downloadRelease((s.showAllReleases ? s.releases : s.releases.slice(0, RELEASES_SHOWN))[Number(el.dataset.index)]); break;
