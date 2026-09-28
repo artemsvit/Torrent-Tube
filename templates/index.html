@@ -936,13 +936,19 @@
 
   .search-dropdown .item, #list .item { cursor: pointer; }
 
+  /* No border and no visible scrollbar: the banner runs edge to edge, and
+     the shared modal border (plus the 8px scrollbar track the global
+     ::-webkit-scrollbar rule reserves) drew a light stroke round it and a
+     dark strip down its right side. Scrolling itself still works. */
   .details-box {
     position: relative;
     max-width: 780px;
     padding: 0;
+    border: none;
     overflow-x: hidden;
-    scrollbar-width: thin;
+    scrollbar-width: none;
   }
+  .details-box::-webkit-scrollbar { display: none; }
   /* Zero-height sticky strip holding Back/Close, so both stay pinned to
      the top of the popup however far it's scrolled (they used to scroll
      away with the hero). */
