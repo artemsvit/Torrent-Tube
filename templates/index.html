@@ -6,7 +6,9 @@
 <title>Torrent Tube</title>
 <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
 <link rel="alternate icon" href="{{ url_for('static', filename='favicon.svg') }}">
-<link rel="apple-touch-icon" href="{{ url_for('static', filename='favicon.svg') }}">
+<!-- iOS ignores SVG here; it needs a PNG (180x180, full-bleed - iOS rounds the corners itself). -->
+<link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
+<meta name="apple-mobile-web-app-title" content="Torrent Tube">
 <script>
   (function () {
     var saved = null;
