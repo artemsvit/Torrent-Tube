@@ -162,18 +162,19 @@ while it downloads, and nothing is kept afterwards:
    `.stream-cache` folder under your downloads. Infuse's first request
    waits until the file list is in, then the film starts. Infuse handles
    MKV, HEVC, every audio track and subtitle, which a browser can't.
-2. Close Infuse. The server watches whether the player still takes data -
-   not whether its connection is open, because iOS can keep a closed
-   player's connection open. About 30 seconds after the player stops
-   taking data the download pauses, and once it has stopped for
-   Settings > Playback > *Delete a stream after* (2 minutes by default)
-   the stream is deleted with its files and its connection closed.
-3. Opening the same title again - or Infuse resuming after a long pause -
-   uses the same link, so the server simply starts it again, and Infuse
-   remembers where you stopped.
+2. Pause as long as you like - the film keeps downloading and nothing is
+   deleted.
+3. Close the player. Infuse calls back the link it was given as
+   `x-success` (`/played/<token>`), which deletes the stream and its files
+   at once and brings you back to Torrent Tube. VLC on iPhone gets the same
+   callback. A player that never calls back (force-quit, a dead phone, VLC
+   on Android or a computer) has its stream deleted after 6 hours without
+   taking any data.
+4. Opening the same title again uses the same link, so the server simply
+   starts it again, and Infuse remembers where you stopped.
 
-While a stream exists it shows at the top of Downloads ("Playing",
-"Player closed · deleted in 2 min"), with ✕ to delete it now and a save
+While a stream exists it shows at the top of Downloads ("Waiting for the
+player", then "Open in the player"), with ✕ to delete it now and a save
 button to keep it as a download in your default folder. Download on the
 same release does the same.
 
@@ -196,9 +197,10 @@ away and seek.
 | Endpoint | What it does |
 |---|---|
 | `POST /api/stream` | Body `{"magnet": ...}`, `{"download_link": ...}` or `{"id": <download id>}`. Starts (or reuses) the torrent in streaming mode and returns `{id, file, name, size, url, cached, ready, progress, ...}`. A new torrent goes to the stream cache (`cached: true`); `id` streams something already in Downloads. |
-| `GET /api/stream/<id>/<file>` | Buffering status: `ready` (the start is buffered), `head_progress`, `progress`, `download_rate`, `num_peers`, `done`, plus `playing` (a player is reading it), `opened` (a player has connected) and `clears_in` (seconds until an idle cached stream is deleted). |
+| `GET /api/stream/<id>/<file>` | Buffering status: `ready` (the start is buffered), `head_progress`, `progress`, `download_rate`, `num_peers`, `done`, plus `opened` (a player has connected) and `playing` (it took data in the last 30 seconds). |
 | `GET /stream/<id>/<file>/<name>` | The video itself, with HTTP Range requests (`206 Partial Content`). |
 | `POST /api/play` | Body `{"token", "title", "magnet" \| "download_link" \| "id"}`. Says what a play token plays and starts it in the background. Tokens are `m-<info hash>`, `d-<download id>` or `l-<hash of the link>`. |
+| `GET /played/<token>` | The player's `x-success`/`x-error` callback: stops the stream (a cached one is deleted with its files) and redirects to the app. |
 | `GET /play/<token>/<name>` | The video for a play token, with Range support. Waits for the token, the torrent and its file list on the first request; starts the torrent again if its stream was deleted. |
 | `POST /api/stream/<id>/keep` | Body `{"category": ...}`. Moves a cached stream to that folder and makes it a normal download. |
 | `DELETE /api/stream/<id>` | Stops a stream. A cached one is deleted with its data now (`deleted: true`); a download being streamed goes back to downloading normally. |

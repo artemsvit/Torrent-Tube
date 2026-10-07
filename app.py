@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import libtorrent as lt
-from flask import Flask, Response, jsonify, render_template, request
+from flask import Flask, Response, jsonify, redirect, render_template, request
 
 DOWNLOAD_DIR = Path(os.environ.get("TORRENTTUBE_DOWNLOAD_DIR") or (Path.home() / "Downloads" / "TorrentTube"))
 DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -79,7 +79,6 @@ DEFAULT_LIMITS = {
     "max_upload_slots": 0,          # unchoke slots, 0 = libtorrent default
     "seed_after_download": 1,       # 0/1 - pause a torrent as soon as it finishes instead of seeding
     "remove_after_download": 0,     # 0/1 - drop a finished torrent from the list (files are kept)
-    "stream_idle_minutes": 2,       # delete a stream this long after its player closes
 }
 
 # Jackett does the actual tracker login/scraping (configured with the user's
@@ -205,7 +204,7 @@ def load_registry():
                 continue
             if entry.get("stream_cache"):
                 STREAM_CACHE_IDS.add(tid)
-                STREAM_LAST_USED[tid] = time.time()  # a fresh idle window after a restart
+                STREAM_LAST_USED[tid] = time.time()  # a fresh abandon window after a restart
         except Exception:
             continue
 
@@ -1168,7 +1167,7 @@ def enforce_remove_policy():
     removed = False
     for tid, h in handles:
         if not h.is_valid() or tid in STREAM_CACHE_IDS:
-            continue  # a cached stream is cleaned up by its own idle timer
+            continue  # a cached stream is cleaned up when its player closes
         st = h.status()
         if not (st.has_metadata and st.is_finished):
             continue
@@ -1352,11 +1351,12 @@ def registry_saver_loop():
 # the whole file.
 #
 # A new stream goes to a hidden cache folder, not a category folder, and
-# shows in Downloads only as a stream. A player's open connection keeps it;
-# once the player closes and stream_idle_minutes pass with no connection,
-# it's removed along with its data - "Play in Infuse" leaves nothing
-# behind. Save (or Download on the same release) moves it to a real folder
-# and makes it an ordinary download.
+# shows in Downloads only as a stream. It keeps downloading - paused or
+# not - until the player says it's closed: Infuse (and VLC on iOS) open
+# the x-success link /played/<token> when the player closes, which deletes
+# it with its data, so "Play in Infuse" leaves nothing behind. Save (or
+# Download on the same release) moves it to a real folder and makes it an
+# ordinary download.
 VIDEO_EXTS = {".mkv", ".mp4", ".m4v", ".mov", ".avi", ".ts", ".m2ts", ".webm", ".wmv", ".mpg", ".mpeg"}
 STREAM_READAHEAD = 32 * 1024 * 1024   # bytes ahead of the read position to rush
 STREAM_HEAD = 8 * 1024 * 1024         # "ready to play" once this much of the start is in
@@ -1372,18 +1372,18 @@ STREAM_FILES = {}
 STREAM_CACHE_DIR = DOWNLOAD_DIR / ".stream-cache"
 STREAM_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 STREAM_CACHE_IDS = set()   # torrents that live in the cache, not in Downloads
-# A player that's closed doesn't always close its connection - iOS can
-# keep a suspended app's socket open, so it just stops reading. So "is it
-# playing" is judged by data flowing, not by an open connection: the time
-# a player last took data (or was waiting on a piece) in STREAM_LAST_USED.
-# STREAM_PAUSE_AFTER seconds without that pauses the download; the
-# stream_idle_minutes setting deletes it, and force-closes its sockets so
-# their threads aren't left waiting forever on a reader that's gone.
+# A paused player and a closed one look the same from here - the connection
+# stays open (iOS keeps a suspended app's socket) and no data is taken - so
+# only the player's own "closed" callback deletes a stream. The safety net
+# for a player that never calls back (force-quit, a phone that died, a
+# player without callbacks): STREAM_ABANDON_AFTER without any data taken.
+# Dropping a stream also shuts its sockets down, so threads blocked on a
+# reader that's gone end.
 STREAM_LAST_USED = {}      # tid -> when a player last took data from it
 STREAM_OPENED = set()      # tids a player has connected to at least once
 STREAM_SOCKETS = {}        # tid -> sockets of its open responses
-STREAM_IDLE_PAUSED = set() # tids paused because no player is reading
-STREAM_PAUSE_AFTER = 30
+STREAM_ABANDON_AFTER = 6 * 3600
+STREAM_PLAYING_WINDOW = 30  # took data this recently = "playing"
 
 
 def _info_hash_hex(magnet: str = None, info=None) -> str:
@@ -1417,23 +1417,15 @@ def rush_pieces(handle, first: int, last: int):
             handle.set_piece_deadline(piece, 300 + n * 150)
 
 
-def stream_idle_seconds() -> int:
-    return max(1, LIMITS.get("stream_idle_minutes", 2)) * 60
-
-
 def stream_idle_for(tid: str) -> float:
     return time.time() - STREAM_LAST_USED.get(tid, time.time())
 
 
 def stream_activity(tid: str) -> dict:
-    """Is a player taking data from this stream right now, and - for a
-    cached one it isn't - how many seconds until it's deleted."""
-    cached = tid in STREAM_CACHE_IDS
-    playing = tid in STREAM_OPENED and stream_idle_for(tid) < STREAM_PAUSE_AFTER
-    clears_in = None
-    if cached and not playing:
-        clears_in = max(0, int(stream_idle_seconds() - stream_idle_for(tid)))
-    return {"cached": cached, "playing": playing, "opened": tid in STREAM_OPENED, "clears_in": clears_in}
+    """Is it a cached stream, has a player connected, and is one taking
+    data from it right now."""
+    playing = tid in STREAM_OPENED and stream_idle_for(tid) < STREAM_PLAYING_WINDOW
+    return {"cached": tid in STREAM_CACHE_IDS, "playing": playing, "opened": tid in STREAM_OPENED}
 
 
 def stream_status(tid: str, index: int) -> dict:
@@ -1658,7 +1650,9 @@ def resolve_play_link(token: str) -> tuple:
                 gone = source["id"] not in HANDLES
             if gone and link.get("magnet"):
                 source = {"magnet": link["magnet"]}  # removed from Downloads since - stream it again
-        return begin_stream(source)
+        tid, index = begin_stream(source)
+        link["tid"] = tid  # for /played/<token>
+        return tid, index
 
 
 @app.route("/api/play", methods=["POST"])
@@ -1690,6 +1684,28 @@ def register_play_link():
     return jsonify({"ok": True})
 
 
+@app.route("/played/<token>")
+def player_closed(token):
+    """The player's x-success / x-error callback: it was closed (or
+    playback failed), so stop the stream - a cached one is deleted with
+    its files - and send the browser that opened this back to the app."""
+    link = PLAY_LINKS.get(token) or {}
+    tid = link.get("tid") or (token[2:] if token.startswith(("m-", "d-")) else None)
+    deleted = False
+    if tid and tid in STREAM_CACHE_IDS:
+        drop_cached_stream(tid)
+        save_registry()
+        deleted = True
+    elif tid:
+        with LOCK:
+            handle = HANDLES.get(tid)
+        if handle and handle.is_valid():  # a download being streamed - just stop streaming it
+            handle.unset_flags(lt.torrent_flags.sequential_download)
+            if tid not in PAUSED_IDS:
+                handle.set_flags(lt.torrent_flags.auto_managed)
+    return redirect("/?stream_closed=1" if deleted else "/")
+
+
 @app.route("/play/<token>/<path:name>")
 def play_link(token, name):
     """The video for a play token. The player may get here before the page's
@@ -1718,7 +1734,6 @@ def adopt_cached_stream(tid: str, category: str) -> "str | None":
         if tid not in STREAM_CACHE_IDS or not handle or not handle.is_valid():
             return None
         STREAM_CACHE_IDS.discard(tid)
-    STREAM_IDLE_PAUSED.discard(tid)
     handle.move_storage(resolve_save_path(category))
     if handle.status().has_metadata:
         handle.prioritize_files([4] * handle.torrent_file().files().num_files())
@@ -1734,7 +1749,6 @@ def drop_cached_stream(tid: str):
         STREAM_CACHE_IDS.discard(tid)
     STREAM_LAST_USED.pop(tid, None)
     STREAM_OPENED.discard(tid)
-    STREAM_IDLE_PAUSED.discard(tid)
     for key in [k for k in STREAM_FILES if k[0] == tid]:
         STREAM_FILES.pop(key, None)
     # A player that stopped reading leaves its response's thread blocked in
@@ -1765,22 +1779,6 @@ def remember_torrent_file(tid: str, handle):
     save_play_links()
 
 
-def pause_idle_stream(tid: str):
-    with LOCK:
-        handle = HANDLES.get(tid)
-    if handle and handle.is_valid() and tid not in STREAM_IDLE_PAUSED:
-        STREAM_IDLE_PAUSED.add(tid)
-        handle.pause()
-
-
-def wake_stream(tid: str, handle):
-    """A player is asking again - resume a stream paused for being idle."""
-    if tid in STREAM_IDLE_PAUSED:
-        STREAM_IDLE_PAUSED.discard(tid)
-        if tid not in PAUSED_IDS and handle.is_valid():
-            handle.resume()
-
-
 @app.route("/api/stream/<tid>/keep", methods=["POST"])
 def keep_stream(tid):
     """Keep a streamed film: it becomes a normal download in that folder."""
@@ -1796,7 +1794,7 @@ def keep_stream(tid):
 @app.route("/api/stream/<tid>", methods=["DELETE"])
 def stop_stream(tid):
     """Stop a stream. A cached one is dropped with its data now instead of
-    waiting for the idle timer; a stream of something in Downloads just
+    waiting for its player to close; a stream of something in Downloads just
     goes back to downloading normally (its files are the user's)."""
     if tid in STREAM_CACHE_IDS:
         drop_cached_stream(tid)
@@ -1812,19 +1810,16 @@ def stop_stream(tid):
 
 
 def clean_stream_cache():
-    """Drops cached streams no player has read for stream_idle_minutes, and
-    anything left in the cache folder that no stream owns (a crash, a
-    restart between saves)."""
-    idle = stream_idle_seconds()
+    """Drops cached streams no player has taken data from for
+    STREAM_ABANDON_AFTER (the player never said it closed), and anything
+    left in the cache folder that no stream owns (a crash, a restart
+    between saves)."""
     now = time.time()
     dropped = False
     for tid in list(STREAM_CACHE_IDS):
-        idle_for = now - STREAM_LAST_USED.get(tid, now)
-        if idle_for > idle:
+        if now - STREAM_LAST_USED.get(tid, now) > STREAM_ABANDON_AFTER:
             drop_cached_stream(tid)
             dropped = True
-        elif idle_for > STREAM_PAUSE_AFTER and tid in STREAM_OPENED:
-            pause_idle_stream(tid)  # player stopped taking data - stop downloading
     if dropped:
         save_registry()
 
@@ -1841,7 +1836,7 @@ def clean_stream_cache():
         if child.name in owned or any(t in child.name for t in live_ids):
             continue  # its files, or its ".<hash>.parts" file
         try:
-            if now - child.stat().st_mtime < idle:
+            if now - child.stat().st_mtime < 600:  # might still be starting up
                 continue
             if child.is_dir():
                 shutil.rmtree(child)
@@ -1900,7 +1895,7 @@ def stream_file(tid, index, name):
             return Response(status=416, headers={"Content-Range": f"bytes */{size}"})
 
     def dropped():
-        # Stopped (or cleared by the idle timer) while this response was
+        # Stopped (or its player closed) while this response was
         # open: its files are gone, so end the response rather than serve
         # a deleted file - an open handle on it would also keep the space.
         return live and not handle.is_valid() and (tid, index) not in STREAM_FILES
@@ -1914,7 +1909,6 @@ def stream_file(tid, index, name):
                 piece, _ = _file_pieces(ti, index, pos, pos + 1)
                 piece_end = min((piece + 1) * ti.piece_length() - fs.file_offset(index), size)
                 if not handle.have_piece(piece):
-                    wake_stream(tid, handle)
                     rush_pieces(handle, *_file_pieces(ti, index, pos, min(size, pos + STREAM_READAHEAD)))
                     waited = time.time()
                     while not handle.have_piece(piece):
@@ -1970,8 +1964,6 @@ def stream_file(tid, index, name):
                 STREAM_SOCKETS.get(tid, set()).discard(sock)
 
     STREAM_LAST_USED[tid] = time.time()
-    if live:
-        wake_stream(tid, handle)
     return Response(tracked(), status=206 if match else 200, headers=headers, direct_passthrough=True)
 
 

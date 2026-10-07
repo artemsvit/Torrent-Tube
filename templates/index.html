@@ -1849,16 +1849,6 @@
           <div class="settings-row-label">Default player<button type="button" class="info-tip" data-tip="The app the Play button opens. The ▾ beside Play changes it too">i</button></div>
           <select class="inline-category-select" id="settingsPlayer"></select>
         </div>
-        <div class="settings-row">
-          <div class="settings-row-label">Delete a stream after<button type="button" class="info-tip" data-tip="How long after the player closes a stream is deleted from the server. Opening it again just starts it again">i</button></div>
-          <select class="inline-category-select" id="settingsStreamCache">
-            <option value="1">1 minute</option>
-            <option value="2">2 minutes</option>
-            <option value="5">5 minutes</option>
-            <option value="15">15 minutes</option>
-            <option value="60">1 hour</option>
-          </select>
-        </div>
       </div>
 
       <div class="settings-section">
@@ -1992,7 +1982,7 @@
   <div class="modal-box player-box" role="dialog" aria-modal="true" aria-labelledby="playerModalTitle">
     <div class="modal-title" id="playerModalTitle">Play in</div>
     <div class="player-list" id="playerList"></div>
-    <p class="player-note">Play opens the film in this app straight away. It streams from this server through a temporary cache, which is deleted a couple of minutes after you close the player.</p>
+    <p class="player-note">Play opens the film in this app straight away. It streams from this server through a temporary file, which is deleted when you close the player.</p>
   </div>
 </div>
 
@@ -2106,7 +2096,6 @@ const settingsSave = document.getElementById("settingsSave");
 const settingsReset = document.getElementById("settingsReset");
 const settingsDefaultCategory = document.getElementById("settingsDefaultCategory");
 const settingsPlayer = document.getElementById("settingsPlayer");
-const settingsStreamCache = document.getElementById("settingsStreamCache");
 const settingsDownloadDir = document.getElementById("settingsDownloadDir");
 const settingsCategories = document.getElementById("settingsCategories");
 const settingsSearch = document.getElementById("settingsSearch");
@@ -2403,13 +2392,11 @@ const STATE_LABELS = {
   seeding: "Seeding",
 };
 
-// "Playing", or how long until an idle cached stream is deleted.
+// Not "Playing"/"Paused": a player reading ahead and one paused look the
+// same from the server. It keeps downloading either way, and the stream
+// goes when the player is closed.
 function streamActivityText(st) {
-  if (st.playing) return "Playing";
-  if (st.clears_in == null) return "";
-  const mins = Math.ceil(st.clears_in / 60);
-  const when = mins >= 60 ? `${Math.round(mins / 60)} h` : `${mins} min`;
-  return st.opened ? `Player closed · deleted in ${when}` : `Waiting for the player · deleted in ${when} if it doesn't open`;
+  return st.opened ? "Open in the player" : "Waiting for the player";
 }
 
 // Streams in the cache sit at the top of Downloads - not downloads, but
@@ -2800,11 +2787,6 @@ function renderLimits() {
   settingsUploadLimitValue.textContent = formatSpeed(lastLimits.upload_rate_limit);
   settingsSeedAfterDownload.checked = (lastLimits.seed_after_download ?? 1) != 0;
   settingsRemoveAfterDownload.checked = (lastLimits.remove_after_download ?? 0) != 0;
-  const cacheMinutes = String(lastLimits.stream_idle_minutes ?? 2);
-  if (![...settingsStreamCache.options].some(o => o.value === cacheMinutes)) {
-    settingsStreamCache.add(new Option(`${cacheMinutes} minutes`, cacheMinutes));
-  }
-  settingsStreamCache.value = cacheMinutes;
   settingsMaxConnections.value = lastLimits.max_connections ?? 0;
   settingsMaxConnectionsValue.textContent = formatCount(lastLimits.max_connections, "Default");
   settingsMaxConnectionsPerTorrent.value = lastLimits.max_connections_per_torrent ?? 0;
@@ -2873,7 +2855,6 @@ async function saveLimits() {
     upload_rate_limit: sliderToKbps(settingsUploadLimit.value),
     seed_after_download: settingsSeedAfterDownload.checked ? 1 : 0,
     remove_after_download: settingsRemoveAfterDownload.checked ? 1 : 0,
-    stream_idle_minutes: settingsStreamCache.value,
     max_connections: settingsMaxConnections.value,
     max_connections_per_torrent: settingsMaxConnectionsPerTorrent.value,
     max_upload_slots: settingsMaxUploadSlots.value,
@@ -2947,7 +2928,7 @@ settingsMaxConnections.addEventListener("input", () => { settingsMaxConnectionsV
 settingsMaxConnectionsPerTorrent.addEventListener("input", () => { settingsMaxConnectionsPerTorrentValue.textContent = formatCount(settingsMaxConnectionsPerTorrent.value, "No cap"); });
 settingsMaxUploadSlots.addEventListener("input", () => { settingsMaxUploadSlotsValue.textContent = formatCount(settingsMaxUploadSlots.value, "Default"); });
 
-[settingsDownloadLimit, settingsUploadLimit, settingsSeedAfterDownload, settingsRemoveAfterDownload, settingsStreamCache, settingsMaxConnections, settingsMaxConnectionsPerTorrent, settingsMaxUploadSlots,
+[settingsDownloadLimit, settingsUploadLimit, settingsSeedAfterDownload, settingsRemoveAfterDownload, settingsMaxConnections, settingsMaxConnectionsPerTorrent, settingsMaxUploadSlots,
  settingsJackettUrl, settingsJackettApiKey, settingsJackettIndexer, settingsTmdbApiKey, settingsTmdbLanguage]
   .forEach(el => el.addEventListener("change", saveLimits));
 
@@ -2963,7 +2944,6 @@ settingsReset.addEventListener("click", async () => {
   settingsUploadLimitValue.textContent = "Unlimited";
   settingsSeedAfterDownload.checked = true;
   settingsRemoveAfterDownload.checked = false;
-  settingsStreamCache.value = "2";
   settingsMaxConnections.value = 0;
   settingsMaxConnectionsValue.textContent = "Default";
   settingsMaxConnectionsPerTorrent.value = 0;
@@ -3134,7 +3114,9 @@ const PLAYERS = {
     icon: "/static/players/infuse.png",
     sub: "iPhone, iPad, Apple TV and Mac",
     store: "https://apps.apple.com/app/id1136220934",
-    link: url => `infuse://x-callback-url/play?url=${encodeURIComponent(url)}`,
+    // x-success is opened when the player is closed (not on pause) - that's
+    // what deletes the stream; x-error when playback fails.
+    link: (url, closed) => `infuse://x-callback-url/play?url=${encodeURIComponent(url)}&x-success=${encodeURIComponent(closed)}&x-error=${encodeURIComponent(closed)}`,
   },
   vlc: {
     name: "VLC",
@@ -3142,8 +3124,8 @@ const PLAYERS = {
     sub: IS_IOS || IS_ANDROID ? "Free, plays almost anything" : "Copies the link - paste it in VLC's Open Network",
     store: IS_ANDROID ? "https://play.google.com/store/apps/details?id=org.videolan.vlc" : "https://apps.apple.com/app/id650377962",
     // Desktop VLC registers no link scheme - the picker copies the URL.
-    link: url => {
-      if (IS_IOS) return `vlc-x-callback://x-callback-url/stream?url=${encodeURIComponent(url)}`;
+    link: (url, closed) => {
+      if (IS_IOS) return `vlc-x-callback://x-callback-url/stream?url=${encodeURIComponent(url)}&x-success=${encodeURIComponent(closed)}&x-error=${encodeURIComponent(closed)}`;
       if (IS_ANDROID) {
         const u = new URL(url);
         return `intent://${u.host}${u.pathname}#Intent;scheme=${u.protocol.replace(":", "")};package=org.videolan.vlc;type=video/*;end`;
@@ -3287,13 +3269,13 @@ function playLink(release, torrent) {
   }
   let name = (title || "video").replace(/[\\/:*?"<>|#%]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 150);
   if (!/\.(mkv|mp4|m4v|avi|mov|ts|webm)$/i.test(name)) name += /\bmp4\b/i.test(name) ? ".mp4" : ".mkv";
-  return { token, source, title, url: `${location.origin}/play/${token}/${encodeURIComponent(name)}` };
+  return { token, source, title, url: `${location.origin}/play/${token}/${encodeURIComponent(name)}`, closedUrl: `${location.origin}/played/${token}` };
 }
 
 // One tap: the player opens straight away with the play link, and the
 // server starts the torrent at the same time. Nothing to wait for or stop
-// here - the player's first request waits for the file, and the server
-// deletes the stream a couple of minutes after the player closes. Both
+// here - the player's first request waits for the file, and closing the
+// player opens /played/<token>, which deletes the stream. Both
 // happen inside the tap, before any await: iOS only lets a page open an
 // app from the tap itself.
 function playRelease(release) {
@@ -3306,7 +3288,7 @@ function playRelease(release) {
   }).then(r => r.json()).then(d => { if (d.error) showToast(d.error, true); setTimeout(refresh, 1500); })
     .catch(() => showToast("Couldn't reach the server", true));
   const id = currentPlayer();
-  const appLink = PLAYERS[id].link(link.url);
+  const appLink = PLAYERS[id].link(link.url, link.closedUrl);
   if (appLink) {
     watchAppOpened(id);
     location.href = appLink;
@@ -3959,6 +3941,13 @@ window.addEventListener("resize", syncTopBarHeight);
 if (window.ResizeObserver) new ResizeObserver(syncTopBarHeight).observe(topBarEl);
 
 async function init() {
+  // Back from the player: /played/<token> deleted the stream and sent us here.
+  const params = new URLSearchParams(location.search);
+  if (params.has("stream_closed")) {
+    showToast("Player closed - the temporary file is deleted");
+    params.delete("stream_closed");
+    history.replaceState(null, "", location.pathname + (params.toString() ? `?${params}` : "") + location.hash);
+  }
   loadConfig();
   loadLimits();
   await loadDiscoverFeeds();
