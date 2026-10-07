@@ -1441,6 +1441,7 @@
      22px between sections, 10px from a section's label to its first row,
      9px of padding within each row. */
   .settings-box { max-width: 440px; }
+  .settings-box > .modal-actions { border-top: 1px solid var(--border); padding-top: 16px; margin-top: 18px; }
   /* Pinned to the top, not centred: tabs differ in height, and centred the
      whole box jumped on every switch - now only its bottom edge moves. */
   #settingsModal.is-open { align-items: flex-start; padding-top: 56px; }
@@ -1459,7 +1460,10 @@
     border-bottom: 1px solid var(--border);
   }
   .settings-tab {
-    padding: 6px 16px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 16px 6px 13px;
     border-radius: var(--radius-pill);
     background: var(--surface);
     border: 1px solid var(--border-strong);
@@ -1467,6 +1471,7 @@
     font-size: 12.5px;
     font-weight: 600;
   }
+  .settings-tab svg { flex-shrink: 0; }
   .settings-tab:hover:not(.is-active) { border-color: var(--accent); color: var(--accent); }
   .settings-tab.is-active {
     background: var(--accent);
@@ -1628,7 +1633,7 @@
   .player-card-head .player-logo { width: 32px; height: 32px; border-radius: 8px; }
   .player-card-name { font-size: 14px; font-weight: 600; flex: 1; }
   .player-card-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; padding: 5px 0; }
-  .player-card-links { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 4px; }
+  .player-card-links { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px 14px; }
   .player-card-links a { font-size: 12.5px; font-weight: 600; color: var(--accent); text-decoration: none; }
   .player-card-links a:hover { text-decoration: underline; }
   .helper-block { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
@@ -1975,9 +1980,9 @@
     <div class="modal-title">Settings</div>
 
     <div class="settings-tabs" id="settingsTabs">
-      <button type="button" class="settings-tab is-active" data-tab="general">General</button>
-      <button type="button" class="settings-tab" data-tab="server">Server</button>
-      <button type="button" class="settings-tab" data-tab="players">Players</button>
+      <button type="button" class="settings-tab is-active" data-tab="general"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>General</button>
+      <button type="button" class="settings-tab" data-tab="server"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>Server</button>
+      <button type="button" class="settings-tab" data-tab="players"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M10 8.5v7l6-3.5-6-3.5z" fill="currentColor"/></svg>Players</button>
     </div>
 
     <div class="settings-tab-panel" data-panel="general">
@@ -2101,9 +2106,9 @@
 
     <div class="settings-tab-panel" data-panel="players" hidden>
       <div class="settings-section">
-        <div class="section-label">Default player</div>
+        <div class="section-label">Playback</div>
         <div class="settings-row">
-          <div class="settings-row-label">Play opens<button type="button" class="info-tip" data-tip="The app the Play button opens. The ▾ beside Play changes it too">i</button></div>
+          <div class="settings-row-label">Default player<button type="button" class="info-tip" data-tip="The app the Play button opens. The ▾ beside Play changes it too">i</button></div>
           <select class="inline-category-select" id="settingsPlayer"></select>
         </div>
       </div>
@@ -3719,15 +3724,15 @@ function renderPlayersTab() {
   playersTabShown = state;
   const links = list => `<div class="player-card-links">${list.map(([label, href]) =>
     `<a href="${escapeHtml(href)}" target="_blank" rel="noopener">${escapeHtml(label)}</a>`).join("")}</div>`;
+  // Download links sit in the header, where the name's row has room.
   const head = id => `<div class="player-card-head"><img class="player-logo" src="${PLAYERS[id].icon}" alt="" width="32" height="32">
-    <div class="player-card-name">${escapeHtml(PLAYERS[id].name)}</div>${id === def ? badge("is-on", "Default") : ""}</div>`;
+    <div class="player-card-name">${escapeHtml(PLAYERS[id].name)}</div>${links(GET_APP[id].links)}</div>`;
 
   const apple = IS_IOS || IS_MAC;
   const infuseOpened = lsGet("torrenttube-opened-infuse") === "1";
   document.getElementById("playerCardInfuse").innerHTML = head("infuse") + `
     <div class="player-card-row"><span>Infuse app</span>${!apple ? badge("is-off", "Apple devices only")
-      : infuseOpened ? badge("is-on", "Opens on this device") : badge("is-off", "Not checked yet")}</div>
-    ${links(GET_APP.infuse.links)}`;
+      : infuseOpened ? badge("is-on", "Installed") : badge("is-off", "Not checked yet")}</div>`;
 
   const helperInstalled = vlcHelperInstalled();
   const vlcFound = lsGet("torrenttube-vlc-found");
@@ -3751,8 +3756,7 @@ function renderPlayersTab() {
   }
   document.getElementById("playerCardVlc").innerHTML = head("vlc") + `
     <div class="player-card-row"><span>VLC app</span>${vlcBadge}</div>
-    ${helper}
-    ${links(GET_APP.vlc.links)}`;
+    ${helper}`;
 }
 
 let playersPoll = null;
@@ -3789,7 +3793,7 @@ let getAppRetry = null;
 const GET_APP = {
   infuse: {
     text: "Infuse plays the film from this server. Get it on the App Store - for iPhone, iPad, Apple TV and Mac.",
-    links: [["App Store", "https://apps.apple.com/app/id1136220934"], ["firecore.com/infuse", "https://firecore.com/infuse"]],
+    links: [["App Store", "https://apps.apple.com/app/id1136220934"], ["firecore.com", "https://firecore.com"]],
   },
   vlc: {
     text: "VLC is a free player that plays the film from this server.",
