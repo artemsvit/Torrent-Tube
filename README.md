@@ -184,15 +184,17 @@ while it downloads, and nothing is kept afterwards:
    starts it again, and Infuse remembers where you stopped.
 
 While a stream exists it shows in its own **Buffering** block under Downloads ("Waiting for the
-player", "Open in the player", then "Player closed · deleting"), with ✕ to delete it now and a save
+player", "Open in the player", then "Player closed · stopped, deleting"), with ✕ to delete it now and a save
 button to keep it as a download in your default folder. Download on the
 same release does the same.
 
-The **▾** beside Play picks the player. The choice is saved on each
-device, so a phone can use Infuse and a computer VLC. Infuse is offered on
-Apple devices only. VLC opens directly on iPhone, iPad and Android; on a
-computer, VLC has no link to open it, so the button copies the stream URL
-for VLC's *Open Network*. A ▶ on each release row plays that release.
+The **▾** beside Play (or Settings > Playback > *Default player*) picks the
+player for the whole app - Infuse unless changed. VLC opens directly on
+iPhone, iPad and Android. Desktop VLC registers no link a web page can
+open, so on a computer the button reads **Copy link for VLC**: paste the
+link in VLC's *File > Open Network*. A copied link downloads nothing until
+VLC opens it, and like any other stream it's deleted 30 seconds after VLC
+closes it. A ▶ on each release row plays that release.
 
 The phone must reach the server at the same address the page uses - on the
 LAN, or over a VPN.

@@ -1694,8 +1694,9 @@ def resolve_play_link(token: str) -> tuple:
 @app.route("/api/play", methods=["POST"])
 def register_play_link():
     """Says what a play token plays: {token, magnet | download_link | id,
-    title}. Returns at once; the torrent starts in the background so it's
-    already fetching by the time the player asks for the video."""
+    title, start}. Returns at once; the torrent starts in the background so
+    it's already fetching by the time the player asks for the video -
+    unless start is false (a copied link), when it waits for the player."""
     payload = request.json or {}
     token = str(payload.get("token", ""))
     if not PLAY_TOKEN_RE.match(token):
@@ -1710,7 +1711,10 @@ def register_play_link():
             link["torrent_hex"] = old["torrent_hex"]
         PLAY_LINKS[token] = link
     save_play_links()
-    stream_log(f"play {token} {link.get('title', '')[:80]!r}")
+    stream_log(f"play {token} {link.get('title', '')[:80]!r}{'' if payload.get('start', True) else ' (link copied - starts when a player opens it)'}")
+    if not payload.get("start", True):
+        # A copied link: nothing downloads until a player really opens it.
+        return jsonify({"ok": True})
 
     def start():
         try:

@@ -3149,6 +3149,7 @@ const PLAYERS = {
   infuse: {
     name: "Infuse",
     icon: "/static/players/infuse.png",
+    canOpen: true,
     sub: "iPhone, iPad, Apple TV and Mac",
     store: "https://apps.apple.com/app/id1136220934",
     // x-success is opened when the player is closed (not on pause) - that's
@@ -3158,6 +3159,7 @@ const PLAYERS = {
   vlc: {
     name: "VLC",
     icon: "/static/players/vlc.png",
+    canOpen: IS_IOS || IS_ANDROID,  // a page can open VLC only on a phone or tablet
     sub: IS_IOS || IS_ANDROID ? "Free, plays almost anything" : "Copies the link - paste it in VLC's Open Network",
     store: IS_ANDROID ? "https://play.google.com/store/apps/details?id=org.videolan.vlc" : "https://apps.apple.com/app/id650377962",
     // Desktop VLC registers no link scheme - the picker copies the URL.
@@ -3244,8 +3246,7 @@ playerModal.addEventListener("click", (e) => {
   if (id === "copy") {
     const s = detailsState, link = s && (s.torrent || primaryRelease()) ? playLink(s.torrent ? null : primaryRelease(), s.torrent) : null;
     if (link) {
-      fetch("/api/play", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: link.token, title: link.title, ...link.source }) }).catch(() => {});
+      registerPlayLink(link, false);
       copyText(link.url, "Play link copied - open it in any player");
     }
     closePlayerPicker();
@@ -3315,22 +3316,29 @@ function playLink(release, torrent) {
 // player opens /played/<token>, which deletes the stream. Both
 // happen inside the tap, before any await: iOS only lets a page open an
 // app from the tap itself.
+// Tells the server what a play link plays. `start` false (a copied link)
+// registers it without downloading anything until a player opens it.
+function registerPlayLink(link, start) {
+  return fetch("/api/play", {
+    method: "POST", keepalive: true, headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token: link.token, title: link.title, start, ...link.source }),
+  }).then(r => r.json()).then(d => { if (d.error) showToast(d.error, true); setTimeout(refresh, 1500); })
+    .catch(() => showToast("Couldn't reach the server", true));
+}
+
 function playRelease(release) {
   const s = detailsState;
   if (!s || (!release && !s.torrent)) return;
   const link = playLink(release, s.torrent);
-  fetch("/api/play", {
-    method: "POST", keepalive: true, headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ token: link.token, title: link.title, ...link.source }),
-  }).then(r => r.json()).then(d => { if (d.error) showToast(d.error, true); setTimeout(refresh, 1500); })
-    .catch(() => showToast("Couldn't reach the server", true));
   const id = currentPlayer();
   const appLink = PLAYERS[id].link(link.url, link.closedUrl);
+  registerPlayLink(link, !!appLink);
   if (appLink) {
     watchAppOpened(id);
     location.href = appLink;
   } else {
-    copyText(link.url, `Link copied - paste it in ${PLAYERS[id].name}'s Open Network`);
+    // Desktop VLC registers no link a page can open - the link is copied.
+    copyText(link.url, `Link copied. In ${PLAYERS[id].name}, choose File > Open Network and paste it`);
   }
 }
 
@@ -3781,7 +3789,7 @@ function renderDetailsBody() {
   const playable = s.torrent || primaryRelease();
   const playerId = currentPlayer();
   actions.push(`<div class="play-split">
-    <button type="button" class="btn-primary btn-pill play-main" data-act="play"${!playable ? " disabled" : ""}>${playerLogo(playerId)}Play in ${escapeHtml(PLAYERS[playerId].name)}</button>
+    <button type="button" class="btn-primary btn-pill play-main" data-act="play"${!playable ? " disabled" : ""}>${playerLogo(playerId)}${PLAYERS[playerId].canOpen ? "Play in" : "Copy link for"} ${escapeHtml(PLAYERS[playerId].name)}</button>
     <button type="button" class="btn-primary btn-pill play-more" data-act="pick-player" title="Choose the player" aria-label="Choose the player">${CHEVRON_DOWN}</button>
   </div>`);
   if (!d.backdrop && !s.playing && !s.loading) {
