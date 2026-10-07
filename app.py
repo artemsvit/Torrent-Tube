@@ -203,8 +203,10 @@ def load_registry():
             else:
                 continue
             if entry.get("stream_cache"):
+                # Its player's connection didn't survive the restart: unless
+                # the player connects again, the never-opened rule clears it.
                 STREAM_CACHE_IDS.add(tid)
-                STREAM_LAST_USED[tid] = time.time()  # a fresh abandon window after a restart
+                STREAM_LAST_USED[tid] = STREAM_STARTED[tid] = time.time()
         except Exception:
             continue
 
@@ -1390,8 +1392,15 @@ STREAM_ABANDON_AFTER = 6 * 3600
 # when it seeks, and a paused one keeps its connection open, so neither
 # trips this.
 STREAM_CLOSED_AFTER = 30
+# Not at once: some players (VLC) close the old connection just before
+# opening the new one when they seek, and pausing drops every peer.
+STREAM_STOP_AFTER = 5
+# Play tapped but the player never connected (the "Open in Infuse?"
+# prompt cancelled, a copied link never pasted, a restart mid-stream).
+STREAM_NEVER_OPENED_AFTER = 180
 STREAM_LAST_CONNECTED = {}  # tid -> when it last had an open response
 STREAM_STOPPED = set()      # cached streams paused because no player is connected
+STREAM_STARTED = {}         # tid -> when its stream started (or was restored)
 
 
 def stream_log(message: str):
@@ -1536,6 +1545,7 @@ def begin_stream(source: dict) -> tuple:
         save_path = str(STREAM_CACHE_DIR)
         tid = add_torrent_file(info, save_path) if info else add_magnet(magnet, save_path)
         STREAM_CACHE_IDS.add(tid)
+        STREAM_STARTED[tid] = time.time()
     STREAM_LAST_USED[tid] = time.time()
     with LOCK:
         handle = HANDLES[tid]
@@ -1612,6 +1622,7 @@ def start_stream():
 # the player remembers its position because the URL is the same.
 PLAY_LINKS_FILE = STATE_DIR / "play_links.json"
 PLAY_LINKS_MAX = 300
+PLAY_LINKS_KEEP = 30 * 86400  # forget a link not played for this long
 PLAY_TOKEN_RE = re.compile(r"^[a-z]-[0-9a-f]{6,64}$")
 PLAY_LOCKS = {}
 
@@ -1627,11 +1638,17 @@ PLAY_LINKS = _load_play_links()
 
 
 def save_play_links():
+    """Only what a link plays (magnet / tracker link / download id, title)
+    goes to disk - not the .torrent kept in memory to restart quickly, so
+    nothing of a watched film's torrent stays behind on disk."""
     with LOCK:
+        cutoff = time.time() - PLAY_LINKS_KEEP
+        for token in [t for t, l in PLAY_LINKS.items() if l.get("at", 0) < cutoff]:
+            PLAY_LINKS.pop(token, None)
         if len(PLAY_LINKS) > PLAY_LINKS_MAX:  # forget the oldest
             for token, _ in sorted(PLAY_LINKS.items(), key=lambda kv: kv[1].get("at", 0))[:len(PLAY_LINKS) - PLAY_LINKS_MAX]:
                 PLAY_LINKS.pop(token, None)
-        data = json.dumps(PLAY_LINKS)
+        data = json.dumps({t: {k: v for k, v in l.items() if k != "torrent_hex"} for t, l in PLAY_LINKS.items()})
     PLAY_LINKS_FILE.write_text(data)
 
 
@@ -1647,11 +1664,12 @@ def resolve_play_link(token: str) -> tuple:
     link = PLAY_LINKS.get(token)
     if not link:
         raise StreamError("Unknown play link", 404)
+    link["at"] = time.time()  # played - keep the link another PLAY_LINKS_KEEP
     with _play_lock(token):
         source = {k: link[k] for k in ("id", "magnet", "download_link", "torrent_hex") if link.get(k)}
         if source.get("download_link") and not source.get("torrent_hex"):
-            # Fetch the .torrent once and keep it - a restart after the
-            # stream is cleared shouldn't depend on the tracker link again.
+            # Fetch the .torrent once and keep it in memory - starting it
+            # again after the stream is cleared needn't hit the tracker.
             try:
                 req = urllib.request.Request(source["download_link"], headers={"User-Agent": "TorrentTube"})
                 with urllib.request.urlopen(req, timeout=25) as resp:
@@ -1776,6 +1794,7 @@ def drop_cached_stream(tid: str):
     # waitress's output buffer, and waitress never times out a connection
     # mid-response - shutting the socket down is what wakes that thread.
     STREAM_LAST_CONNECTED.pop(tid, None)
+    STREAM_STARTED.pop(tid, None)
     STREAM_STOPPED.discard(tid)
     for sock in STREAM_SOCKETS.pop(tid, set()):
         try:
@@ -1844,11 +1863,24 @@ def clean_stream_cache():
             stream_log(f"deleting {tid}: no data taken for {STREAM_ABANDON_AFTER // 3600} h")
             drop_cached_stream(tid)
             dropped = True
-        elif (tid in STREAM_OPENED and not STREAM_SOCKETS.get(tid)
-              and now - STREAM_LAST_CONNECTED.get(tid, now) > STREAM_CLOSED_AFTER):
-            stream_log(f"deleting {tid}: player closed (no connection for {STREAM_CLOSED_AFTER} s)")
-            drop_cached_stream(tid)
-            dropped = True
+        elif tid not in STREAM_OPENED:
+            if now - STREAM_STARTED.get(tid, now) > STREAM_NEVER_OPENED_AFTER:
+                stream_log(f"deleting {tid}: no player connected within {STREAM_NEVER_OPENED_AFTER} s")
+                drop_cached_stream(tid)
+                dropped = True
+        elif not STREAM_SOCKETS.get(tid):
+            gone_for = now - STREAM_LAST_CONNECTED.get(tid, now)
+            if gone_for > STREAM_CLOSED_AFTER:
+                stream_log(f"deleting {tid}: player closed (no connection for {STREAM_CLOSED_AFTER} s)")
+                drop_cached_stream(tid)
+                dropped = True
+            elif gone_for > STREAM_STOP_AFTER and tid not in STREAM_STOPPED:
+                with LOCK:
+                    handle = HANDLES.get(tid)
+                if handle and handle.is_valid():
+                    stream_log(f"stopping {tid}: player has no connection")
+                    STREAM_STOPPED.add(tid)  # player gone - stop downloading
+                    handle.pause()
     if dropped:
         save_registry()
 
@@ -1943,6 +1975,8 @@ def stream_file(tid, index, name):
                     while not handle.have_piece(piece):
                         if not handle.is_valid() or dropped():
                             break
+                        if client_gone():
+                            return  # the player hung up while we waited for the piece
                         if time.time() - waited > STREAM_PIECE_TIMEOUT:
                             return
                         STREAM_LAST_USED[tid] = time.time()  # the player is waiting, not gone
@@ -1978,6 +2012,7 @@ def stream_file(tid, index, name):
     channel = getattr(request.environ.get("waitress.client_disconnected"), "__self__", None)
     sock = getattr(channel, "socket", None)
     ua = request.headers.get("User-Agent", "?")[:80]
+    client_gone = request.environ.get("waitress.client_disconnected") or (lambda: False)
 
     def tracked():
         # Each chunk handed on means the player took the previous one -
@@ -1998,9 +2033,6 @@ def stream_file(tid, index, name):
             STREAM_SOCKETS.get(tid, set()).discard(conn)
             STREAM_LAST_CONNECTED[tid] = time.time()
             stream_log(f"player connection to {tid} closed ({len(STREAM_SOCKETS.get(tid, ()))} open)")
-            if not STREAM_SOCKETS.get(tid) and tid in STREAM_CACHE_IDS and live and handle.is_valid():
-                STREAM_STOPPED.add(tid)  # player gone - stop downloading now
-                handle.pause()
 
     STREAM_LAST_USED[tid] = time.time()
     return Response(tracked(), status=206 if match else 200, headers=headers, direct_passthrough=True)
@@ -2022,4 +2054,8 @@ if __name__ == "__main__":
     # A 4MB output buffer (waitress's default is 16MB) per connection: a
     # player that stops reading is noticed once it fills - see
     # STREAM_LAST_USED - so a smaller one notices a closed player sooner.
-    serve(app, host=host, port=port, threads=24, outbuf_high_watermark=4 * 1024 * 1024)
+    # channel_request_lookahead lets waitress keep reading a connection while
+    # its response runs, so it sees the player hang up even while the
+    # response is waiting on a piece - see client_gone in stream_file.
+    serve(app, host=host, port=port, threads=24, outbuf_high_watermark=4 * 1024 * 1024,
+          channel_request_lookahead=5)

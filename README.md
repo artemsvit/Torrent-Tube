@@ -168,12 +168,17 @@ while it downloads, and nothing is kept afterwards:
    `x-success` (`/played/<token>`), which deletes the stream and its files
    at once and brings you back to Torrent Tube. VLC on iPhone gets the same
    callback. Infuse 8.5 doesn't call it, so the server also watches the
-   player's connections: when the last one closes the download stops at
-   once, and 30 seconds later (no new connection) the stream is deleted. A
-   paused player keeps its connection open, and a seeking one opens a new
-   connection before closing the old, so neither trips this. As a last
-   resort the server deletes a
-   stream after 6 hours without any data taken. `docker logs torrenttube`
+   player's connections: 5 seconds after the last one closes the download
+   stops, and 30 seconds after it (no new connection) the stream is
+   deleted. A paused player keeps its connection open, and a seeking one
+   reconnects within a second or two, so neither trips this. A stream no
+   player ever connects to (the "Open in Infuse?" prompt cancelled, a
+   copied link never used, a restart mid-film) is deleted after 3 minutes.
+   As a last resort the server deletes a
+   stream after 6 hours without any data taken. Nothing of a played film
+   stays on disk: its files go with the stream, and the play link keeps
+   only the magnet or tracker link and title (no .torrent copy) for 30
+   days, so Infuse can resume it. `docker logs torrenttube`
    shows each player connection, disconnection and close callback.
 4. Opening the same title again uses the same link, so the server simply
    starts it again, and Infuse remembers where you stopped.
