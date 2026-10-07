@@ -2420,7 +2420,8 @@ const STATE_LABELS = {
 // same from the server. It keeps downloading either way, and the stream
 // goes when the player is closed.
 function streamActivityText(st) {
-  return st.opened ? "Open in the player" : "Waiting for the player";
+  if (!st.opened) return "Waiting for the player";
+  return st.connections ? "Open in the player" : "Player closed · deleting";
 }
 
 // A stream's row in the Buffering block - the one place it can be seen,

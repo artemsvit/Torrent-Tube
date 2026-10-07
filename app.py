@@ -1383,6 +1383,17 @@ STREAM_LAST_USED = {}      # tid -> when a player last took data from it
 STREAM_OPENED = set()      # tids a player has connected to at least once
 STREAM_SOCKETS = {}        # tid -> sockets of its open responses
 STREAM_ABANDON_AFTER = 6 * 3600
+# Second sign of a closed player, for when its callback never comes: a
+# player that had a connection and now has none for this long. A paused
+# player keeps its connection open, so a pause doesn't trip this.
+STREAM_CLOSED_AFTER = 120
+STREAM_LAST_CONNECTED = {}  # tid -> when it last had an open response
+
+
+def stream_log(message: str):
+    """One line in the container log (docker logs torrenttube) - what the
+    players actually do: connections, disconnections, close callbacks."""
+    print(time.strftime("%Y-%m-%d %H:%M:%S"), "[stream]", message, flush=True)
 STREAM_PLAYING_WINDOW = 30  # took data this recently = "playing"
 
 
@@ -1425,7 +1436,8 @@ def stream_activity(tid: str) -> dict:
     """Is it a cached stream, has a player connected, and is one taking
     data from it right now."""
     playing = tid in STREAM_OPENED and stream_idle_for(tid) < STREAM_PLAYING_WINDOW
-    return {"cached": tid in STREAM_CACHE_IDS, "playing": playing, "opened": tid in STREAM_OPENED}
+    return {"cached": tid in STREAM_CACHE_IDS, "playing": playing, "opened": tid in STREAM_OPENED,
+            "connections": len(STREAM_SOCKETS.get(tid, ()))}
 
 
 def stream_status(tid: str, index: int) -> dict:
@@ -1651,7 +1663,9 @@ def resolve_play_link(token: str) -> tuple:
             if gone and link.get("magnet"):
                 source = {"magnet": link["magnet"]}  # removed from Downloads since - stream it again
         tid, index = begin_stream(source)
-        link["tid"] = tid  # for /played/<token>
+        if link.get("tid") != tid:
+            link["tid"] = tid  # for /played/<token>, after a restart too
+            save_play_links()
         return tid, index
 
 
@@ -1674,6 +1688,7 @@ def register_play_link():
             link["torrent_hex"] = old["torrent_hex"]
         PLAY_LINKS[token] = link
     save_play_links()
+    stream_log(f"play {token} {link.get('title', '')[:80]!r}")
 
     def start():
         try:
@@ -1691,6 +1706,7 @@ def player_closed(token):
     its files - and send the browser that opened this back to the app."""
     link = PLAY_LINKS.get(token) or {}
     tid = link.get("tid") or (token[2:] if token.startswith(("m-", "d-")) else None)
+    stream_log(f"close callback {token} {request.query_string.decode()[:200]!r} from {request.headers.get('User-Agent', '?')[:80]!r}")
     deleted = False
     if tid and tid in STREAM_CACHE_IDS:
         drop_cached_stream(tid)
@@ -1754,10 +1770,11 @@ def drop_cached_stream(tid: str):
     # A player that stopped reading leaves its response's thread blocked in
     # waitress's output buffer, and waitress never times out a connection
     # mid-response - shutting the socket down is what wakes that thread.
+    STREAM_LAST_CONNECTED.pop(tid, None)
     for sock in STREAM_SOCKETS.pop(tid, set()):
         try:
             sock.shutdown(socket.SHUT_RDWR)
-        except OSError:
+        except (OSError, AttributeError):  # AttributeError: a counted non-socket
             pass
     if handle and handle.is_valid():
         if handle.status().has_metadata:
@@ -1818,6 +1835,12 @@ def clean_stream_cache():
     dropped = False
     for tid in list(STREAM_CACHE_IDS):
         if now - STREAM_LAST_USED.get(tid, now) > STREAM_ABANDON_AFTER:
+            stream_log(f"deleting {tid}: no data taken for {STREAM_ABANDON_AFTER // 3600} h")
+            drop_cached_stream(tid)
+            dropped = True
+        elif (tid in STREAM_OPENED and not STREAM_SOCKETS.get(tid)
+              and now - STREAM_LAST_CONNECTED.get(tid, now) > STREAM_CLOSED_AFTER):
+            stream_log(f"deleting {tid}: player has had no connection for {STREAM_CLOSED_AFTER} s")
             drop_cached_stream(tid)
             dropped = True
     if dropped:
@@ -1948,20 +1971,24 @@ def stream_file(tid, index, name):
     # request context is gone.
     channel = getattr(request.environ.get("waitress.client_disconnected"), "__self__", None)
     sock = getattr(channel, "socket", None)
+    ua = request.headers.get("User-Agent", "?")[:80]
 
     def tracked():
         # Each chunk handed on means the player took the previous one -
         # waitress blocks here once its buffer is full and nobody reads.
         STREAM_OPENED.add(tid)
-        if sock is not None:
-            STREAM_SOCKETS.setdefault(tid, set()).add(sock)
+        conn = sock if sock is not None else object()  # counted either way; only a socket can be shut
+        STREAM_SOCKETS.setdefault(tid, set()).add(conn)
+        STREAM_LAST_CONNECTED[tid] = time.time()
+        stream_log(f"player connected to {tid} ({len(STREAM_SOCKETS[tid])} open) bytes={start}- from {ua!r}")
         try:
             for data in generate():
                 STREAM_LAST_USED[tid] = time.time()
                 yield data
         finally:
-            if sock is not None:
-                STREAM_SOCKETS.get(tid, set()).discard(sock)
+            STREAM_SOCKETS.get(tid, set()).discard(conn)
+            STREAM_LAST_CONNECTED[tid] = time.time()
+            stream_log(f"player connection to {tid} closed ({len(STREAM_SOCKETS.get(tid, ()))} open)")
 
     STREAM_LAST_USED[tid] = time.time()
     return Response(tracked(), status=206 if match else 200, headers=headers, direct_passthrough=True)
