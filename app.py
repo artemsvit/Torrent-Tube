@@ -1210,7 +1210,7 @@ def list_torrents():
         items = [(tid, h) for tid, h in HANDLES.items() if h.is_valid() and tid not in STREAM_CACHE_IDS]
         removed = [{"id": r["id"], "name": r["name"]} for r in RECENTLY_REMOVED]
     items.sort(key=lambda pair: pair[1].status().added_time, reverse=True)
-    return jsonify({"torrents": [serialize(tid, h) for tid, h in items], "auto_removed": removed})
+    return jsonify({"torrents": [serialize(tid, h) for tid, h in items], "streams": cached_streams(), "auto_removed": removed})
 
 
 @app.route("/api/torrents/inspect", methods=["POST"])
@@ -1324,6 +1324,9 @@ def remove_torrent(tid):
     if not handle or not handle.is_valid():
         return jsonify({"error": "Unknown torrent"}), 404
     delete_files = request.args.get("delete_files") == "1"
+    if delete_files:  # an open stream of it must stop too - see dropped()
+        for key in [k for k in STREAM_FILES if k[0] == tid]:
+            STREAM_FILES.pop(key, None)
     ses.remove_torrent(handle, lt.session.delete_files if delete_files else 0)
     save_registry()
     return jsonify({"ok": True})
@@ -1402,12 +1405,24 @@ def rush_pieces(handle, first: int, last: int):
             handle.set_piece_deadline(piece, 300 + n * 150)
 
 
+def stream_activity(tid: str) -> dict:
+    """Is a player reading this stream right now, and - for a cached one
+    nothing is reading - how many seconds until it's deleted."""
+    cached = tid in STREAM_CACHE_IDS
+    playing = STREAM_READERS.get(tid, 0) > 0
+    clears_in = None
+    if cached and not playing:
+        idle = max(5, LIMITS.get("stream_cache_minutes", 60)) * 60
+        clears_in = max(0, int(idle - (time.time() - STREAM_LAST_USED.get(tid, time.time()))))
+    return {"cached": cached, "playing": playing, "clears_in": clears_in}
+
+
 def stream_status(tid: str, index: int) -> dict:
     with LOCK:
         handle = HANDLES.get(tid)
     entry = STREAM_FILES.get((tid, index))
     if not handle or not handle.is_valid():
-        return {"ready": bool(entry), "done": True, "progress": 100.0}
+        return {"ready": bool(entry), "done": True, "progress": 100.0, "gone": not entry, **stream_activity(tid)}
     st = handle.status()
     ti = handle.torrent_file()
     size = ti.files().file_size(index)
@@ -1422,7 +1437,32 @@ def stream_status(tid: str, index: int) -> dict:
         "download_rate": st.download_rate,
         "num_peers": st.num_peers,
         "num_seeds": st.num_seeds,
+        **stream_activity(tid),
     }
+
+
+def cached_streams() -> list:
+    """The streams in the cache, for the Downloads list - they aren't
+    downloads, but they need to be visible to be stopped."""
+    out = []
+    with LOCK:
+        entries = [(tid, HANDLES.get(tid)) for tid in STREAM_CACHE_IDS]
+    for tid, h in entries:
+        if not h or not h.is_valid():
+            continue
+        st = h.status()
+        item = {"id": tid, "name": st.name or "Fetching metadata...", "file": None, "progress": 0.0,
+                "download_rate": st.download_rate, "num_peers": st.num_peers, **stream_activity(tid)}
+        if st.has_metadata:
+            ti = h.torrent_file()
+            index = next((k[1] for k in STREAM_FILES if k[0] == tid), None)
+            if index is None:
+                index = pick_video_file(ti)  # STREAM_FILES doesn't survive a restart
+            size = ti.files().file_size(index)
+            item.update(file=index, name=Path(ti.files().file_path(index)).name,
+                        progress=round(h.file_progress()[index] / size * 100, 1) if size else 0.0)
+        out.append(item)
+    return out
 
 
 @app.route("/api/stream", methods=["POST"])
@@ -1550,12 +1590,20 @@ def keep_stream(tid):
 
 @app.route("/api/stream/<tid>", methods=["DELETE"])
 def stop_stream(tid):
-    """Drop a cached stream and its data now instead of waiting for the
-    idle timer. A stream of something in Downloads is left alone."""
+    """Stop a stream. A cached one is dropped with its data now instead of
+    waiting for the idle timer; a stream of something in Downloads just
+    goes back to downloading normally (its files are the user's)."""
     if tid in STREAM_CACHE_IDS:
         drop_cached_stream(tid)
         save_registry()
-    return jsonify({"ok": True})
+        return jsonify({"ok": True, "deleted": True})
+    with LOCK:
+        handle = HANDLES.get(tid)
+    if handle and handle.is_valid():
+        handle.unset_flags(lt.torrent_flags.sequential_download)
+        if tid not in PAUSED_IDS:
+            handle.set_flags(lt.torrent_flags.auto_managed)
+    return jsonify({"ok": True, "deleted": False})
 
 
 def clean_stream_cache():
@@ -1643,9 +1691,17 @@ def stream_file(tid, index, name):
         if start >= size or start > end:
             return Response(status=416, headers={"Content-Range": f"bytes */{size}"})
 
+    def dropped():
+        # Stopped (or cleared by the idle timer) while this response was
+        # open: its files are gone, so end the response rather than serve
+        # a deleted file - an open handle on it would also keep the space.
+        return live and not handle.is_valid() and (tid, index) not in STREAM_FILES
+
     def generate():
         pos = start
         while pos <= end:
+            if dropped():
+                return
             if live and handle.is_valid():
                 piece, _ = _file_pieces(ti, index, pos, pos + 1)
                 piece_end = min((piece + 1) * ti.piece_length() - fs.file_offset(index), size)
@@ -1665,6 +1721,8 @@ def stream_file(tid, index, name):
                 with open(path, "rb") as f:
                     f.seek(pos)
                     while pos < chunk_end:
+                        if dropped():
+                            return
                         data = f.read(min(STREAM_CHUNK, chunk_end - pos))
                         if not data:
                             return

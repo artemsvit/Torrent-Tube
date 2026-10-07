@@ -161,10 +161,15 @@ it in that app, so nothing is kept unless you ask for it:
 2. When the start is buffered, tap **Open in Infuse**. The app plays the
    stream URL and can seek in it. It handles MKV, HEVC, every audio track
    and subtitle, which a browser can't.
-3. Once no player has read the stream for a while (Settings > Playback >
-   *Clear a stream after*, 1 hour by default), the server deletes it.
-   **Keep** (or Download on the same release) moves it to the folder
-   picked beside Download instead, and it becomes a normal download.
+3. **Stop** deletes the stream and its files at once. A stream also shows
+   at the top of Downloads (with how long until it's deleted), so it can be
+   stopped there after the popup is closed. Stopping a stream of something
+   already in Downloads only ends streaming - that download continues.
+4. Without Stop, the server deletes a stream once no player has read it
+   for a while (Settings > Playback > *Clear a stream after*, 1 hour by
+   default, 5 minutes at the least). **Save** (or Download on the same
+   release) moves it to the folder picked beside Download instead, and it
+   becomes a normal download.
 
 The **▾** beside Play picks the player. The choice is saved on each
 device, so a phone can use Infuse and a computer VLC. Infuse is offered on
@@ -185,10 +190,10 @@ away and seek.
 | Endpoint | What it does |
 |---|---|
 | `POST /api/stream` | Body `{"magnet": ...}`, `{"download_link": ...}` or `{"id": <download id>}`. Starts (or reuses) the torrent in streaming mode and returns `{id, file, name, size, url, cached, ready, progress, ...}`. A new torrent goes to the stream cache (`cached: true`); `id` streams something already in Downloads. |
-| `GET /api/stream/<id>/<file>` | Buffering status: `ready` (the start is buffered), `head_progress`, `progress`, `download_rate`, `num_peers`, `done`. |
+| `GET /api/stream/<id>/<file>` | Buffering status: `ready` (the start is buffered), `head_progress`, `progress`, `download_rate`, `num_peers`, `done`, plus `playing` (a player is reading it) and `clears_in` (seconds until an idle cached stream is deleted). |
 | `GET /stream/<id>/<file>/<name>` | The video itself, with HTTP Range requests (`206 Partial Content`). |
 | `POST /api/stream/<id>/keep` | Body `{"category": ...}`. Moves a cached stream to that folder and makes it a normal download. |
-| `DELETE /api/stream/<id>` | Stops a cached stream and deletes its data now. |
+| `DELETE /api/stream/<id>` | Stops a stream. A cached one is deleted with its data now (`deleted: true`); a download being streamed goes back to downloading normally. |
 
 AVPlayer (Apple's native player) can't open MKV, which is what most
 releases are. A native app needs a player that can (VLCKit, KSPlayer,

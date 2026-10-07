@@ -918,6 +918,9 @@
      everything else, so it actually matches the app's own design instead
      of the browser's stock alert styling. */
   .confirm-box { max-width: 340px; }
+  .confirm-check { display: flex; align-items: center; gap: 9px; margin: -4px 0 18px; font-size: 13.5px; cursor: pointer; }
+  .confirm-check[hidden] { display: none; }
+  .confirm-check input { width: 18px; height: 18px; margin: 0; accent-color: var(--danger); flex-shrink: 0; }
   .confirm-text {
     font-size: 13.5px;
     line-height: 1.5;
@@ -1882,6 +1885,7 @@
         <div class="settings-row">
           <div class="settings-row-label">Clear a stream after<button type="button" class="info-tip" data-tip="A stream is deleted from the server once no player has read it for this long. Keep it to save it to a folder instead">i</button></div>
           <select class="inline-category-select" id="settingsStreamCache">
+            <option value="5">5 minutes</option>
             <option value="15">15 minutes</option>
             <option value="60">1 hour</option>
             <option value="360">6 hours</option>
@@ -2029,6 +2033,7 @@
   <div class="modal-box confirm-box">
     <div class="modal-title" id="confirmModalTitle">Are you sure?</div>
     <p class="confirm-text" id="confirmModalText"></p>
+    <label class="confirm-check" id="confirmModalCheckRow" hidden><input type="checkbox" id="confirmModalCheck"><span id="confirmModalCheckLabel"></span></label>
     <div class="modal-actions">
       <button class="btn-secondary" id="confirmModalCancel">Cancel</button>
       <button class="btn-primary btn-pill" id="confirmModalOk">OK</button>
@@ -2097,11 +2102,20 @@ const confirmModalTitle = document.getElementById("confirmModalTitle");
 const confirmModalText = document.getElementById("confirmModalText");
 const confirmModalCancel = document.getElementById("confirmModalCancel");
 const confirmModalOk = document.getElementById("confirmModalOk");
+const confirmModalCheckRow = document.getElementById("confirmModalCheckRow");
+const confirmModalCheck = document.getElementById("confirmModalCheck");
+const confirmModalCheckLabel = document.getElementById("confirmModalCheckLabel");
 let confirmResolve = null;
 
 // Promise-based stand-in for the native confirm() - same centered overlay
 // as every other modal in this app instead of the browser's own styling.
-function showConfirm({ title, text, confirmLabel = "OK", danger = false }) {
+// `check` adds a checkbox (read confirmModalCheck.checked after OK);
+// `onCheck` lets the caller restyle the dialog as it's ticked.
+function showConfirm({ title, text, confirmLabel = "OK", danger = false, check = null, checked = false, onCheck = null }) {
+  confirmModalCheckRow.hidden = !check;
+  confirmModalCheckLabel.textContent = check || "";
+  confirmModalCheck.checked = !!checked;
+  confirmModalCheck.onchange = onCheck ? () => onCheck(confirmModalCheck.checked) : null;
   confirmModalTitle.textContent = title;
   confirmModalText.textContent = text || "";
   confirmModalText.style.display = text ? "" : "none";
@@ -2382,14 +2396,19 @@ async function resumeTorrent(id) {
   await fetch(`/api/torrents/${id}/resume`, { method: "POST" });
   refresh();
 }
+// A checkbox, not only Shift+click, so files can be deleted from a phone.
 async function removeTorrent(id, deleteFiles) {
-  const ok = await showConfirm({
-    title: deleteFiles ? "Remove torrent and delete its files?" : "Remove torrent from the list?",
-    text: deleteFiles ? "The downloaded files will be permanently deleted." : "The downloaded files are kept on disk.",
-    confirmLabel: deleteFiles ? "Delete" : "Remove",
-    danger: deleteFiles,
-  });
+  const look = (del) => {
+    confirmModalTitle.textContent = del ? "Remove torrent and delete its files?" : "Remove torrent from the list?";
+    confirmModalText.textContent = del ? "The downloaded files will be permanently deleted." : "The downloaded files are kept on disk.";
+    confirmModalOk.textContent = del ? "Delete" : "Remove";
+    confirmModalOk.classList.toggle("is-danger", del);
+  };
+  const shown = showConfirm({ title: "", text: " ", check: "Also delete the downloaded files", checked: deleteFiles, onCheck: look });
+  look(deleteFiles);
+  const ok = await shown;
   if (!ok) return;
+  deleteFiles = confirmModalCheck.checked;
   await fetch(`/api/torrents/${id}?delete_files=${deleteFiles ? "1" : "0"}`, { method: "DELETE" });
   refresh();
 }
@@ -2417,10 +2436,43 @@ const STATE_LABELS = {
   seeding: "Seeding",
 };
 
-function render(torrents) {
-  countEl.textContent = torrents.length;
-  listEmptyEl.style.display = torrents.length ? "none" : "block";
+// "Playing", or how long until an idle cached stream is deleted.
+function streamActivityText(st) {
+  if (st.playing) return "Playing";
+  if (st.clears_in == null) return "";
+  const mins = Math.ceil(st.clears_in / 60);
+  return `Not playing · deleted in ${mins >= 60 ? `${Math.round(mins / 60)} h` : `${mins} min`}`;
+}
+
+// Streams in the cache sit at the top of Downloads - not downloads, but
+// the one place they can be seen and stopped once the popup is closed.
+function renderStreamItem(st) {
+  const div = document.createElement("div");
+  div.className = "item is-stream";
+  const sub = ["Streaming", `${st.progress}%`, streamActivityText(st)].filter(Boolean).join(" · ");
+  const stats = [];
+  if (st.download_rate > 0) stats.push(`<span>${ICONS.down}${formatRate(st.download_rate)}</span>`);
+  if (st.num_peers > 0) stats.push(`<span>${ICONS.peers}${st.num_peers} peers</span>`);
+  div.innerHTML = `
+    <div class="item-top">
+      <div class="item-icon">${ICONS.play}</div>
+      <div class="item-meta">
+        <div class="item-title">${escapeHtml(st.name)}</div>
+        <div class="item-sub">${escapeHtml(sub)}</div>
+      </div>
+      <div class="item-actions"><button class="action-btn danger stop-stream-btn" title="Stop and delete it" aria-label="Stop and delete">${CLOSE_ICON}</button></div>
+    </div>
+    <div class="progress-track"><div class="progress-fill" style="width:${st.progress}%"></div></div>
+    ${stats.length ? `<div class="item-stats">${stats.join("")}</div>` : ""}`;
+  div.querySelector(".stop-stream-btn").addEventListener("click", () => stopStreamById(st.id));
+  return div;
+}
+
+function render(torrents, streams = []) {
+  countEl.textContent = torrents.length + streams.length;
+  listEmptyEl.style.display = torrents.length || streams.length ? "none" : "block";
   listEl.querySelectorAll(".item").forEach(el => el.remove());
+  streams.forEach(st => listEl.appendChild(renderStreamItem(st)));
 
   torrents.forEach(t => {
     const div = document.createElement("div");
@@ -2449,7 +2501,7 @@ function render(torrents) {
         ? `<button class="action-btn resume-btn" title="Resume">${ICONS.play}</button>`
         : `<button class="action-btn pause-btn" title="Pause">${ICONS.pause}</button>`;
     }
-    actionsHtml += `<button class="action-btn danger remove-btn" title="Remove (Shift+click also deletes the downloaded files)">${ICONS.trash}</button>`;
+    actionsHtml += `<button class="action-btn danger remove-btn" title="Remove (or delete its files)">${ICONS.trash}</button>`;
 
     div.innerHTML = `
       <div class="item-top">
@@ -2495,6 +2547,7 @@ async function refresh() {
     const res = await fetch("/api/torrents");
     const data = await res.json();
     const torrents = data.torrents || [];
+    currentStreams = data.streams || [];
     announceAutoRemoved(data.auto_removed || []);
     // The view-toggle button's badge reflects the download count regardless
     // of which screen is showing, so this keeps polling either way - only
@@ -2505,7 +2558,7 @@ async function refresh() {
     renderViewToggleBtn();
     currentTorrents = torrents;
     clearAllBtn.disabled = torrents.length === 0;
-    if (!discoverMode) render(torrents);
+    if (!discoverMode) render(torrents, currentStreams);
   } catch (e) {
     // Transient network hiccup; the next poll will retry.
   }
@@ -2519,6 +2572,7 @@ async function refresh() {
 
 let currentTorrentCount = 0;
 let currentTorrents = [];
+let currentStreams = [];
 
 const DISCOVER_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>`;
 
@@ -3256,6 +3310,7 @@ function pollStream(s) {
     try {
       const status = await fetch(`/api/stream/${encodeURIComponent(s.stream.id)}/${s.stream.file}`).then(r => r.json());
       if (detailsState !== s || !s.stream) return;
+      if (status.gone) { s.stream = null; renderDetailsBody(); return; }
       const wasReady = s.stream.ready;
       Object.assign(s.stream, status);
       // Ready flips the Open button on - redraw the panel; otherwise just
@@ -3271,9 +3326,10 @@ function streamStatusText(st) {
   if (st.done) return "Fully downloaded · ready";
   const peers = st.num_peers ? ` · ${st.num_peers} peer${st.num_peers === 1 ? "" : "s"}` : " · looking for peers";
   const speed = st.download_rate ? ` · ${formatSpeed(Math.round(st.download_rate / 1024))}` : "";
-  return st.ready
+  const activity = streamActivityText(st);
+  return (st.ready
     ? `Ready · ${st.progress}% downloaded${speed}${peers}`
-    : `Buffering the start… ${st.head_progress || 0}%${speed}${peers}`;
+    : `Buffering the start… ${st.head_progress || 0}%${speed}${peers}`) + (activity ? ` · ${activity}` : "");
 }
 
 function updateWatchStatus(st) {
@@ -3312,8 +3368,8 @@ function renderWatchPanel(s) {
     </div>
     <div class="dt-watch-actions">
       ${open}
-      ${st.cached ? `<button type="button" class="btn-secondary" data-act="stream-keep" title="Download it to the folder picked beside Download, instead of clearing it">${ICONS.download}Keep</button>
-      <button type="button" class="action-btn" data-act="stream-stop" title="Stop and clear it now" aria-label="Stop and clear">${CLOSE_ICON}</button>` : ""}
+      ${st.cached ? `<button type="button" class="btn-secondary" data-act="stream-keep" title="Save it as a download in the folder picked beside Download, instead of deleting it">${ICONS.download}Save</button>` : ""}
+      <button type="button" class="btn-secondary" data-act="stream-stop" title="${st.cached ? "Stop and delete the temporary file now" : "Stop streaming - the download itself continues"}">${CLOSE_ICON}Stop</button>
     </div>
   </div>`;
 }
@@ -3353,11 +3409,25 @@ async function keepStream() {
 async function stopStream() {
   const s = detailsState, st = s && s.stream;
   if (!st || !st.id) return;
-  clearTimeout(s.streamTimer);
-  s.stream = null;
-  renderDetailsBody();
-  try { await fetch(`/api/stream/${encodeURIComponent(st.id)}`, { method: "DELETE" }); } catch (e) {}
-  showToast("Stream stopped and cleared");
+  await stopStreamById(st.id);
+}
+
+// Stops a stream from its panel or its Downloads row. A cached stream is
+// deleted with its files; a download being streamed keeps downloading.
+async function stopStreamById(id) {
+  const s = detailsState;
+  if (s && s.stream && s.stream.id === id) {
+    clearTimeout(s.streamTimer);
+    s.stream = null;
+    renderDetailsBody();
+  }
+  try {
+    const data = await fetch(`/api/stream/${encodeURIComponent(id)}`, { method: "DELETE" }).then(r => r.json());
+    showToast(data.deleted ? "Stopped - the temporary file is deleted" : "Stopped - the download itself continues in Downloads");
+  } catch (e) {
+    showToast("Couldn't stop it", true);
+  }
+  refresh();
 }
 const RELEASES_SHOWN = 5;
 
