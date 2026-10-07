@@ -1496,29 +1496,42 @@
     font-size: 11px;
   }
   .settings-box .category-select { width: 100%; }
-  .settings-select { min-width: 0; max-width: 220px; text-overflow: ellipsis; }
-
-  .settings-text-input {
+  /* Every field in Settings is one size: the URL and key inputs match the
+     drop-downs (TMDB language) - same width, height, pill and font, text
+     and placeholder from the left. ".settings-box input" so it beats the
+     search bar's input[type="text"] rule, which the URL field fell under. */
+  .settings-box .settings-select,
+  .settings-box input.settings-text-input {
+    box-sizing: border-box;
+    width: 220px;
+    max-width: 100%;
     min-width: 0;
-    flex: 1;
-    max-width: 220px;
-    padding: 7px 10px;
-    border-radius: var(--radius-sm);
+    height: 35px;
+    flex: 0 1 auto;
+    text-overflow: ellipsis;
+  }
+  .settings-box input.settings-text-input {
+    padding: 0 14px;
+    border-radius: var(--radius-pill);
     border: 1px solid var(--border-strong);
     background: var(--surface);
     color: var(--text);
     font-size: 12.5px;
-    font-family: ui-monospace, "SF Mono", Menlo, monospace;
-    text-align: right;
+    font-weight: 600;
+    font-family: inherit;
+    text-align: left;
     outline: none;
     transition: border-color 0.15s;
   }
-  .settings-text-input::placeholder { color: var(--text-tertiary); font-family: inherit; }
-  .settings-text-input:hover { border-color: var(--accent); }
-  .settings-text-input:focus {
+  .settings-box input.settings-text-input::placeholder { color: var(--text-tertiary); font-weight: 500; }
+  .settings-box input.settings-text-input:hover { border-color: var(--accent); }
+  .settings-box input.settings-text-input:focus {
     border-color: var(--accent);
     box-shadow: 0 0 0 4px var(--accent-soft);
-    text-align: left;
+  }
+  @media (max-width: 480px) {
+    /* iOS zooms into an input under 16px on focus. */
+    .settings-box input.settings-text-input { font-size: 16px; }
   }
 
   /* A small "i" badge carrying the explanation as a toast on tap/click
@@ -1592,6 +1605,27 @@
   }
   .status-badge.is-on { color: var(--success); background: rgba(31, 157, 75, 0.12); }
   .status-badge.is-off { color: var(--text-tertiary); background: var(--border); }
+  .status-badge.is-warn { color: #ff8f00; background: rgba(255, 143, 0, 0.14); }
+
+  /* Settings > Players: a card per player - its status on this device,
+     where to get it, and for VLC on a computer its helper's command. */
+  .player-card { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px; margin-bottom: 10px; }
+  .player-card .status-badge.is-on::before, .player-card .status-badge.is-warn::before {
+    width: auto; height: auto; border-radius: 0; background: none; font-weight: 800;
+  }
+  .player-card .status-badge.is-on::before { content: "✓"; }
+  .player-card .status-badge.is-warn::before { content: "!"; }
+  .player-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .player-card-head .player-logo { width: 32px; height: 32px; border-radius: 8px; }
+  .player-card-name { font-size: 14px; font-weight: 600; flex: 1; }
+  .player-card-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; padding: 5px 0; }
+  .player-card-links { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 4px; }
+  .player-card-links a { font-size: 12.5px; font-weight: 600; color: var(--accent); text-decoration: none; }
+  .player-card-links a:hover { text-decoration: underline; }
+  .helper-block { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+  .helper-block-title { font-size: 13px; font-weight: 600; }
+  .helper-block .setup-text { margin: 2px 0 8px; font-size: 12.5px; }
+  .helper-block .dt-link-btn { margin-top: 8px; }
 
   /* ---------- Sliders (download/upload speed) ---------- */
 
@@ -1738,13 +1772,15 @@
   .category-badge {
     display: inline-flex;
     align-items: center;
-    font-size: 11.5px;
+    font-size: 12px;
     font-weight: 600;
+    line-height: 1.3;
     color: var(--accent);
     background: var(--accent-soft);
     border-radius: var(--radius-pill);
-    padding: 1px 9px;
+    padding: 5px 12px;
   }
+  #settingsCategories { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 
   @media (max-width: 480px) {
     /* The subtitle just repeats what the placeholder text already says -
@@ -1900,6 +1936,7 @@
     <div class="settings-tabs" id="settingsTabs">
       <button type="button" class="settings-tab is-active" data-tab="general">General</button>
       <button type="button" class="settings-tab" data-tab="server">Server</button>
+      <button type="button" class="settings-tab" data-tab="players">Players</button>
     </div>
 
     <div class="settings-tab-panel" data-panel="general">
@@ -1908,18 +1945,6 @@
         <div class="settings-row">
           <div class="settings-row-label">Default folder</div>
           <select class="inline-category-select" id="settingsDefaultCategory"></select>
-        </div>
-      </div>
-
-      <div class="settings-section">
-        <div class="section-label">Playback</div>
-        <div class="settings-row">
-          <div class="settings-row-label">Default player<button type="button" class="info-tip" data-tip="The app the Play button opens. The ▾ beside Play changes it too">i</button></div>
-          <select class="inline-category-select" id="settingsPlayer"></select>
-        </div>
-        <div class="settings-row" id="settingsVlcHelperRow" hidden>
-          <div class="settings-row-label">VLC helper<button type="button" class="info-tip" data-tip="Lets Play open VLC on this computer, like Infuse. Install once per computer">i</button></div>
-          <button type="button" class="btn-secondary" id="settingsVlcHelper">Set up</button>
         </div>
       </div>
 
@@ -2030,6 +2055,22 @@
           <div class="settings-row-label">TMDB language<button type="button" class="info-tip" data-tip="Language for titles and descriptions from TMDB">i</button></div>
           <select class="inline-category-select settings-select" id="settingsTmdbLanguage"></select>
         </div>
+      </div>
+    </div>
+
+    <div class="settings-tab-panel" data-panel="players" hidden>
+      <div class="settings-section">
+        <div class="section-label">Default player</div>
+        <div class="settings-row">
+          <div class="settings-row-label">Play opens<button type="button" class="info-tip" data-tip="The app the Play button opens. The ▾ beside Play changes it too">i</button></div>
+          <select class="inline-category-select" id="settingsPlayer"></select>
+        </div>
+      </div>
+      <div class="settings-section">
+        <div class="section-label">On this device</div>
+        <div class="player-card" id="playerCardInfuse"></div>
+        <div class="player-card" id="playerCardVlc"></div>
+        <p class="player-note">A web page can't see which apps are installed, so a player gets its ✓ once it has opened from here. On a computer, VLC's comes from its helper's installer.</p>
       </div>
     </div>
 
@@ -2896,7 +2937,7 @@ function renderSettings() {
   settingsDownloadDir.textContent = lastConfig.download_dir || "—";
   settingsCategories.innerHTML = currentCategories
     .map(c => `<span class="category-badge">${escapeHtml(c)}</span>`)
-    .join(" ");
+    .join("");
 
   settingsSearch.innerHTML = lastConfig.search_enabled
     ? `<span class="status-badge is-on">Enabled${lastConfig.search_indexer ? ` &middot; ${escapeHtml(lastConfig.search_indexer)}` : ""}</span>`
@@ -3054,6 +3095,7 @@ function switchSettingsTab(tabId) {
     btn.classList.toggle("is-active", btn.dataset.tab === tabId));
   settingsModal.querySelectorAll(".settings-tab-panel").forEach(panel =>
     panel.hidden = panel.dataset.panel !== tabId);
+  if (tabId === "players") watchPlayersTab();
 }
 
 async function openSettings() {
@@ -3076,7 +3118,7 @@ settingsTabs.addEventListener("click", e => {
   if (btn) switchSettingsTab(btn.dataset.tab);
 });
 settingsDefaultCategory.addEventListener("change", () => rememberCategory(settingsDefaultCategory.value));
-settingsPlayer.addEventListener("change", () => rememberPlayer(settingsPlayer.value));
+settingsPlayer.addEventListener("change", () => { rememberPlayer(settingsPlayer.value); renderPlayersTab(); });
 
 // A native title-attribute tooltip never fires on touch, so the "i" badges
 // are buttons that surface their hint as a toast instead - works the same
@@ -3545,7 +3587,10 @@ function renderVlcHelper(installed, vlc) {
 }
 
 function markVlcHelperInstalled(vlc = null) {
-  try { localStorage.setItem("torrenttube-vlc-helper", "1"); } catch (e) {}
+  try {
+    localStorage.setItem("torrenttube-vlc-helper", "1");
+    if (vlc !== null) localStorage.setItem("torrenttube-vlc-found", vlc ? "1" : "0");
+  } catch (e) {}
   clearInterval(helperPoll);
   renderVlcHelper(true, vlc);
   if (detailsState) renderDetailsBody();
@@ -3588,8 +3633,94 @@ helperDone.addEventListener("click", () => {
   if (then) then();
 });
 helperModal.addEventListener("click", e => { if (e.target === helperModal) closeVlcHelper(); });
-document.getElementById("settingsVlcHelperRow").hidden = !VLC_HELPER_OS;
-document.getElementById("settingsVlcHelper").addEventListener("click", () => openVlcHelper());
+
+// ---------- Settings > Players ----------
+// What this device can tell: an app gets ✓ once it has opened from here;
+// VLC on a computer from its helper's installer, which also reports
+// whether it found VLC. The helper's uninstaller reports too, so the card
+// swaps the remove command for the install one by itself.
+function lsGet(name) { try { return localStorage.getItem(name); } catch (e) { return null; } }
+
+function vlcHelperUninstallCommand() {
+  const url = `${location.origin}/helper/${VLC_HELPER_OS === "mac" ? "vlc-mac-uninstall.sh" : "vlc-windows-uninstall.ps1"}?k=${vlcHelperKey()}`;
+  return VLC_HELPER_OS === "mac" ? `curl -fsSL "${url}" | sh` : `irm "${url}" | iex`;
+}
+
+function badge(state, text) {
+  return `<span class="status-badge ${state}">${escapeHtml(text)}</span>`;
+}
+
+let playersTabShown = "";
+function renderPlayersTab() {
+  const def = currentPlayer();
+  // Redrawn only when something changed - the poll calls this every 2s,
+  // and a redraw would drop a selection in the command box.
+  const state = [def, vlcHelperInstalled(), lsGet("torrenttube-vlc-found"), lsGet("torrenttube-opened-infuse"), lsGet("torrenttube-opened-vlc")].join("|");
+  if (state === playersTabShown && document.getElementById("playerCardVlc").innerHTML) return;
+  playersTabShown = state;
+  const links = list => `<div class="player-card-links">${list.map(([label, href]) =>
+    `<a href="${escapeHtml(href)}" target="_blank" rel="noopener">${escapeHtml(label)}</a>`).join("")}</div>`;
+  const head = id => `<div class="player-card-head"><img class="player-logo" src="${PLAYERS[id].icon}" alt="" width="32" height="32">
+    <div class="player-card-name">${escapeHtml(PLAYERS[id].name)}</div>${id === def ? badge("is-on", "Default") : ""}</div>`;
+
+  const apple = IS_IOS || IS_MAC;
+  const infuseOpened = lsGet("torrenttube-opened-infuse") === "1";
+  document.getElementById("playerCardInfuse").innerHTML = head("infuse") + `
+    <div class="player-card-row"><span>Infuse app</span>${!apple ? badge("is-off", "Apple devices only")
+      : infuseOpened ? badge("is-on", "Opens on this device") : badge("is-off", "Not checked yet")}</div>
+    ${links(GET_APP.infuse.links)}`;
+
+  const helperInstalled = vlcHelperInstalled();
+  const vlcFound = lsGet("torrenttube-vlc-found");
+  const vlcOpened = lsGet("torrenttube-opened-vlc") === "1";
+  const vlcBadge = vlcFound === "1" || vlcOpened ? badge("is-on", "Installed")
+    : vlcFound === "0" ? badge("is-warn", "Not found") : badge("is-off", "Not checked yet");
+  let helper = "";
+  if (VLC_HELPER_OS) {
+    const terminal = VLC_HELPER_OS === "mac" ? "Terminal" : "PowerShell";
+    const cmd = helperInstalled ? vlcHelperUninstallCommand() : vlcHelperCommand();
+    helper = `
+      <div class="player-card-row"><span>Torrent Tube helper</span>${helperInstalled ? badge("is-on", "Installed") : badge("is-off", "Not installed")}</div>
+      <div class="helper-block">
+        <div class="helper-block-title">${helperInstalled ? "Remove the helper" : "Install the helper"}</div>
+        <div class="setup-text">${helperInstalled
+          ? `Paste in ${terminal} and press Return. VLC itself stays.`
+          : `Lets Play open VLC on this computer, like Infuse. Paste in ${terminal} and press Return.`}</div>
+        <div class="helper-command"><code>${escapeHtml(cmd)}</code><button type="button" class="btn-secondary" data-copy="${escapeHtml(cmd)}">Copy</button></div>
+        ${helperInstalled ? "" : `<button type="button" class="dt-link-btn" data-act="vlc-setup">Step-by-step setup</button>`}
+      </div>`;
+  }
+  document.getElementById("playerCardVlc").innerHTML = head("vlc") + `
+    <div class="player-card-row"><span>VLC app</span>${vlcBadge}</div>
+    ${helper}
+    ${links(GET_APP.vlc.links)}`;
+}
+
+let playersPoll = null;
+function watchPlayersTab() {
+  clearInterval(playersPoll);
+  renderPlayersTab();
+  if (!VLC_HELPER_OS) return;
+  playersPoll = setInterval(async () => {
+    const panel = settingsModal.querySelector('[data-panel="players"]');
+    if (!settingsModal.classList.contains("is-open") || panel.hidden) { clearInterval(playersPoll); return; }
+    try {
+      const d = await fetch(`/api/helper/${vlcHelperKey()}`).then(r => r.json());
+      if (!d.known) return;  // nothing said since the server started - keep what this browser knows
+      try {
+        if (d.installed) localStorage.setItem("torrenttube-vlc-helper", "1");
+        else localStorage.removeItem("torrenttube-vlc-helper");
+        if (d.vlc !== null) localStorage.setItem("torrenttube-vlc-found", d.vlc ? "1" : "0");
+      } catch (e) {}
+      renderPlayersTab();
+    } catch (e) {}
+  }, 2000);
+}
+settingsModal.addEventListener("click", (e) => {
+  const copy = e.target.closest("[data-copy]");
+  if (copy) copyText(copy.dataset.copy, "Command copied");
+  if (e.target.closest('[data-act="vlc-setup"]')) openVlcHelper();
+});
 
 // ---------- A player that didn't open ----------
 // A page can't see installed apps, only that the app didn't open - then
@@ -3670,7 +3801,10 @@ function watchAppOpened(id, retry) {
     document.removeEventListener("visibilitychange", onHide);
     window.removeEventListener("pagehide", onHide);
     window.removeEventListener("blur", onBlur);
-    if (left || document.hidden) return;
+    if (left || document.hidden) {
+      try { localStorage.setItem(`torrenttube-opened-${id}`, "1"); } catch (e) {}  // Settings > Players
+      return;
+    }
     if (id === "vlc" && VLC_HELPER_OS) openVlcHelper(retry);
     else openGetApp(id, retry);
   }, 5000);

@@ -188,9 +188,23 @@ player", "Open in the player", then "Player closed · stopped, deleting"), with 
 button to keep it as a download in your default folder. Download on the
 same release does the same.
 
-The **▾** beside Play (or Settings > Playback > *Default player*) picks the
+The **▾** beside Play (or Settings > Players > *Play opens*) picks the
 player for the whole app - Infuse unless changed. A ▶ on each release row
 plays that release.
+
+**Settings > Players** shows each player's status on this device - ✓ once
+it has opened from here, and for VLC on a computer its helper ✓ - with
+official download links, and the helper's remove command (or, once it's
+removed, its install command). The uninstaller reports back like the
+installer, so the card switches by itself:
+
+```bash
+curl -fsSL "http://<server>:5058/helper/vlc-mac-uninstall.sh" | sh
+```
+
+```powershell
+irm "http://<server>:5058/helper/vlc-windows-uninstall.ps1" | iex
+```
 
 If the player doesn't open within a few seconds - most likely it isn't
 installed - Torrent Tube says so, with its official download links
@@ -201,8 +215,8 @@ videolan.org), **Try again** and **Other player**.
 
 VLC opens directly on iPhone, iPad and Android. Desktop VLC registers no
 link a web page can open, so a Mac or Windows PC needs a small helper,
-installed once. The first Play in VLC (or Settings > Playback > *VLC
-helper*) shows a two-step checklist: **1 VLC player** (with its official
+installed once. The first Play in VLC (or Settings > Players) shows a
+two-step checklist: **1 VLC player** (with its official
 download link) and **2 Torrent Tube helper** - one paste, as no web page
 can install anything by itself: the command is copied on that tap. The
 installer reports back under the page's own random key (`?k=`) that it's

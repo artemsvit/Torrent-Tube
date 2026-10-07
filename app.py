@@ -288,11 +288,11 @@ def index():
     return render_template("index.html")
 
 
-HELPER_SCRIPTS = {"vlc-mac.sh", "vlc-windows.ps1"}
+HELPER_SCRIPTS = {"vlc-mac.sh", "vlc-windows.ps1", "vlc-mac-uninstall.sh", "vlc-windows-uninstall.ps1"}
 
 
 HELPER_KEY_RE = re.compile(r"^[0-9a-f]{16,32}$")
-HELPER_INSTALLED = {}  # browser's helper key -> {"at", "vlc"}: installer finished, found VLC or not
+HELPER_INSTALLED = {}  # browser's helper key -> {"at", "installed", "vlc"}: what its (un)installer last said
 
 
 @app.route("/helper/<name>")
@@ -313,19 +313,25 @@ def helper_script(name):
 @app.route("/api/helper/<key>", methods=["GET", "POST"])
 def helper_status(key):
     """POST: an installer saying it finished (vlc=1/0: whether it found VLC
-    on that computer - a web page can't see installed apps). GET: the page
-    asking."""
+    on that computer - a web page can't see installed apps), or the
+    uninstaller saying it's gone (removed=1). GET: the page asking - known
+    is false when nothing's been said under this key (since a restart)."""
     if not HELPER_KEY_RE.match(key):
         return jsonify({"error": "Bad key"}), 400
     if request.method == "POST":
+        removed = request.values.get("removed") == "1"
         vlc = request.values.get("vlc")
         with LOCK:
-            HELPER_INSTALLED[key] = {"at": time.time(), "vlc": None if vlc is None else vlc == "1"}
+            old_vlc = (HELPER_INSTALLED.get(key) or {}).get("vlc")
+            HELPER_INSTALLED[key] = {"at": time.time(), "installed": not removed,
+                                     "vlc": old_vlc if vlc is None else vlc == "1"}
             for old in [k for k, v in HELPER_INSTALLED.items() if time.time() - v["at"] > 86400]:
                 HELPER_INSTALLED.pop(old, None)
-        stream_log(f"VLC helper installed, VLC {'found' if vlc == '1' else 'not found'} ({request.headers.get('User-Agent', '?')[:60]!r})")
+        what = "removed" if removed else f"installed, VLC {'found' if vlc == '1' else 'not found'}"
+        stream_log(f"VLC helper {what} ({request.headers.get('User-Agent', '?')[:60]!r})")
     entry = HELPER_INSTALLED.get(key)
-    return jsonify({"installed": bool(entry), "vlc": entry["vlc"] if entry else None})
+    return jsonify({"known": bool(entry), "installed": bool(entry and entry["installed"]),
+                    "vlc": entry["vlc"] if entry else None})
 
 
 @app.route("/api/config")
