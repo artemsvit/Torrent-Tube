@@ -1537,6 +1537,13 @@ def cached_streams() -> list:
     return out
 
 
+# What a tracker's (Jackett's) download link failing usually means - say
+# so, since a player only shows "can't open".
+TRACKER_FETCH_ERROR = ("The tracker didn't hand over this torrent - its login in Jackett has probably "
+                       "expired: open Jackett (port 9117) and log that indexer in again, or pick a "
+                       "release with a magnet link")
+
+
 class StreamError(Exception):
     def __init__(self, message: str, status: int):
         super().__init__(message)
@@ -1572,7 +1579,7 @@ def begin_stream(source: dict) -> tuple:
     except StreamError:
         raise
     except Exception:
-        raise StreamError("Couldn't fetch that torrent", 400)
+        raise StreamError(TRACKER_FETCH_ERROR if download_link else "Couldn't fetch that torrent", 400)
 
     with LOCK:
         existing = HANDLES.get(tid)
@@ -1661,6 +1668,7 @@ PLAY_LINKS_MAX = 300
 PLAY_LINKS_KEEP = 30 * 86400  # forget a link not played for this long
 PLAY_TOKEN_RE = re.compile(r"^[a-z]-[0-9a-f]{6,64}$")
 PLAY_LOCKS = {}
+PLAY_ERRORS = {}  # token -> why its stream couldn't start (for the page to show)
 
 
 def _load_play_links() -> dict:
@@ -1714,7 +1722,7 @@ def resolve_play_link(token: str) -> tuple:
                 link["torrent_hex"] = source["torrent_hex"] = raw.hex()
                 save_play_links()
             except Exception:
-                raise StreamError("Couldn't fetch that torrent", 400)
+                raise StreamError(TRACKER_FETCH_ERROR, 400)
         if source.get("id"):
             with LOCK:
                 gone = source["id"] not in HANDLES
@@ -1752,13 +1760,29 @@ def register_play_link():
         # A copied link: nothing downloads until a player really opens it.
         return jsonify({"ok": True})
 
+    PLAY_ERRORS.pop(token, None)
+
     def start():
         try:
             resolve_play_link(token)
-        except StreamError:
-            pass  # the player's own request reports it
+        except StreamError as e:
+            note_play_error(token, e)
     threading.Thread(target=start, daemon=True).start()
     return jsonify({"ok": True})
+
+
+def note_play_error(token: str, error: "StreamError"):
+    """A player only says "can't open" - keep the reason for the page."""
+    PLAY_ERRORS[token] = str(error)
+    stream_log(f"play {token} failed: {error}")
+
+
+@app.route("/api/play/<token>")
+def play_link_status(token):
+    """For the page after Play: did the stream start, or why not."""
+    link = PLAY_LINKS.get(token) or {}
+    tid = link.get("tid")
+    return jsonify({"error": PLAY_ERRORS.get(token), "started": bool(tid and (tid in STREAM_CACHE_IDS or tid in HANDLES))})
 
 
 @app.route("/played/<token>")
@@ -1796,7 +1820,9 @@ def play_link(token, name):
     try:
         tid, index = resolve_play_link(token)
     except StreamError as e:
+        note_play_error(token, e)
         return jsonify({"error": str(e)}), e.status
+    PLAY_ERRORS.pop(token, None)
     with LOCK:
         handle = HANDLES.get(tid)
     real_name = Path(handle.torrent_file().files().file_path(index)).name if handle and handle.is_valid() else name

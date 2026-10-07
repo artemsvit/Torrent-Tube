@@ -2246,7 +2246,8 @@ function showToast(message, isError) {
   el.className = "toast" + (isError ? " is-error" : "");
   el.textContent = message;
   toastStack.appendChild(el);
-  setTimeout(() => el.remove(), isError ? 6000 : 3500);
+  // Long enough to read: about 60ms a character, at least 3.5s (6s for errors).
+  setTimeout(() => el.remove(), Math.max(isError ? 6000 : 3500, message.length * 60));
 }
 
 // ---------- Adding torrents ----------
@@ -3407,6 +3408,7 @@ function playRelease(release) {
   }
   const appLink = PLAYERS[id].link(link.url, link.closedUrl);
   registerPlayLink(link, !!appLink);
+  if (appLink) watchPlayStart(link.token);
   if (appLink) {
     watchAppOpened(id);
     location.href = appLink;
@@ -3495,6 +3497,21 @@ helperDone.addEventListener("click", () => {
 helperModal.addEventListener("click", e => { if (e.target === helperModal) closeVlcHelper(); });
 document.getElementById("settingsVlcHelperRow").hidden = !VLC_HELPER_OS;
 document.getElementById("settingsVlcHelper").addEventListener("click", () => openVlcHelper());
+
+// The player only says "can't open" if the stream fails to start (a dead
+// tracker link, no peers) - ask the server why for up to a minute and say it.
+function watchPlayStart(token) {
+  const until = Date.now() + 60000;
+  const check = async () => {
+    try {
+      const d = await fetch(`/api/play/${encodeURIComponent(token)}`).then(r => r.json());
+      if (d.error) { showToast(`Couldn't play: ${d.error}`, true); return; }
+      if (d.started) return;
+    } catch (e) {}
+    if (Date.now() < until) setTimeout(check, 2000);
+  };
+  setTimeout(check, 1500);
+}
 
 // No app behind the link: iOS shows "cannot open the page" and the page
 // stays visible. If it's still visible a moment later, say what's missing.
