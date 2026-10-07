@@ -2421,7 +2421,7 @@ const STATE_LABELS = {
 // goes when the player is closed.
 function streamActivityText(st) {
   if (!st.opened) return "Waiting for the player";
-  return st.connections ? "Open in the player" : "Player closed · deleting";
+  return st.connections ? "Open in the player" : "Player closed · stopped, deleting";
 }
 
 // A stream's row in the Buffering block - the one place it can be seen,
@@ -2431,8 +2431,11 @@ function renderStreamItem(st) {
   div.className = "item is-stream";
   const sub = [`${st.progress}% buffered`, streamActivityText(st)].filter(Boolean).join(" · ");
   const stats = [];
-  if (st.download_rate > 0) stats.push(`<span>${ICONS.down}${formatRate(st.download_rate)}</span>`);
-  if (st.num_peers > 0) stats.push(`<span>${ICONS.peers}${st.num_peers} peers</span>`);
+  // Player closed: the download has stopped, so no speed (libtorrent's
+  // average would take a while to fall to zero).
+  const closed = st.opened && !st.connections;
+  if (!closed && st.download_rate > 0) stats.push(`<span>${ICONS.down}${formatRate(st.download_rate)}</span>`);
+  if (!closed && st.num_peers > 0) stats.push(`<span>${ICONS.peers}${st.num_peers} peers</span>`);
   div.innerHTML = `
     <div class="item-top">
       <div class="item-icon">${ICONS.play}</div>

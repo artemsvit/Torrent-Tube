@@ -1383,11 +1383,15 @@ STREAM_LAST_USED = {}      # tid -> when a player last took data from it
 STREAM_OPENED = set()      # tids a player has connected to at least once
 STREAM_SOCKETS = {}        # tid -> sockets of its open responses
 STREAM_ABANDON_AFTER = 6 * 3600
-# Second sign of a closed player, for when its callback never comes: a
-# player that had a connection and now has none for this long. A paused
-# player keeps its connection open, so a pause doesn't trip this.
-STREAM_CLOSED_AFTER = 120
+# Second sign of a closed player, for when its callback never comes (Infuse
+# 8.5 doesn't call it): its last connection closes. The download stops at
+# once, and the stream is deleted after STREAM_CLOSED_AFTER with no new
+# connection. A player opens a new connection before closing the old one
+# when it seeks, and a paused one keeps its connection open, so neither
+# trips this.
+STREAM_CLOSED_AFTER = 30
 STREAM_LAST_CONNECTED = {}  # tid -> when it last had an open response
+STREAM_STOPPED = set()      # cached streams paused because no player is connected
 
 
 def stream_log(message: str):
@@ -1750,6 +1754,7 @@ def adopt_cached_stream(tid: str, category: str) -> "str | None":
         if tid not in STREAM_CACHE_IDS or not handle or not handle.is_valid():
             return None
         STREAM_CACHE_IDS.discard(tid)
+    STREAM_STOPPED.discard(tid)
     handle.move_storage(resolve_save_path(category))
     if handle.status().has_metadata:
         handle.prioritize_files([4] * handle.torrent_file().files().num_files())
@@ -1771,6 +1776,7 @@ def drop_cached_stream(tid: str):
     # waitress's output buffer, and waitress never times out a connection
     # mid-response - shutting the socket down is what wakes that thread.
     STREAM_LAST_CONNECTED.pop(tid, None)
+    STREAM_STOPPED.discard(tid)
     for sock in STREAM_SOCKETS.pop(tid, set()):
         try:
             sock.shutdown(socket.SHUT_RDWR)
@@ -1840,7 +1846,7 @@ def clean_stream_cache():
             dropped = True
         elif (tid in STREAM_OPENED and not STREAM_SOCKETS.get(tid)
               and now - STREAM_LAST_CONNECTED.get(tid, now) > STREAM_CLOSED_AFTER):
-            stream_log(f"deleting {tid}: player has had no connection for {STREAM_CLOSED_AFTER} s")
+            stream_log(f"deleting {tid}: player closed (no connection for {STREAM_CLOSED_AFTER} s)")
             drop_cached_stream(tid)
             dropped = True
     if dropped:
@@ -1871,7 +1877,7 @@ def clean_stream_cache():
 
 def stream_cache_loop():
     while True:
-        time.sleep(10)
+        time.sleep(5)
         try:
             clean_stream_cache()
         except Exception:
@@ -1980,6 +1986,9 @@ def stream_file(tid, index, name):
         conn = sock if sock is not None else object()  # counted either way; only a socket can be shut
         STREAM_SOCKETS.setdefault(tid, set()).add(conn)
         STREAM_LAST_CONNECTED[tid] = time.time()
+        if tid in STREAM_STOPPED and live and handle.is_valid():  # back within the grace time
+            STREAM_STOPPED.discard(tid)
+            handle.resume()
         stream_log(f"player connected to {tid} ({len(STREAM_SOCKETS[tid])} open) bytes={start}- from {ua!r}")
         try:
             for data in generate():
@@ -1989,6 +1998,9 @@ def stream_file(tid, index, name):
             STREAM_SOCKETS.get(tid, set()).discard(conn)
             STREAM_LAST_CONNECTED[tid] = time.time()
             stream_log(f"player connection to {tid} closed ({len(STREAM_SOCKETS.get(tid, ()))} open)")
+            if not STREAM_SOCKETS.get(tid) and tid in STREAM_CACHE_IDS and live and handle.is_valid():
+                STREAM_STOPPED.add(tid)  # player gone - stop downloading now
+                handle.pause()
 
     STREAM_LAST_USED[tid] = time.time()
     return Response(tracked(), status=206 if match else 200, headers=headers, direct_passthrough=True)
