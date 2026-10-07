@@ -44,5 +44,9 @@ Set-ItemProperty -Path $key -Name 'URL Protocol' -Value ''
 Set-ItemProperty -Path "$key\shell\open\command" -Name '(default)' `
     -Value "powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$handler`" `"%1`""
 
+{% if key %}
+# Tell the Torrent Tube page this computer is ready, so it can go on by itself.
+try { Invoke-RestMethod -Method Post -Uri "$origin/api/helper/{{ key }}" | Out-Null } catch {}
+{% endif %}
 Write-Host "Done: Torrent Tube VLC helper is installed (VLC at $vlc)." -ForegroundColor Green
 Write-Host "Press Play in VLC in Torrent Tube - your browser asks once whether to open it."

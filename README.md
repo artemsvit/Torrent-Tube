@@ -196,8 +196,12 @@ plays that release.
 
 VLC opens directly on iPhone, iPad and Android. Desktop VLC registers no
 link a web page can open, so a Mac or Windows PC needs a small helper,
-installed once - the first Play in VLC (or Settings > Playback > *VLC
-helper*) shows the command:
+installed once. No web page can install anything by itself, so it's one
+paste: the first Play in VLC (or Settings > Playback > *VLC helper*)
+copies the command on that tap and shows where to paste it. The installer
+reports back under the page's own random key (`?k=`), so the window turns
+into "VLC is ready" with a Play button by itself. The command, without
+that key:
 
 ```bash
 curl -fsSL http://<server>:5058/helper/vlc-mac.sh | sh

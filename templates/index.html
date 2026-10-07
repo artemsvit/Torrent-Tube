@@ -1225,6 +1225,17 @@
   .helper-command { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 12px; border-radius: var(--radius-md); background: var(--border); }
   .helper-command code { flex: 1; min-width: 0; font-size: 12px; word-break: break-all; user-select: all; }
   .helper-command .btn-secondary { padding: 6px 12px; font-size: 12px; }
+  .helper-wait { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--text-secondary); margin-top: 12px; }
+  .helper-wait .spinner-ring {
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--border-strong);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: dt-spin 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+  .helper-ready { font-size: 15px; font-weight: 600; color: var(--success); }
   .dt-status-pill {
     font-size: 12.5px;
     font-weight: 600;
@@ -2032,16 +2043,22 @@
       <img class="player-logo" src="/static/players/vlc.png" alt="" width="40" height="40">
       <div class="modal-title" id="helperModalTitle">Set up VLC on this computer</div>
     </div>
-    <p class="helper-text">Once per computer: a small helper lets Play open films in VLC, just like Infuse. It only opens films from this server.</p>
-    <ol class="helper-steps">
-      <li id="helperStepOpen"></li>
-      <li>Paste this command and press Return:</li>
-    </ol>
-    <div class="helper-command"><code id="helperCommand"></code><button type="button" class="btn-secondary" id="helperCopy">Copy</button></div>
-    <p class="helper-text helper-small" id="helperVlcNote">VLC itself must be installed: <a href="https://www.videolan.org/vlc/" target="_blank" rel="noopener">videolan.org</a>.</p>
+    <div id="helperSetup">
+      <p class="helper-text">Once per computer, so Play opens films in VLC just like Infuse. It only opens films from this server.</p>
+      <ol class="helper-steps">
+        <li id="helperStepOpen"></li>
+        <li id="helperStepPaste"></li>
+      </ol>
+      <div class="helper-command"><code id="helperCommand"></code><button type="button" class="btn-secondary" id="helperCopy">Copy</button></div>
+      <div class="helper-wait"><span class="spinner-ring"></span>Waiting for the install to finish…</div>
+      <p class="helper-text helper-small">VLC itself must be installed: <a href="https://www.videolan.org/vlc/" target="_blank" rel="noopener">videolan.org</a>. Already set up? <button type="button" class="dt-link-btn" id="helperAlready">Skip</button></p>
+    </div>
+    <div id="helperReady" hidden>
+      <p class="helper-text helper-ready">✓ Play now opens films in VLC on this computer.</p>
+    </div>
     <div class="modal-actions">
       <button class="btn-secondary" id="helperCancel">Cancel</button>
-      <button class="btn-primary btn-pill" id="helperDone">Installed - play</button>
+      <button class="btn-primary btn-pill" id="helperDone" hidden>Play</button>
     </div>
   </div>
 </div>
@@ -3400,37 +3417,79 @@ function playRelease(release) {
 }
 
 // ---------- VLC helper (Mac / Windows) ----------
+// Setup is one paste: the command is copied on the tap that opens this,
+// and the installer reports back to the server under this browser's own
+// random key, so the window turns into "VLC is ready" by itself.
 const helperModal = document.getElementById("helperModal");
 const helperCommand = document.getElementById("helperCommand");
+const helperDone = document.getElementById("helperDone");
 let helperThen = null;
+let helperPoll = null;
 
-function vlcHelperCommand() {
-  return VLC_HELPER_OS === "mac"
-    ? `curl -fsSL ${location.origin}/helper/vlc-mac.sh | sh`
-    : `irm ${location.origin}/helper/vlc-windows.ps1 | iex`;
+function vlcHelperKey() {
+  let key = null;
+  try { key = localStorage.getItem("torrenttube-vlc-helper-key"); } catch (e) {}
+  if (!/^[0-9a-f]{24}$/.test(key || "")) {
+    key = Array.from(crypto.getRandomValues(new Uint8Array(12)), b => b.toString(16).padStart(2, "0")).join("");
+    try { localStorage.setItem("torrenttube-vlc-helper-key", key); } catch (e) {}
+  }
+  return key;
 }
 
-// `then` runs from the Installed button's own tap, so it can still open VLC.
+function vlcHelperCommand() {
+  const url = `${location.origin}/helper/${VLC_HELPER_OS === "mac" ? "vlc-mac.sh" : "vlc-windows.ps1"}?k=${vlcHelperKey()}`;
+  return VLC_HELPER_OS === "mac" ? `curl -fsSL "${url}" | sh` : `irm "${url}" | iex`;
+}
+
+function showHelperReady(ready) {
+  document.getElementById("helperModalTitle").textContent = ready ? "VLC is ready" : "Set up VLC on this computer";
+  document.getElementById("helperSetup").hidden = ready;
+  document.getElementById("helperReady").hidden = !ready;
+  helperDone.hidden = !ready;
+  helperDone.textContent = helperThen ? "Play" : "Done";
+}
+
+function markVlcHelperInstalled() {
+  try { localStorage.setItem("torrenttube-vlc-helper", "1"); } catch (e) {}
+  clearInterval(helperPoll);
+  showHelperReady(true);
+  if (detailsState) renderDetailsBody();
+}
+
+// `then` (Play) runs from the Play button's own tap, so it can open VLC.
 function openVlcHelper(then = null) {
   helperThen = then;
-  document.getElementById("helperStepOpen").textContent = VLC_HELPER_OS === "mac"
-    ? "Open Terminal (Applications > Utilities)."
-    : "Open PowerShell (Start menu, type PowerShell).";
+  const mac = VLC_HELPER_OS === "mac";
+  document.getElementById("helperStepOpen").textContent = mac
+    ? "Open Terminal (press ⌘ Space, type Terminal, press Return)."
+    : "Open PowerShell (Start menu, type PowerShell, press Enter).";
+  document.getElementById("helperStepPaste").textContent = mac
+    ? "Press ⌘ V, then Return - the command is already copied."
+    : "Press Ctrl + V, then Enter - the command is already copied.";
   helperCommand.textContent = vlcHelperCommand();
-  document.getElementById("helperDone").textContent = then ? "Installed - play" : "Installed";
+  showHelperReady(false);
   helperModal.classList.add("is-open");
+  copyText(vlcHelperCommand(), `Command copied - paste it in ${mac ? "Terminal" : "PowerShell"}`);
+  clearInterval(helperPoll);
+  helperPoll = setInterval(async () => {
+    if (!helperModal.classList.contains("is-open")) { clearInterval(helperPoll); return; }
+    try {
+      const d = await fetch(`/api/helper/${vlcHelperKey()}`).then(r => r.json());
+      if (d.installed) markVlcHelperInstalled();
+    } catch (e) {}
+  }, 1500);
 }
 function closeVlcHelper() {
   helperModal.classList.remove("is-open");
+  clearInterval(helperPoll);
   helperThen = null;
 }
 document.getElementById("helperCopy").addEventListener("click", () => copyText(vlcHelperCommand(), "Command copied"));
 document.getElementById("helperCancel").addEventListener("click", closeVlcHelper);
-document.getElementById("helperDone").addEventListener("click", () => {
-  try { localStorage.setItem("torrenttube-vlc-helper", "1"); } catch (e) {}
+document.getElementById("helperAlready").addEventListener("click", markVlcHelperInstalled);
+helperDone.addEventListener("click", () => {
   const then = helperThen;
   closeVlcHelper();
-  if (detailsState) renderDetailsBody();
   if (then) then();
 });
 helperModal.addEventListener("click", e => { if (e.target === helperModal) closeVlcHelper(); });

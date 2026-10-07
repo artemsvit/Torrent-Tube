@@ -6,7 +6,7 @@
 # The helper is built here (not downloaded as an app), so Gatekeeper has
 # nothing to quarantine. It only opens play links from {{ origin }}.
 #
-#   Install:    curl -fsSL {{ origin }}/helper/vlc-mac.sh | sh
+#   Install:    curl -fsSL "{{ origin }}/helper/vlc-mac.sh" | sh
 #   Uninstall:  rm -rf ~/Applications/"Torrent Tube VLC Helper.app"
 set -e
 
@@ -52,6 +52,9 @@ plutil -replace LSUIElement -bool true "$PLIST"   # no Dock icon while it hands 
 plutil -replace CFBundleURLTypes -json '[{"CFBundleURLName":"Torrent Tube VLC link","CFBundleURLSchemes":["torrenttube-vlc"]}]' "$PLIST"
 codesign --force --deep --sign - "$APP" 2>/dev/null   # re-sign after editing Info.plist
 "$LSREGISTER" -f "$APP"
-
+{% if key %}
+# Tell the Torrent Tube page this computer is ready, so it can go on by itself.
+curl -fsS -X POST "$ORIGIN/api/helper/{{ key }}" >/dev/null 2>&1 || true
+{% endif %}
 echo "Done: Torrent Tube VLC Helper is installed in ~/Applications."
 echo "Press Play in VLC in Torrent Tube - your browser asks once whether to open the helper."

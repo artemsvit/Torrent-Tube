@@ -291,15 +291,37 @@ def index():
 HELPER_SCRIPTS = {"vlc-mac.sh", "vlc-windows.ps1"}
 
 
+HELPER_KEY_RE = re.compile(r"^[0-9a-f]{16,32}$")
+HELPER_INSTALLED = {}  # browser's helper key -> when its installer finished
+
+
 @app.route("/helper/<name>")
 def helper_script(name):
     """One-time installers that let a computer's browser open VLC: they
     register a torrenttube-vlc: link handler that only accepts play links
-    from this server - its address, as the browser reached it, is filled in."""
+    from this server - its address, as the browser reached it, is filled in.
+    ?k=<key> (the page's own random id) makes the installer report back
+    when it's done, so the page can tell without asking."""
     if name not in HELPER_SCRIPTS:
         return jsonify({"error": "No such helper"}), 404
-    body = render_template(f"helpers/{name}", origin=request.host_url.rstrip("/"))
+    key = request.args.get("k", "")
+    body = render_template(f"helpers/{name}", origin=request.host_url.rstrip("/"),
+                           key=key if HELPER_KEY_RE.match(key) else "")
     return Response(body, mimetype="text/plain; charset=utf-8")
+
+
+@app.route("/api/helper/<key>", methods=["GET", "POST"])
+def helper_status(key):
+    """POST: an installer saying it finished. GET: the page asking."""
+    if not HELPER_KEY_RE.match(key):
+        return jsonify({"error": "Bad key"}), 400
+    if request.method == "POST":
+        with LOCK:
+            HELPER_INSTALLED[key] = time.time()
+            for old in [k for k, at in HELPER_INSTALLED.items() if time.time() - at > 86400]:
+                HELPER_INSTALLED.pop(old, None)
+        stream_log(f"VLC helper installed ({request.headers.get('User-Agent', '?')[:60]!r})")
+    return jsonify({"installed": key in HELPER_INSTALLED})
 
 
 @app.route("/api/config")
