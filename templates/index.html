@@ -1441,6 +1441,15 @@
      22px between sections, 10px from a section's label to its first row,
      9px of padding within each row. */
   .settings-box { max-width: 440px; }
+  /* Pinned to the top, not centred: tabs differ in height, and centred the
+     whole box jumped on every switch - now only its bottom edge moves. */
+  #settingsModal.is-open { align-items: flex-start; padding-top: 56px; }
+  @media (min-width: 641px) {
+    #settingsModal .settings-box { max-height: calc(100dvh / var(--ui-zoom) - 72px); }
+  }
+  @media (max-width: 640px) {
+    #settingsModal.is-open { padding-top: 16px; }
+  }
 
   .settings-tabs {
     display: flex;
@@ -1705,35 +1714,67 @@
 
   /* ---------- Toasts ---------- */
 
+  /* A glass card like the rest of the app, with a round status icon - a
+     green check when something's done, an orange ! when it isn't. Above
+     the popups (a "Command copied" from inside one has to show), slides
+     in from the right, and a click dismisses it. */
   .toast-stack {
     position: fixed;
     bottom: 20px;
     right: 20px;
     display: flex;
     flex-direction: column;
+    align-items: flex-end;
     gap: 8px;
-    z-index: 100;
-    width: 300px;
+    z-index: 300;
+    max-width: 380px;
+    pointer-events: none;
   }
   .toast {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    max-width: 100%;
+    padding: 10px 16px 10px 10px;
     background: var(--surface-solid);
     backdrop-filter: var(--blur);
     -webkit-backdrop-filter: var(--blur);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-md);
-    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
     box-shadow: var(--shadow-lg);
-    font-size: 12.5px;
-    animation: toast-in 0.2s ease;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.4;
+    color: var(--text);
+    pointer-events: auto;
+    cursor: pointer;
+    animation: toast-in 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.2);
   }
+  .toast-icon {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(31, 157, 75, 0.16);
+    color: var(--success);
+  }
+  .toast-icon svg { width: 14px; height: 14px; }
+  .toast.is-error .toast-icon { background: rgba(255, 143, 0, 0.16); color: #ff8f00; }
+  .toast-text { min-width: 0; overflow-wrap: anywhere; }
+  .toast.is-leaving { animation: toast-out 0.2s ease forwards; }
   @keyframes toast-in {
-    from { opacity: 0; transform: translateY(6px); }
-    to { opacity: 1; transform: translateY(0); }
+    from { opacity: 0; transform: translateX(24px) scale(0.98); }
+    to { opacity: 1; transform: none; }
   }
-  .toast.is-error { border-color: var(--danger); color: var(--danger); }
+  @keyframes toast-out {
+    to { opacity: 0; transform: translateX(16px); }
+  }
 
   @media (max-width: 640px) {
-    .toast-stack { left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); width: auto; }
+    .toast-stack { left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); max-width: none; align-items: stretch; }
     .item-stats { gap: 3px 10px; }
   }
 
@@ -2350,13 +2391,26 @@ themeToggleBtn.addEventListener("click", () => {
 
 // ---------- Toasts ----------
 
+const TOAST_ICONS = {
+  ok: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>`,
+  error: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 6v8"/><path d="M12 18.5v.01"/></svg>`,
+};
+
 function showToast(message, isError) {
   const el = document.createElement("div");
   el.className = "toast" + (isError ? " is-error" : "");
-  el.textContent = message;
+  el.setAttribute("role", isError ? "alert" : "status");
+  el.innerHTML = `<span class="toast-icon">${TOAST_ICONS[isError ? "error" : "ok"]}</span><span class="toast-text"></span>`;
+  el.querySelector(".toast-text").textContent = message;
+  const dismiss = () => {
+    if (el.classList.contains("is-leaving")) return;
+    el.classList.add("is-leaving");
+    setTimeout(() => el.remove(), 200);
+  };
+  el.addEventListener("click", dismiss);
   toastStack.appendChild(el);
   // Long enough to read: about 60ms a character, at least 3.5s (6s for errors).
-  setTimeout(() => el.remove(), Math.max(isError ? 6000 : 3500, message.length * 60));
+  setTimeout(dismiss, Math.max(isError ? 6000 : 3500, message.length * 60));
 }
 
 // ---------- Adding torrents ----------
