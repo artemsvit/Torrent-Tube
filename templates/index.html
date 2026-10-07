@@ -815,6 +815,16 @@
     transition: width 0.4s ease;
   }
   .item.is-done .progress-fill, .item.is-seeding .progress-fill { background: var(--success); }
+
+  /* Buffering block: same panel, but its rows read as temporary - an
+     orange play icon and a striped bar instead of a download's blue. */
+  .streams-panel { margin-top: 16px; }
+  .streams-panel[hidden] { display: none; }
+  .streams-note { font-size: 12px; color: var(--text-tertiary); margin: -6px 0 12px; }
+  .item.is-stream .item-icon { background: rgba(255, 143, 0, 0.14); color: #ff8f00; }
+  .item.is-stream .progress-fill {
+    background: repeating-linear-gradient(-45deg, #ffab40 0 8px, #ff8f00 8px 16px);
+  }
   .item.is-paused .progress-fill { background: var(--text-tertiary); }
 
   .item-stats {
@@ -1803,6 +1813,17 @@
       <button class="btn-secondary" id="discoverNextBtn">Next</button>
     </div>
   </section>
+
+  <!-- Films playing in Infuse/VLC right now. Not downloads: temporary,
+       and gone when the player closes - so they get a block of their own. -->
+  <section class="panel streams-panel" id="streamsPanel" hidden>
+    <div class="panel-header">
+      <div class="section-label">Buffering</div>
+      <span class="count-badge" id="streamsCount">0</span>
+    </div>
+    <p class="streams-note">Temporary files for the player. Each is deleted when you close the player.</p>
+    <div id="streamsList"></div>
+  </section>
 </div>
 
 <div class="drop-zone" id="dropZone"><div class="drop-zone-inner">Drop .torrent file to add it</div></div>
@@ -2034,6 +2055,9 @@ const searchDropdown = document.getElementById("searchDropdown");
 
 const viewToggleBtn = document.getElementById("viewToggleBtn");
 const downloadsTab = document.getElementById("downloadsTab");
+const streamsPanel = document.getElementById("streamsPanel");
+const streamsList = document.getElementById("streamsList");
+const streamsCount = document.getElementById("streamsCount");
 const downloadsHeader = document.getElementById("downloadsHeader");
 const discoverHeader = document.getElementById("discoverHeader");
 const discoverTabs = document.getElementById("discoverTabs");
@@ -2399,12 +2423,12 @@ function streamActivityText(st) {
   return st.opened ? "Open in the player" : "Waiting for the player";
 }
 
-// Streams in the cache sit at the top of Downloads - not downloads, but
-// the one place they can be seen and stopped once the popup is closed.
+// A stream's row in the Buffering block - the one place it can be seen,
+// saved or stopped once the popup is closed.
 function renderStreamItem(st) {
   const div = document.createElement("div");
   div.className = "item is-stream";
-  const sub = ["Streaming", `${st.progress}%`, streamActivityText(st)].filter(Boolean).join(" · ");
+  const sub = [`${st.progress}% buffered`, streamActivityText(st)].filter(Boolean).join(" · ");
   const stats = [];
   if (st.download_rate > 0) stats.push(`<span>${ICONS.down}${formatRate(st.download_rate)}</span>`);
   if (st.num_peers > 0) stats.push(`<span>${ICONS.peers}${st.num_peers} peers</span>`);
@@ -2428,11 +2452,18 @@ function renderStreamItem(st) {
   return div;
 }
 
-function render(torrents, streams = []) {
-  countEl.textContent = torrents.length + streams.length;
-  listEmptyEl.style.display = torrents.length || streams.length ? "none" : "block";
+// The Buffering block under Downloads - shown only while something plays,
+// and not over Discover.
+function renderStreams(streams) {
+  streamsPanel.hidden = discoverMode || !streams.length;
+  streamsCount.textContent = streams.length;
+  streamsList.replaceChildren(...streams.map(renderStreamItem));
+}
+
+function render(torrents) {
+  countEl.textContent = torrents.length;
+  listEmptyEl.style.display = torrents.length ? "none" : "block";
   listEl.querySelectorAll(".item").forEach(el => el.remove());
-  streams.forEach(st => listEl.appendChild(renderStreamItem(st)));
 
   torrents.forEach(t => {
     const div = document.createElement("div");
@@ -2518,7 +2549,8 @@ async function refresh() {
     renderViewToggleBtn();
     currentTorrents = torrents;
     clearAllBtn.disabled = torrents.length === 0;
-    if (!discoverMode) render(torrents, currentStreams);
+    if (!discoverMode) render(torrents);
+    renderStreams(currentStreams);
   } catch (e) {
     // Transient network hiccup; the next poll will retry.
   }
@@ -2673,6 +2705,7 @@ function enterDiscover() {
   listEl.style.display = "none";
   clearAllBtn.style.display = "none";
   discoverList.classList.add("is-open");
+  streamsPanel.hidden = true;
   loadDiscoverFeed(currentDiscoverFeed || (discoverFeeds[0] && discoverFeeds[0].id));
 }
 

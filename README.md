@@ -173,7 +173,7 @@ while it downloads, and nothing is kept afterwards:
 4. Opening the same title again uses the same link, so the server simply
    starts it again, and Infuse remembers where you stopped.
 
-While a stream exists it shows at the top of Downloads ("Waiting for the
+While a stream exists it shows in its own **Buffering** block under Downloads ("Waiting for the
 player", then "Open in the player"), with ✕ to delete it now and a save
 button to keep it as a download in your default folder. Download on the
 same release does the same.
