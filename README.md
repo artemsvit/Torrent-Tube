@@ -153,23 +153,26 @@ hidden and the app behaves exactly like the paste-only version.
 ## Play in Infuse / VLC
 
 A title's details popup has a **Play in Infuse** (or **Play in VLC**)
-button next to Download. It streams the film while it downloads and opens
-it in that app, so nothing is kept unless you ask for it:
+button next to Download. One tap opens the film in that app, streamed
+while it downloads, and nothing is kept afterwards:
 
-1. Tap **Play**. The server fetches only the video file, in playback
-   order, into a hidden `.stream-cache` folder under your downloads.
-2. When the start is buffered, tap **Open in Infuse**. The app plays the
-   stream URL and can seek in it. It handles MKV, HEVC, every audio track
-   and subtitle, which a browser can't.
-3. **Stop** deletes the stream and its files at once. A stream also shows
-   at the top of Downloads (with how long until it's deleted), so it can be
-   stopped there after the popup is closed. Stopping a stream of something
-   already in Downloads only ends streaming - that download continues.
-4. Without Stop, the server deletes a stream once no player has read it
-   for a while (Settings > Playback > *Clear a stream after*, 1 hour by
-   default, 5 minutes at the least). **Save** (or Download on the same
-   release) moves it to the folder picked beside Download instead, and it
-   becomes a normal download.
+1. Tap **Play**. Infuse opens at once with a play link
+   (`/play/<token>/<title>.mkv`), and the server starts the torrent at the
+   same moment - only the video file, in playback order, into a hidden
+   `.stream-cache` folder under your downloads. Infuse's first request
+   waits until the file list is in, then the film starts. Infuse handles
+   MKV, HEVC, every audio track and subtitle, which a browser can't.
+2. Close Infuse. The server sees the player's connection close, and a
+   couple of minutes later (Settings > Playback > *Delete a stream after*,
+   2 minutes by default) deletes the stream and its files.
+3. Opening the same title again - or Infuse resuming after a long pause -
+   uses the same link, so the server simply starts it again, and Infuse
+   remembers where you stopped.
+
+While a stream exists it shows at the top of Downloads ("Playing",
+"Player closed · deleted in 2 min"), with ✕ to delete it now and a save
+button to keep it as a download in your default folder. Download on the
+same release does the same.
 
 The **▾** beside Play picks the player. The choice is saved on each
 device, so a phone can use Infuse and a computer VLC. Infuse is offered on
@@ -190,8 +193,10 @@ away and seek.
 | Endpoint | What it does |
 |---|---|
 | `POST /api/stream` | Body `{"magnet": ...}`, `{"download_link": ...}` or `{"id": <download id>}`. Starts (or reuses) the torrent in streaming mode and returns `{id, file, name, size, url, cached, ready, progress, ...}`. A new torrent goes to the stream cache (`cached: true`); `id` streams something already in Downloads. |
-| `GET /api/stream/<id>/<file>` | Buffering status: `ready` (the start is buffered), `head_progress`, `progress`, `download_rate`, `num_peers`, `done`, plus `playing` (a player is reading it) and `clears_in` (seconds until an idle cached stream is deleted). |
+| `GET /api/stream/<id>/<file>` | Buffering status: `ready` (the start is buffered), `head_progress`, `progress`, `download_rate`, `num_peers`, `done`, plus `playing` (a player is reading it), `opened` (a player has connected) and `clears_in` (seconds until an idle cached stream is deleted). |
 | `GET /stream/<id>/<file>/<name>` | The video itself, with HTTP Range requests (`206 Partial Content`). |
+| `POST /api/play` | Body `{"token", "title", "magnet" \| "download_link" \| "id"}`. Says what a play token plays and starts it in the background. Tokens are `m-<info hash>`, `d-<download id>` or `l-<hash of the link>`. |
+| `GET /play/<token>/<name>` | The video for a play token, with Range support. Waits for the token, the torrent and its file list on the first request; starts the torrent again if its stream was deleted. |
 | `POST /api/stream/<id>/keep` | Body `{"category": ...}`. Moves a cached stream to that folder and makes it a normal download. |
 | `DELETE /api/stream/<id>` | Stops a stream. A cached one is deleted with its data now (`deleted: true`); a download being streamed goes back to downloading normally. |
 

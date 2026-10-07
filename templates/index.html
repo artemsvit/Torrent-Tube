@@ -1176,37 +1176,6 @@
   .player-logo { width: 20px; height: 20px; border-radius: 5px; flex-shrink: 0; display: block; }
   .dt-release .action-btn + .action-btn { margin-left: 2px; }
 
-  /* "Now playing": what's buffering, and the button that opens it. */
-  .dt-watch {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 10px 14px;
-    padding: 12px 14px;
-    margin-top: 12px;
-    border-radius: var(--radius-md);
-    background: var(--accent-soft);
-  }
-  .dt-watch-info { flex: 1 1 220px; min-width: 0; }
-  .dt-watch-name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .dt-watch-status { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
-  .dt-watch-status.is-ready { color: var(--success); }
-  .dt-watch-status.is-error { color: var(--danger); }
-  .dt-watch-bar { height: 3px; border-radius: 2px; background: var(--border); margin-top: 7px; overflow: hidden; }
-  .dt-watch-bar > div { height: 100%; background: var(--accent); transition: width 0.4s; }
-  .dt-watch-actions { display: flex; align-items: center; gap: 6px; }
-  .dt-watch-actions .btn-primary, .dt-watch-actions .btn-secondary {
-    padding: 8px 14px;
-    font-size: 13px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 7px;
-    text-decoration: none;
-  }
-  .dt-watch-actions .player-logo { width: 18px; height: 18px; }
-  .dt-watch-actions .is-waiting { opacity: 0.55; pointer-events: none; }
-
   /* Player picker */
   .player-box { max-width: 380px; }
   .player-list { display: flex; flex-direction: column; gap: 6px; }
@@ -1390,8 +1359,6 @@
     .dt-actions > [data-act="download-best"], .dt-actions > .dt-status-pill { flex: 1 1 0; white-space: nowrap; text-align: center; }
     .dt-actions > [data-act="category"] { flex: 0 0 auto; }
     .dt-actions > [data-act="download-best"] .dt-download-meta { overflow: hidden; text-overflow: ellipsis; }
-    .dt-watch-actions { flex: 1 1 100%; }
-    .dt-watch-actions > [data-role="open"] { flex: 1; padding-top: 10px; padding-bottom: 10px; }
     /* The picker is a bottom sheet too. */
     #playerModal.is-open { align-items: flex-end; padding: 0; }
     #playerModal .player-box {
@@ -1883,13 +1850,13 @@
           <select class="inline-category-select" id="settingsPlayer"></select>
         </div>
         <div class="settings-row">
-          <div class="settings-row-label">Clear a stream after<button type="button" class="info-tip" data-tip="A stream is deleted from the server once no player has read it for this long. Keep it to save it to a folder instead">i</button></div>
+          <div class="settings-row-label">Delete a stream after<button type="button" class="info-tip" data-tip="How long after the player closes a stream is deleted from the server. Opening it again just starts it again">i</button></div>
           <select class="inline-category-select" id="settingsStreamCache">
+            <option value="1">1 minute</option>
+            <option value="2">2 minutes</option>
             <option value="5">5 minutes</option>
             <option value="15">15 minutes</option>
             <option value="60">1 hour</option>
-            <option value="360">6 hours</option>
-            <option value="1440">1 day</option>
           </select>
         </div>
       </div>
@@ -2025,7 +1992,7 @@
   <div class="modal-box player-box" role="dialog" aria-modal="true" aria-labelledby="playerModalTitle">
     <div class="modal-title" id="playerModalTitle">Play in</div>
     <div class="player-list" id="playerList"></div>
-    <p class="player-note">The film streams from this server while it downloads to a temporary cache. Nothing is kept after you stop watching, unless you tap Keep.</p>
+    <p class="player-note">Play opens the film in this app straight away. It streams from this server through a temporary cache, which is deleted a couple of minutes after you close the player.</p>
   </div>
 </div>
 
@@ -2441,7 +2408,8 @@ function streamActivityText(st) {
   if (st.playing) return "Playing";
   if (st.clears_in == null) return "";
   const mins = Math.ceil(st.clears_in / 60);
-  return `Not playing · deleted in ${mins >= 60 ? `${Math.round(mins / 60)} h` : `${mins} min`}`;
+  const when = mins >= 60 ? `${Math.round(mins / 60)} h` : `${mins} min`;
+  return st.opened ? `Player closed · deleted in ${when}` : `Waiting for the player · deleted in ${when} if it doesn't open`;
 }
 
 // Streams in the cache sit at the top of Downloads - not downloads, but
@@ -2460,11 +2428,16 @@ function renderStreamItem(st) {
         <div class="item-title">${escapeHtml(st.name)}</div>
         <div class="item-sub">${escapeHtml(sub)}</div>
       </div>
-      <div class="item-actions"><button class="action-btn danger stop-stream-btn" title="Stop and delete it" aria-label="Stop and delete">${CLOSE_ICON}</button></div>
+      <div class="item-actions">
+        ${st.cached ? `<button class="action-btn save-stream-btn" title="Save it as a download in your default folder" aria-label="Save as a download">${ICONS.download}</button>` : ""}
+        <button class="action-btn danger stop-stream-btn" title="Stop and delete it now" aria-label="Stop and delete">${CLOSE_ICON}</button>
+      </div>
     </div>
     <div class="progress-track"><div class="progress-fill" style="width:${st.progress}%"></div></div>
     ${stats.length ? `<div class="item-stats">${stats.join("")}</div>` : ""}`;
   div.querySelector(".stop-stream-btn").addEventListener("click", () => stopStreamById(st.id));
+  const saveBtn = div.querySelector(".save-stream-btn");
+  if (saveBtn) saveBtn.addEventListener("click", () => saveStream(st.id));
   return div;
 }
 
@@ -2827,7 +2800,7 @@ function renderLimits() {
   settingsUploadLimitValue.textContent = formatSpeed(lastLimits.upload_rate_limit);
   settingsSeedAfterDownload.checked = (lastLimits.seed_after_download ?? 1) != 0;
   settingsRemoveAfterDownload.checked = (lastLimits.remove_after_download ?? 0) != 0;
-  const cacheMinutes = String(lastLimits.stream_cache_minutes ?? 60);
+  const cacheMinutes = String(lastLimits.stream_idle_minutes ?? 2);
   if (![...settingsStreamCache.options].some(o => o.value === cacheMinutes)) {
     settingsStreamCache.add(new Option(`${cacheMinutes} minutes`, cacheMinutes));
   }
@@ -2900,7 +2873,7 @@ async function saveLimits() {
     upload_rate_limit: sliderToKbps(settingsUploadLimit.value),
     seed_after_download: settingsSeedAfterDownload.checked ? 1 : 0,
     remove_after_download: settingsRemoveAfterDownload.checked ? 1 : 0,
-    stream_cache_minutes: settingsStreamCache.value,
+    stream_idle_minutes: settingsStreamCache.value,
     max_connections: settingsMaxConnections.value,
     max_connections_per_torrent: settingsMaxConnectionsPerTorrent.value,
     max_upload_slots: settingsMaxUploadSlots.value,
@@ -2990,7 +2963,7 @@ settingsReset.addEventListener("click", async () => {
   settingsUploadLimitValue.textContent = "Unlimited";
   settingsSeedAfterDownload.checked = true;
   settingsRemoveAfterDownload.checked = false;
-  settingsStreamCache.value = "60";
+  settingsStreamCache.value = "2";
   settingsMaxConnections.value = 0;
   settingsMaxConnectionsValue.textContent = "Default";
   settingsMaxConnectionsPerTorrent.value = 0;
@@ -3220,7 +3193,8 @@ let playerPickerThen = null;
 function openPlayerPicker(then = null) {
   playerPickerThen = then;
   const current = currentPlayer();
-  const st = detailsState && detailsState.stream;
+  const s = detailsState;
+  const canCopy = !!(s && (s.torrent || primaryRelease()));
   playerList.innerHTML = availablePlayers().map(id => `
     <button type="button" class="player-option${id === current ? " is-current" : ""}" data-player="${id}">
       <img class="player-logo" src="${PLAYERS[id].icon}" alt="" width="40" height="40">
@@ -3229,12 +3203,12 @@ function openPlayerPicker(then = null) {
         <div class="player-option-sub">${escapeHtml(PLAYERS[id].sub)}</div>
       </div>
       <span class="player-option-check">${ICONS.check}</span>
-    </button>`).join("") + (st && st.url ? `
+    </button>`).join("") + (canCopy ? `
     <button type="button" class="player-option" data-player="copy">
       <span class="player-option-icon">${LINK_ICON}</span>
       <div class="player-option-text">
         <div class="player-option-name">Copy link</div>
-        <div class="player-option-sub">For any other player that opens a URL</div>
+        <div class="player-option-sub">A play link for any other player</div>
       </div>
     </button>` : "");
   playerModal.classList.add("is-open");
@@ -3248,7 +3222,16 @@ playerModal.addEventListener("click", (e) => {
   const opt = e.target.closest("[data-player]");
   if (!opt) return;
   const id = opt.dataset.player;
-  if (id === "copy") { copyStreamLink(); closePlayerPicker(); return; }
+  if (id === "copy") {
+    const s = detailsState, link = s && (s.torrent || primaryRelease()) ? playLink(s.torrent ? null : primaryRelease(), s.torrent) : null;
+    if (link) {
+      fetch("/api/play", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: link.token, title: link.title, ...link.source }) }).catch(() => {});
+      copyText(link.url, "Play link copied - open it in any player");
+    }
+    closePlayerPicker();
+    return;
+  }
   rememberPlayer(id);
   const then = playerPickerThen;
   closePlayerPicker();
@@ -3256,122 +3239,80 @@ playerModal.addEventListener("click", (e) => {
   if (then) then();
 });
 
-function copyStreamLink() {
-  const st = detailsState && detailsState.stream;
-  if (!st || !st.url) return;
-  const done = () => showToast("Stream link copied");
+function copyText(text, doneMessage) {
+  const done = () => showToast(doneMessage);
   if (navigator.clipboard && window.isSecureContext) {
-    navigator.clipboard.writeText(st.url).then(done, () => showToast(st.url));
+    navigator.clipboard.writeText(text).then(done, () => showToast(text));
+    return;
+  }
+  // Plain http on the LAN isn't a secure context - no Clipboard API.
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.setAttribute("readonly", "");
+  ta.style.position = "fixed";
+  ta.style.opacity = "0";
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand("copy") ? done() : showToast(text); } catch (e) { showToast(text); }
+  ta.remove();
+}
+
+// A short stable hash, so the same release always gets the same play link
+// (and the player remembers where you stopped). crypto.subtle isn't there
+// on plain http, and this has to be synchronous - see playRelease.
+function hashHex(str) {
+  let a = 0x811c9dc5, b = 0x01000193 ^ 0x5bd1e995;
+  for (let i = 0; i < str.length; i++) {
+    const c = str.charCodeAt(i);
+    a = Math.imul(a ^ c, 0x01000193);
+    b = Math.imul(b ^ c, 0x5bd1e995);
+  }
+  return (a >>> 0).toString(16).padStart(8, "0") + (b >>> 0).toString(16).padStart(8, "0");
+}
+
+// The play link for a release (or something in Downloads): a token the
+// server learns from POST /api/play, and the title as the file name the
+// player shows and looks its artwork up by.
+function playLink(release, torrent) {
+  let token, source, title;
+  if (torrent) {
+    token = `d-${torrent.id.toLowerCase()}`;
+    source = { id: torrent.id };
+    title = torrent.name;
   } else {
-    // Plain http on the LAN isn't a secure context - no Clipboard API.
-    const ta = document.createElement("textarea");
-    ta.value = st.url;
-    ta.setAttribute("readonly", "");
-    ta.style.position = "fixed";
-    ta.style.opacity = "0";
-    document.body.appendChild(ta);
-    ta.select();
-    try { document.execCommand("copy") ? done() : showToast(st.url); } catch (e) { showToast(st.url); }
-    ta.remove();
+    const btih = (release.magnet || "").match(/xt=urn:btih:([0-9a-f]{40})/i);
+    token = btih ? `m-${btih[1].toLowerCase()}` : `l-${hashHex(release.magnet || release.download_link || release.title)}`;
+    source = release.magnet ? { magnet: release.magnet } : { download_link: release.download_link };
+    title = release.title;
   }
+  let name = (title || "video").replace(/[\\/:*?"<>|#%]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 150);
+  if (!/\.(mkv|mp4|m4v|avi|mov|ts|webm)$/i.test(name)) name += /\bmp4\b/i.test(name) ? ".mp4" : ".mkv";
+  return { token, source, title, url: `${location.origin}/play/${token}/${encodeURIComponent(name)}` };
 }
 
-function requestPlay(release) {
-  startStream(release);
-}
-
-async function startStream(release) {
+// One tap: the player opens straight away with the play link, and the
+// server starts the torrent at the same time. Nothing to wait for or stop
+// here - the player's first request waits for the file, and the server
+// deletes the stream a couple of minutes after the player closes. Both
+// happen inside the tap, before any await: iOS only lets a page open an
+// app from the tap itself.
+function playRelease(release) {
   const s = detailsState;
-  if (!s || (s.stream && s.stream.state === "starting")) return;
-  clearTimeout(s.streamTimer);
-  s.stream = { state: "starting", release };
-  renderDetailsBody();
-  const body = s.torrent ? { id: s.torrent.id }
-    : release.magnet ? { magnet: release.magnet } : { download_link: release.download_link };
-  try {
-    const res = await fetch("/api/stream", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
-    if (detailsState !== s) return;
-    s.stream = { state: "ready", release, ...data, url: location.origin + data.url };
-    pollStream(s);
-  } catch (e) {
-    if (detailsState !== s) return;
-    s.stream = { state: "error", release, error: e.message || "Couldn't start playback" };
-  }
-  renderDetailsBody();
-}
-
-function pollStream(s) {
-  clearTimeout(s.streamTimer);
-  if (!s.stream || s.stream.done) return;
-  s.streamTimer = setTimeout(async () => {
-    if (detailsState !== s || !s.stream || !s.stream.id) return;
-    try {
-      const status = await fetch(`/api/stream/${encodeURIComponent(s.stream.id)}/${s.stream.file}`).then(r => r.json());
-      if (detailsState !== s || !s.stream) return;
-      if (status.gone) { s.stream = null; renderDetailsBody(); return; }
-      const wasReady = s.stream.ready;
-      Object.assign(s.stream, status);
-      // Ready flips the Open button on - redraw the panel; otherwise just
-      // the status line and bar, so a tap in progress isn't lost.
-      if (wasReady !== s.stream.ready) renderDetailsBody();
-      else updateWatchStatus(s.stream);
-    } catch (e) {}
-    pollStream(s);
-  }, 1500);
-}
-
-function streamStatusText(st) {
-  if (st.done) return "Fully downloaded · ready";
-  const peers = st.num_peers ? ` · ${st.num_peers} peer${st.num_peers === 1 ? "" : "s"}` : " · looking for peers";
-  const speed = st.download_rate ? ` · ${formatSpeed(Math.round(st.download_rate / 1024))}` : "";
-  const activity = streamActivityText(st);
-  return (st.ready
-    ? `Ready · ${st.progress}% downloaded${speed}${peers}`
-    : `Buffering the start… ${st.head_progress || 0}%${speed}${peers}`) + (activity ? ` · ${activity}` : "");
-}
-
-function updateWatchStatus(st) {
-  const el = document.getElementById("dtWatchStatus");
-  if (el) { el.className = `dt-watch-status${st.ready ? " is-ready" : ""}`; el.textContent = streamStatusText(st); }
-  const bar = document.getElementById("dtWatchBar");
-  if (bar) bar.style.width = `${st.ready ? st.progress : st.head_progress || 0}%`;
-}
-
-function renderWatchPanel(s) {
-  const st = s.stream;
-  if (!st) return "";
-  if (st.state === "starting") {
-    return `<div class="dt-watch"><div class="dt-watch-info"><div class="dt-watch-name">Starting…</div>
-      <div class="dt-watch-status">Getting the torrent's file list from peers</div>
-      <div class="dt-watch-bar"><div style="width:0%"></div></div></div></div>`;
-  }
-  if (st.state === "error") {
-    return `<div class="dt-watch"><div class="dt-watch-info"><div class="dt-watch-name">Couldn't start playback</div>
-      <div class="dt-watch-status is-error">${escapeHtml(st.error)}</div></div>
-      <div class="dt-watch-actions"><button type="button" class="btn-secondary" data-act="stream-dismiss">OK</button></div></div>`;
-  }
+  if (!s || (!release && !s.torrent)) return;
+  const link = playLink(release, s.torrent);
+  fetch("/api/play", {
+    method: "POST", keepalive: true, headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token: link.token, title: link.title, ...link.source }),
+  }).then(r => r.json()).then(d => { if (d.error) showToast(d.error, true); setTimeout(refresh, 1500); })
+    .catch(() => showToast("Couldn't reach the server", true));
   const id = currentPlayer();
-  const link = PLAYERS[id].link(st.url);
-  const label = st.ready ? `Open in ${PLAYERS[id].name}` : "Buffering…";
-  // A real link, so the tap itself opens the app - iOS blocks app links
-  // opened from a timer or after an await.
-  const open = link
-    ? `<a class="btn-primary btn-pill${st.ready ? "" : " is-waiting"}" data-role="open" data-act="open-player" href="${escapeHtml(link)}">${playerLogo(id)}${label}</a>`
-    : `<button type="button" class="btn-primary btn-pill${st.ready ? "" : " is-waiting"}" data-role="open" data-act="copy-stream">${LINK_ICON}${st.ready ? "Copy link for VLC" : "Buffering…"}</button>`;
-  return `<div class="dt-watch">
-    <div class="dt-watch-info">
-      <div class="dt-watch-name" title="${escapeHtml(st.name)}">${escapeHtml(st.name)} · ${escapeHtml(st.size_label)}</div>
-      <div class="dt-watch-status${st.ready ? " is-ready" : ""}" id="dtWatchStatus">${escapeHtml(streamStatusText(st))}</div>
-      <div class="dt-watch-bar"><div id="dtWatchBar" style="width:${st.ready ? st.progress : st.head_progress || 0}%"></div></div>
-    </div>
-    <div class="dt-watch-actions">
-      ${open}
-      ${st.cached ? `<button type="button" class="btn-secondary" data-act="stream-keep" title="Save it as a download in the folder picked beside Download, instead of deleting it">${ICONS.download}Save</button>` : ""}
-      <button type="button" class="btn-secondary" data-act="stream-stop" title="${st.cached ? "Stop and delete the temporary file now" : "Stop streaming - the download itself continues"}">${CLOSE_ICON}Stop</button>
-    </div>
-  </div>`;
+  const appLink = PLAYERS[id].link(link.url);
+  if (appLink) {
+    watchAppOpened(id);
+    location.href = appLink;
+  } else {
+    copyText(link.url, `Link copied - paste it in ${PLAYERS[id].name}'s Open Network`);
+  }
 }
 
 // No app behind the link: iOS shows "cannot open the page" and the page
@@ -3388,39 +3329,24 @@ function watchAppOpened(id) {
   }, 2500);
 }
 
-async function keepStream() {
-  const s = detailsState, st = s && s.stream;
-  if (!st || !st.id) return;
+// Save a stream (from its Downloads row) as a download in the default folder.
+async function saveStream(id) {
+  const category = getDefaultCategory();
   try {
-    const data = await fetch(`/api/stream/${encodeURIComponent(st.id)}/keep`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ category: s.category }),
+    const data = await fetch(`/api/stream/${encodeURIComponent(id)}/keep`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ category }),
     }).then(r => r.json());
     if (data.error) throw new Error(data.error);
-    st.cached = false;
-    if (st.release) s.added.add(releaseKey(st.release));
-    showToast(`Kept - it's downloading to ${data.category || s.category}`);
-    refresh();
+    showToast(`Saved - it's downloading to ${data.category || category}`);
   } catch (e) {
-    showToast(e.message || "Couldn't keep it", true);
+    showToast(e.message || "Couldn't save it", true);
   }
-  if (detailsState === s) renderDetailsBody();
+  refresh();
 }
 
-async function stopStream() {
-  const s = detailsState, st = s && s.stream;
-  if (!st || !st.id) return;
-  await stopStreamById(st.id);
-}
-
-// Stops a stream from its panel or its Downloads row. A cached stream is
-// deleted with its files; a download being streamed keeps downloading.
+// Stops a stream from its Downloads row: deleted with its files now,
+// instead of a couple of minutes after the player closes.
 async function stopStreamById(id) {
-  const s = detailsState;
-  if (s && s.stream && s.stream.id === id) {
-    clearTimeout(s.streamTimer);
-    s.stream = null;
-    renderDetailsBody();
-  }
   try {
     const data = await fetch(`/api/stream/${encodeURIComponent(id)}`, { method: "DELETE" }).then(r => r.json());
     showToast(data.deleted ? "Stopped - the temporary file is deleted" : "Stopped - the download itself continues in Downloads");
@@ -3562,7 +3488,6 @@ function setDetailsBackVisible(visible) {
 
 function closeDetails() {
   destroyTrailerPlayer(detailsState);
-  if (detailsState) clearTimeout(detailsState.streamTimer);
   detailsModal.classList.remove("is-open");
   detailsRequestId++;          // drop any response still in flight
   detailsBody.innerHTML = "";  // also stops a playing trailer
@@ -3835,10 +3760,9 @@ function renderDetailsBody() {
   // button here instead. ---
   const actions = [];
   const playable = s.torrent || primaryRelease();
-  const busy = s.stream && s.stream.state === "starting";
   const playerId = currentPlayer();
   actions.push(`<div class="play-split">
-    <button type="button" class="btn-primary btn-pill play-main" data-act="play"${!playable || busy ? " disabled" : ""}>${playerLogo(playerId)}${busy ? "Starting…" : `Play in ${escapeHtml(PLAYERS[playerId].name)}`}</button>
+    <button type="button" class="btn-primary btn-pill play-main" data-act="play"${!playable ? " disabled" : ""}>${playerLogo(playerId)}Play in ${escapeHtml(PLAYERS[playerId].name)}</button>
     <button type="button" class="btn-primary btn-pill play-more" data-act="pick-player" title="Choose the player" aria-label="Choose the player">${CHEVRON_DOWN}</button>
   </div>`);
   if (!d.backdrop && !s.playing && !s.loading) {
@@ -3948,7 +3872,6 @@ function renderDetailsBody() {
 
   body.innerHTML = `
     <div class="dt-actions">${actions.join("")}</div>
-    ${renderWatchPanel(s)}
     <div class="dt-cols">
       <div>${overview}</div>
       ${facts.length ? `<div class="dt-facts">${facts.join("")}</div>` : ""}
@@ -3999,14 +3922,9 @@ detailsBody.addEventListener("click", (e) => {
       else findYoutubeTrailers();
       break;
     case "download-best": { const best = primaryRelease(); if (best) downloadRelease(best); break; }
-    case "play": requestPlay(s.torrent ? null : primaryRelease()); break;
-    case "play-release": requestPlay((s.showAllReleases ? s.releases : s.releases.slice(0, RELEASES_SHOWN))[Number(el.dataset.index)]); break;
+    case "play": playRelease(s.torrent ? null : primaryRelease()); break;
+    case "play-release": playRelease((s.showAllReleases ? s.releases : s.releases.slice(0, RELEASES_SHOWN))[Number(el.dataset.index)]); break;
     case "pick-player": openPlayerPicker(); break;
-    case "open-player": watchAppOpened(currentPlayer()); break;
-    case "copy-stream": copyStreamLink(); break;
-    case "stream-keep": keepStream(); break;
-    case "stream-stop": stopStream(); break;
-    case "stream-dismiss": s.stream = null; renderDetailsBody(); break;
     case "download-release": downloadRelease((s.showAllReleases ? s.releases : s.releases.slice(0, RELEASES_SHOWN))[Number(el.dataset.index)]); break;
     case "toggle-releases": s.showAllReleases = !s.showAllReleases; renderDetailsBody(); break;
     case "more": {

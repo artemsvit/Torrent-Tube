@@ -78,7 +78,7 @@ DEFAULT_LIMITS = {
     "max_upload_slots": 0,          # unchoke slots, 0 = libtorrent default
     "seed_after_download": 1,       # 0/1 - pause a torrent as soon as it finishes instead of seeding
     "remove_after_download": 0,     # 0/1 - drop a finished torrent from the list (files are kept)
-    "stream_cache_minutes": 60,     # delete a stream that nothing has read for this long
+    "stream_idle_minutes": 2,       # delete a stream this long after its player closes
 }
 
 # Jackett does the actual tracker login/scraping (configured with the user's
@@ -1351,10 +1351,11 @@ def registry_saver_loop():
 # the whole file.
 #
 # A new stream goes to a hidden cache folder, not a category folder, and
-# stays out of the Downloads list. Once nothing has read it for
-# stream_cache_minutes it's removed along with its data - "Play in Infuse"
-# leaves nothing behind. Keep (or Download on the same release) moves it to
-# a real folder and makes it an ordinary download.
+# shows in Downloads only as a stream. A player's open connection keeps it;
+# once the player closes and stream_idle_minutes pass with no connection,
+# it's removed along with its data - "Play in Infuse" leaves nothing
+# behind. Save (or Download on the same release) moves it to a real folder
+# and makes it an ordinary download.
 VIDEO_EXTS = {".mkv", ".mp4", ".m4v", ".mov", ".avi", ".ts", ".m2ts", ".webm", ".wmv", ".mpg", ".mpeg"}
 STREAM_READAHEAD = 32 * 1024 * 1024   # bytes ahead of the read position to rush
 STREAM_HEAD = 8 * 1024 * 1024         # "ready to play" once this much of the start is in
@@ -1372,6 +1373,7 @@ STREAM_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 STREAM_CACHE_IDS = set()   # torrents that live in the cache, not in Downloads
 STREAM_LAST_USED = {}      # tid -> when a player last read from it
 STREAM_READERS = {}        # tid -> open /stream responses right now
+STREAM_OPENED = set()      # tids a player has connected to at least once
 
 
 def _info_hash_hex(magnet: str = None, info=None) -> str:
@@ -1405,6 +1407,10 @@ def rush_pieces(handle, first: int, last: int):
             handle.set_piece_deadline(piece, 300 + n * 150)
 
 
+def stream_idle_seconds() -> int:
+    return max(1, LIMITS.get("stream_idle_minutes", 2)) * 60
+
+
 def stream_activity(tid: str) -> dict:
     """Is a player reading this stream right now, and - for a cached one
     nothing is reading - how many seconds until it's deleted."""
@@ -1412,9 +1418,9 @@ def stream_activity(tid: str) -> dict:
     playing = STREAM_READERS.get(tid, 0) > 0
     clears_in = None
     if cached and not playing:
-        idle = max(5, LIMITS.get("stream_cache_minutes", 60)) * 60
+        idle = stream_idle_seconds()
         clears_in = max(0, int(idle - (time.time() - STREAM_LAST_USED.get(tid, time.time()))))
-    return {"cached": cached, "playing": playing, "clears_in": clears_in}
+    return {"cached": cached, "playing": playing, "opened": tid in STREAM_OPENED, "clears_in": clears_in}
 
 
 def stream_status(tid: str, index: int) -> dict:
@@ -1465,33 +1471,42 @@ def cached_streams() -> list:
     return out
 
 
-@app.route("/api/stream", methods=["POST"])
-def start_stream():
-    """Start (or reuse) a torrent in streaming mode and return its stream
-    URL. Takes the same magnet / download_link / category as adding a
-    download. Waits up to ~30s for a magnet's metadata - the file list is
-    needed to know what to play."""
-    payload = request.json or {}
-    magnet = (payload.get("magnet") or "").strip()
-    download_link = (payload.get("download_link") or "").strip()
+class StreamError(Exception):
+    def __init__(self, message: str, status: int):
+        super().__init__(message)
+        self.status = status
 
+
+def begin_stream(source: dict) -> tuple:
+    """Start (or reuse) a torrent in streaming mode; returns (tid, file
+    index). `source` is {"id"} (something in Downloads), {"magnet"},
+    {"download_link"} or {"torrent_hex"} (a .torrent already fetched).
+    A new torrent goes to the stream cache. Waits up to ~30s for a
+    magnet's metadata - the file list is needed to know what to play."""
+    magnet = (source.get("magnet") or "").strip()
+    download_link = (source.get("download_link") or "").strip()
     try:
-        if payload.get("id"):  # something already in Downloads
-            info, tid = None, str(payload["id"])
+        if source.get("id"):  # something already in Downloads
+            info, tid = None, str(source["id"])
             with LOCK:
                 if tid not in HANDLES:
-                    return jsonify({"error": "That download is gone"}), 404
+                    raise StreamError("That download is gone", 404)
         elif magnet.lower().startswith("magnet:?"):
             info, tid = None, _info_hash_hex(magnet=magnet)
+        elif source.get("torrent_hex"):
+            info = lt.torrent_info(bytes.fromhex(source["torrent_hex"]))
+            tid = _info_hash_hex(info=info)
         elif download_link:
             req = urllib.request.Request(download_link, headers={"User-Agent": "TorrentTube"})
             with urllib.request.urlopen(req, timeout=25) as resp:
                 info = lt.torrent_info(resp.read())
             tid = _info_hash_hex(info=info)
         else:
-            return jsonify({"error": "Nothing to play"}), 400
+            raise StreamError("Nothing to play", 400)
+    except StreamError:
+        raise
     except Exception:
-        return jsonify({"error": "Couldn't fetch that torrent"}), 400
+        raise StreamError("Couldn't fetch that torrent", 400)
 
     with LOCK:
         existing = HANDLES.get(tid)
@@ -1507,12 +1522,15 @@ def start_stream():
     deadline = time.time() + 30
     while not handle.status().has_metadata:
         if time.time() > deadline:
-            return jsonify({"error": "Couldn't get the file list - no peers yet. Try again in a bit."}), 504
+            raise StreamError("Couldn't get the file list - no peers yet. Try again in a bit.", 504)
         time.sleep(0.25)
 
     ti = handle.torrent_file()
     fs = ti.files()
     index = pick_video_file(ti)
+    if (tid, index) in STREAM_FILES and handle.is_valid():
+        return tid, index  # already streaming - don't re-rush the start on every request
+
     if is_new:
         # Only the video - not the samples, extras, other episodes.
         priorities = [0] * fs.num_files()
@@ -1534,7 +1552,22 @@ def start_stream():
     rush_pieces(handle, *_file_pieces(ti, index, max(0, size - 2 * 1024 * 1024), size))
     STREAM_FILES[(tid, index)] = {"path": str(Path(handle.status().save_path) / fs.file_path(index)), "size": size}
     save_registry()
+    return tid, index
 
+
+@app.route("/api/stream", methods=["POST"])
+def start_stream():
+    """Start (or reuse) a torrent in streaming mode and return its stream
+    URL. Takes the same magnet / download_link as adding a download, or
+    the id of one."""
+    try:
+        tid, index = begin_stream(request.json or {})
+    except StreamError as e:
+        return jsonify({"error": str(e)}), e.status
+    with LOCK:
+        handle = HANDLES[tid]
+    fs = handle.torrent_file().files()
+    size = fs.file_size(index)
     name = Path(fs.file_path(index)).name
     return jsonify({
         "id": tid,
@@ -1546,6 +1579,121 @@ def start_stream():
         "cached": tid in STREAM_CACHE_IDS,
         **stream_status(tid, index),
     })
+
+
+# ---------- Play links ----------
+# Play opens the player straight away with a link the page makes up on the
+# tap itself - /play/<token>/<title> - while it tells the server (POST
+# /api/play) what that token is. The player's first request waits for the
+# torrent to start and its file list to arrive, then streams like /stream.
+# A token stays valid after its stream is cleared: opening the link again
+# (or a player resuming after a long pause) starts the torrent again, and
+# the player remembers its position because the URL is the same.
+PLAY_LINKS_FILE = STATE_DIR / "play_links.json"
+PLAY_LINKS_MAX = 300
+PLAY_TOKEN_RE = re.compile(r"^[a-z]-[0-9a-f]{6,64}$")
+PLAY_LOCKS = {}
+
+
+def _load_play_links() -> dict:
+    try:
+        return json.loads(PLAY_LINKS_FILE.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+PLAY_LINKS = _load_play_links()
+
+
+def save_play_links():
+    with LOCK:
+        if len(PLAY_LINKS) > PLAY_LINKS_MAX:  # forget the oldest
+            for token, _ in sorted(PLAY_LINKS.items(), key=lambda kv: kv[1].get("at", 0))[:len(PLAY_LINKS) - PLAY_LINKS_MAX]:
+                PLAY_LINKS.pop(token, None)
+        data = json.dumps(PLAY_LINKS)
+    PLAY_LINKS_FILE.write_text(data)
+
+
+def _play_lock(token: str) -> threading.Lock:
+    with LOCK:
+        return PLAY_LOCKS.setdefault(token, threading.Lock())
+
+
+def resolve_play_link(token: str) -> tuple:
+    """(tid, file index) for a play token, starting its torrent if it isn't
+    running (first open, or cleared since). One start per token at a time -
+    a player opens several connections at once."""
+    link = PLAY_LINKS.get(token)
+    if not link:
+        raise StreamError("Unknown play link", 404)
+    with _play_lock(token):
+        source = {k: link[k] for k in ("id", "magnet", "download_link", "torrent_hex") if link.get(k)}
+        if source.get("download_link") and not source.get("torrent_hex"):
+            # Fetch the .torrent once and keep it - a restart after the
+            # stream is cleared shouldn't depend on the tracker link again.
+            try:
+                req = urllib.request.Request(source["download_link"], headers={"User-Agent": "TorrentTube"})
+                with urllib.request.urlopen(req, timeout=25) as resp:
+                    raw = resp.read()
+                lt.torrent_info(raw)
+                link["torrent_hex"] = source["torrent_hex"] = raw.hex()
+                save_play_links()
+            except Exception:
+                raise StreamError("Couldn't fetch that torrent", 400)
+        if source.get("id"):
+            with LOCK:
+                gone = source["id"] not in HANDLES
+            if gone and link.get("magnet"):
+                source = {"magnet": link["magnet"]}  # removed from Downloads since - stream it again
+        return begin_stream(source)
+
+
+@app.route("/api/play", methods=["POST"])
+def register_play_link():
+    """Says what a play token plays: {token, magnet | download_link | id,
+    title}. Returns at once; the torrent starts in the background so it's
+    already fetching by the time the player asks for the video."""
+    payload = request.json or {}
+    token = str(payload.get("token", ""))
+    if not PLAY_TOKEN_RE.match(token):
+        return jsonify({"error": "Bad play token"}), 400
+    link = {k: str(payload[k]).strip() for k in ("id", "magnet", "download_link", "title") if payload.get(k)}
+    if not any(link.get(k) for k in ("id", "magnet", "download_link")):
+        return jsonify({"error": "Nothing to play"}), 400
+    link["at"] = time.time()
+    with LOCK:
+        old = PLAY_LINKS.get(token, {})
+        if old.get("torrent_hex") and old.get("download_link") == link.get("download_link"):
+            link["torrent_hex"] = old["torrent_hex"]
+        PLAY_LINKS[token] = link
+    save_play_links()
+
+    def start():
+        try:
+            resolve_play_link(token)
+        except StreamError:
+            pass  # the player's own request reports it
+    threading.Thread(target=start, daemon=True).start()
+    return jsonify({"ok": True})
+
+
+@app.route("/play/<token>/<path:name>")
+def play_link(token, name):
+    """The video for a play token. The player may get here before the page's
+    POST /api/play does - wait a little for it."""
+    deadline = time.time() + 20
+    while token not in PLAY_LINKS:
+        if time.time() > deadline:
+            return jsonify({"error": "Unknown play link"}), 404
+        time.sleep(0.2)
+    try:
+        tid, index = resolve_play_link(token)
+    except StreamError as e:
+        return jsonify({"error": str(e)}), e.status
+    with LOCK:
+        handle = HANDLES.get(tid)
+    real_name = Path(handle.torrent_file().files().file_path(index)).name if handle and handle.is_valid() else name
+    return stream_file(tid, index, real_name)
 
 
 def adopt_cached_stream(tid: str, category: str) -> "str | None":
@@ -1570,6 +1718,7 @@ def drop_cached_stream(tid: str):
         PAUSED_IDS.discard(tid)
         STREAM_CACHE_IDS.discard(tid)
     STREAM_LAST_USED.pop(tid, None)
+    STREAM_OPENED.discard(tid)
     for key in [k for k in STREAM_FILES if k[0] == tid]:
         STREAM_FILES.pop(key, None)
     if handle and handle.is_valid():
@@ -1607,10 +1756,10 @@ def stop_stream(tid):
 
 
 def clean_stream_cache():
-    """Drops cached streams nothing has read for stream_cache_minutes, and
+    """Drops cached streams no player has read for stream_idle_minutes, and
     anything left in the cache folder that no stream owns (a crash, a
     restart between saves)."""
-    idle = max(5, LIMITS.get("stream_cache_minutes", 60)) * 60
+    idle = stream_idle_seconds()
     now = time.time()
     dropped = False
     for tid in list(STREAM_CACHE_IDS):
@@ -1645,7 +1794,7 @@ def clean_stream_cache():
 
 def stream_cache_loop():
     while True:
-        time.sleep(60)
+        time.sleep(20)
         try:
             clean_stream_cache()
         except Exception:
@@ -1743,6 +1892,7 @@ def stream_file(tid, index, name):
         # An open response keeps a cached stream alive however long the
         # player sits paused on it; the idle timer starts once it closes.
         STREAM_READERS[tid] = STREAM_READERS.get(tid, 0) + 1
+        STREAM_OPENED.add(tid)
         try:
             for data in generate():
                 STREAM_LAST_USED[tid] = time.time()
