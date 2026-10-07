@@ -16,6 +16,8 @@ behind qBittorrent and Deluge), served by Flask + waitress.
   Jackett (bundled) and TMDB power this, and both are configured from the
   app's own Settings screen (see below)
 - Pick which folder a download goes to (e.g. Cartoon / Movies / TV Shows)
+- Play a film without downloading it: **Play in Infuse / VLC** streams it to
+  the app and clears it afterwards (see below)
 - Live progress, download/upload speed, peer count and ETA
 - Pause, resume, and remove (optionally deleting the downloaded files)
 - Downloads survive a container restart (queue is saved to disk)
@@ -148,19 +150,45 @@ into the image or docker-compose.yml), so they survive a container restart
 or redeploy. Without a Jackett URL + API key set, the Search tab stays
 hidden and the app behaves exactly like the paste-only version.
 
+## Play in Infuse / VLC
+
+A title's details popup has a **Play in Infuse** (or **Play in VLC**)
+button next to Download. It streams the film while it downloads and opens
+it in that app, so nothing is kept unless you ask for it:
+
+1. Tap **Play**. The server fetches only the video file, in playback
+   order, into a hidden `.stream-cache` folder under your downloads.
+2. When the start is buffered, tap **Open in Infuse**. The app plays the
+   stream URL and can seek in it. It handles MKV, HEVC, every audio track
+   and subtitle, which a browser can't.
+3. Once no player has read the stream for a while (Settings > Playback >
+   *Clear a stream after*, 1 hour by default), the server deletes it.
+   **Keep** (or Download on the same release) moves it to the folder
+   picked beside Download instead, and it becomes a normal download.
+
+The **▾** beside Play picks the player. The choice is saved on each
+device, so a phone can use Infuse and a computer VLC. Infuse is offered on
+Apple devices only. VLC opens directly on iPhone, iPad and Android; on a
+computer, VLC has no link to open it, so the button copies the stream URL
+for VLC's *Open Network*. A ▶ on each release row plays that release.
+
+The phone must reach the server at the same address the page uses - on the
+LAN, or over a VPN.
+
 ## Streaming API
 
-The server can stream a torrent while it downloads: only the video file is
-fetched, in playback order, and served over plain HTTP with Range support,
-so a player can start right away and seek. The web UI doesn't use this (it
-sticks to downloading). It's here for native clients, such as an Apple TV
-app, or for pasting the stream URL into Infuse or VLC.
+The same streaming, for native clients (such as an Apple TV app) or any
+player that opens a URL. Only the video file is fetched, in playback order,
+and served over plain HTTP with Range support, so a player can start right
+away and seek.
 
 | Endpoint | What it does |
 |---|---|
-| `POST /api/stream` | Body `{"magnet": ...}`, `{"download_link": ...}` or `{"id": <download id>}`, plus optional `"category"`. Starts (or reuses) the torrent in streaming mode and returns `{id, file, name, size, url, ready, progress, ...}`. |
+| `POST /api/stream` | Body `{"magnet": ...}`, `{"download_link": ...}` or `{"id": <download id>}`. Starts (or reuses) the torrent in streaming mode and returns `{id, file, name, size, url, cached, ready, progress, ...}`. A new torrent goes to the stream cache (`cached: true`); `id` streams something already in Downloads. |
 | `GET /api/stream/<id>/<file>` | Buffering status: `ready` (the start is buffered), `head_progress`, `progress`, `download_rate`, `num_peers`, `done`. |
 | `GET /stream/<id>/<file>/<name>` | The video itself, with HTTP Range requests (`206 Partial Content`). |
+| `POST /api/stream/<id>/keep` | Body `{"category": ...}`. Moves a cached stream to that folder and makes it a normal download. |
+| `DELETE /api/stream/<id>` | Stops a cached stream and deletes its data now. |
 
 AVPlayer (Apple's native player) can't open MKV, which is what most
 releases are. A native app needs a player that can (VLCKit, KSPlayer,

@@ -3,6 +3,7 @@ import json
 import mimetypes
 import os
 import re
+import shutil
 import threading
 import time
 import urllib.parse
@@ -77,6 +78,7 @@ DEFAULT_LIMITS = {
     "max_upload_slots": 0,          # unchoke slots, 0 = libtorrent default
     "seed_after_download": 1,       # 0/1 - pause a torrent as soon as it finishes instead of seeding
     "remove_after_download": 0,     # 0/1 - drop a finished torrent from the list (files are kept)
+    "stream_cache_minutes": 60,     # delete a stream that nothing has read for this long
 }
 
 # Jackett does the actual tracker login/scraping (configured with the user's
@@ -94,7 +96,9 @@ DEFAULT_SERVICE = {
     "jackett_indexer": os.environ.get("JACKETTAPI_INDEXER", "all"),
     "tmdb_api_key": os.environ.get("TMDB_API_KEY", ""),
     "tmdb_language": os.environ.get("TMDB_LANGUAGE", "uk-UA"),
+    "default_player": "infuse",  # what Play opens: "infuse" or "vlc"
 }
+PLAYERS = ("infuse", "vlc")
 
 
 def load_settings() -> dict:
@@ -173,6 +177,8 @@ def save_registry():
                     entry["file_priorities"] = priorities
             else:
                 entry["magnet_uri"] = lt.make_magnet_uri(h)
+            if torrent_id(h) in STREAM_CACHE_IDS:
+                entry["stream_cache"] = True
             entries.append(entry)
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     RESUME_FILE.write_text(json.dumps(entries))
@@ -193,7 +199,12 @@ def load_registry():
                 if entry.get("file_priorities"):
                     HANDLES[tid].prioritize_files(entry["file_priorities"])
             elif "magnet_uri" in entry:
-                add_magnet(entry["magnet_uri"], entry["save_path"])
+                tid = add_magnet(entry["magnet_uri"], entry["save_path"])
+            else:
+                continue
+            if entry.get("stream_cache"):
+                STREAM_CACHE_IDS.add(tid)
+                STREAM_LAST_USED[tid] = time.time()  # a fresh idle window after a restart
         except Exception:
             continue
 
@@ -286,6 +297,7 @@ def config():
         "search_indexer": JACKETT_INDEXER if search_enabled else None,
         "tmdb_enabled": bool(TMDB_API_KEY),
         "tmdb_language": TMDB_LANGUAGE if TMDB_API_KEY else None,
+        "default_player": SETTINGS["default_player"] if SETTINGS["default_player"] in PLAYERS else "infuse",
     })
 
 
@@ -311,6 +323,8 @@ def update_settings():
         if not isinstance(payload[key], str):
             return jsonify({"error": f"'{key}' must be text"}), 400
         SETTINGS[key] = payload[key].strip()
+    if SETTINGS["default_player"] not in PLAYERS:
+        SETTINGS["default_player"] = DEFAULT_SERVICE["default_player"]
 
     JACKETT_URL = SETTINGS["jackett_url"].rstrip("/")
     JACKETT_API_KEY = SETTINGS["jackett_api_key"]
@@ -1152,8 +1166,8 @@ def enforce_remove_policy():
         handles = list(HANDLES.items())
     removed = False
     for tid, h in handles:
-        if not h.is_valid():
-            continue
+        if not h.is_valid() or tid in STREAM_CACHE_IDS:
+            continue  # a cached stream is cleaned up by its own idle timer
         st = h.status()
         if not (st.has_metadata and st.is_finished):
             continue
@@ -1192,7 +1206,8 @@ def list_torrents():
     enforce_remove_policy()
     enforce_seed_policy()
     with LOCK:
-        items = [(tid, h) for tid, h in HANDLES.items() if h.is_valid()]
+        # Streams in the cache aren't downloads - they live and go on their own.
+        items = [(tid, h) for tid, h in HANDLES.items() if h.is_valid() and tid not in STREAM_CACHE_IDS]
         removed = [{"id": r["id"], "name": r["name"]} for r in RECENTLY_REMOVED]
     items.sort(key=lambda pair: pair[1].status().added_time, reverse=True)
     return jsonify({"torrents": [serialize(tid, h) for tid, h in items], "auto_removed": removed})
@@ -1242,7 +1257,7 @@ def create_torrent():
             info = lt.torrent_info(f.read())
         except Exception:
             return jsonify({"error": "That doesn't look like a valid .torrent file"}), 400
-        tid = add_torrent_file(info, resolve_save_path(category))
+        tid = adopt_cached_stream(_info_hash_hex(info=info), category) or add_torrent_file(info, resolve_save_path(category))
     else:
         payload = (request.json or {}) if request.is_json else request.form
         magnet = payload.get("magnet", "").strip()
@@ -1250,7 +1265,7 @@ def create_torrent():
         category = payload.get("category", "")
         if magnet.lower().startswith("magnet:?"):
             try:
-                tid = add_magnet(magnet, resolve_save_path(category))
+                tid = adopt_cached_stream(_info_hash_hex(magnet=magnet), category) or add_magnet(magnet, resolve_save_path(category))
             except Exception:
                 return jsonify({"error": "Couldn't parse that magnet link"}), 400
         elif download_link:
@@ -1260,7 +1275,7 @@ def create_torrent():
                     info = lt.torrent_info(resp.read())
             except Exception:
                 return jsonify({"error": "Couldn't fetch that torrent"}), 400
-            tid = add_torrent_file(info, resolve_save_path(category))
+            tid = adopt_cached_stream(_info_hash_hex(info=info), category) or add_torrent_file(info, resolve_save_path(category))
         else:
             return jsonify({"error": "Paste a magnet link or upload a .torrent file"}), 400
     save_registry()
@@ -1305,6 +1320,7 @@ def remove_torrent(tid):
     with LOCK:
         handle = HANDLES.pop(tid, None)
         PAUSED_IDS.discard(tid)
+        STREAM_CACHE_IDS.discard(tid)
     if not handle or not handle.is_valid():
         return jsonify({"error": "Unknown torrent"}), 404
     delete_files = request.args.get("delete_files") == "1"
@@ -1329,8 +1345,13 @@ def registry_saver_loop():
 # native Apple TV app - can play it and seek in it. Seeking works by
 # pulling the pieces under the requested byte range to the front of the
 # queue (set_piece_deadline) and waiting for them, instead of waiting for
-# the whole file. Data still lands on disk like a normal download, in the
-# chosen folder, so a stream the user likes is also a download they keep.
+# the whole file.
+#
+# A new stream goes to a hidden cache folder, not a category folder, and
+# stays out of the Downloads list. Once nothing has read it for
+# stream_cache_minutes it's removed along with its data - "Play in Infuse"
+# leaves nothing behind. Keep (or Download on the same release) moves it to
+# a real folder and makes it an ordinary download.
 VIDEO_EXTS = {".mkv", ".mp4", ".m4v", ".mov", ".avi", ".ts", ".m2ts", ".webm", ".wmv", ".mpg", ".mpeg"}
 STREAM_READAHEAD = 32 * 1024 * 1024   # bytes ahead of the read position to rush
 STREAM_HEAD = 8 * 1024 * 1024         # "ready to play" once this much of the start is in
@@ -1343,6 +1364,11 @@ mimetypes.add_type("video/mp2t", ".m2ts")
 # "Remove when finished" drops a completed torrent from the session, and a
 # stream still playing it should just keep reading the finished file.
 STREAM_FILES = {}
+STREAM_CACHE_DIR = DOWNLOAD_DIR / ".stream-cache"
+STREAM_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+STREAM_CACHE_IDS = set()   # torrents that live in the cache, not in Downloads
+STREAM_LAST_USED = {}      # tid -> when a player last read from it
+STREAM_READERS = {}        # tid -> open /stream responses right now
 
 
 def _info_hash_hex(magnet: str = None, info=None) -> str:
@@ -1408,7 +1434,6 @@ def start_stream():
     payload = request.json or {}
     magnet = (payload.get("magnet") or "").strip()
     download_link = (payload.get("download_link") or "").strip()
-    save_path = resolve_save_path(payload.get("category", ""))
 
     try:
         if payload.get("id"):  # something already in Downloads
@@ -1432,7 +1457,10 @@ def start_stream():
         existing = HANDLES.get(tid)
     is_new = not (existing and existing.is_valid())
     if is_new:
+        save_path = str(STREAM_CACHE_DIR)
         tid = add_torrent_file(info, save_path) if info else add_magnet(magnet, save_path)
+        STREAM_CACHE_IDS.add(tid)
+    STREAM_LAST_USED[tid] = time.time()
     with LOCK:
         handle = HANDLES[tid]
 
@@ -1475,8 +1503,105 @@ def start_stream():
         "size": size,
         "size_label": format_size(size),
         "url": f"/stream/{tid}/{index}/{urllib.parse.quote(name)}",
+        "cached": tid in STREAM_CACHE_IDS,
         **stream_status(tid, index),
     })
+
+
+def adopt_cached_stream(tid: str, category: str) -> "str | None":
+    """Turns a cached stream into an ordinary download: moved to the
+    category folder, back in the Downloads list, every file wanted. None
+    when `tid` isn't a cached stream."""
+    with LOCK:
+        handle = HANDLES.get(tid)
+        if tid not in STREAM_CACHE_IDS or not handle or not handle.is_valid():
+            return None
+        STREAM_CACHE_IDS.discard(tid)
+    handle.move_storage(resolve_save_path(category))
+    if handle.status().has_metadata:
+        handle.prioritize_files([4] * handle.torrent_file().files().num_files())
+    handle.set_flags(lt.torrent_flags.auto_managed)
+    return tid
+
+
+def drop_cached_stream(tid: str):
+    with LOCK:
+        handle = HANDLES.pop(tid, None)
+        PAUSED_IDS.discard(tid)
+        STREAM_CACHE_IDS.discard(tid)
+    STREAM_LAST_USED.pop(tid, None)
+    for key in [k for k in STREAM_FILES if k[0] == tid]:
+        STREAM_FILES.pop(key, None)
+    if handle and handle.is_valid():
+        ses.remove_torrent(handle, lt.session.delete_files)
+
+
+@app.route("/api/stream/<tid>/keep", methods=["POST"])
+def keep_stream(tid):
+    """Keep a streamed film: it becomes a normal download in that folder."""
+    category = (request.json or {}).get("category", "")
+    if tid not in STREAM_CACHE_IDS:
+        return jsonify({"ok": True})  # already a download
+    if not adopt_cached_stream(tid, category):
+        return jsonify({"error": "That stream is gone"}), 404
+    save_registry()
+    return jsonify({"ok": True, "category": Path(resolve_save_path(category)).name})
+
+
+@app.route("/api/stream/<tid>", methods=["DELETE"])
+def stop_stream(tid):
+    """Drop a cached stream and its data now instead of waiting for the
+    idle timer. A stream of something in Downloads is left alone."""
+    if tid in STREAM_CACHE_IDS:
+        drop_cached_stream(tid)
+        save_registry()
+    return jsonify({"ok": True})
+
+
+def clean_stream_cache():
+    """Drops cached streams nothing has read for stream_cache_minutes, and
+    anything left in the cache folder that no stream owns (a crash, a
+    restart between saves)."""
+    idle = max(5, LIMITS.get("stream_cache_minutes", 60)) * 60
+    now = time.time()
+    dropped = False
+    for tid in list(STREAM_CACHE_IDS):
+        if STREAM_READERS.get(tid, 0) == 0 and now - STREAM_LAST_USED.get(tid, now) > idle:
+            drop_cached_stream(tid)
+            dropped = True
+    if dropped:
+        save_registry()
+
+    owned = set()
+    with LOCK:
+        handles = [HANDLES.get(tid) for tid in STREAM_CACHE_IDS]
+    for h in handles:
+        if not h or not h.is_valid() or not h.status().has_metadata:
+            return  # can't tell what it owns yet - sweep next time
+        owned.add(h.torrent_file().files().file_path(0).replace("\\", "/").split("/")[0])
+        owned.add(h.torrent_file().name())
+    live_ids = set(STREAM_CACHE_IDS)
+    for child in STREAM_CACHE_DIR.iterdir():
+        if child.name in owned or any(t in child.name for t in live_ids):
+            continue  # its files, or its ".<hash>.parts" file
+        try:
+            if now - child.stat().st_mtime < idle:
+                continue
+            if child.is_dir():
+                shutil.rmtree(child)
+            else:
+                child.unlink()
+        except OSError:
+            pass
+
+
+def stream_cache_loop():
+    while True:
+        time.sleep(60)
+        try:
+            clean_stream_cache()
+        except Exception:
+            pass
 
 
 @app.route("/api/stream/<tid>/<int:index>")
@@ -1555,11 +1680,26 @@ def stream_file(tid, index, name):
     }
     if match:
         headers["Content-Range"] = f"bytes {start}-{end}/{size}"
-    return Response(generate(), status=206 if match else 200, headers=headers, direct_passthrough=True)
+
+    def tracked():
+        # An open response keeps a cached stream alive however long the
+        # player sits paused on it; the idle timer starts once it closes.
+        STREAM_READERS[tid] = STREAM_READERS.get(tid, 0) + 1
+        try:
+            for data in generate():
+                STREAM_LAST_USED[tid] = time.time()
+                yield data
+        finally:
+            STREAM_READERS[tid] = max(0, STREAM_READERS.get(tid, 1) - 1)
+            STREAM_LAST_USED[tid] = time.time()
+
+    STREAM_LAST_USED[tid] = time.time()
+    return Response(tracked(), status=206 if match else 200, headers=headers, direct_passthrough=True)
 
 
 load_registry()
 threading.Thread(target=registry_saver_loop, daemon=True).start()
+threading.Thread(target=stream_cache_loop, daemon=True).start()
 
 
 if __name__ == "__main__":

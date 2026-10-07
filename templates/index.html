@@ -951,6 +951,19 @@
     scrollbar-width: none;
   }
   .details-box::-webkit-scrollbar { display: none; }
+  /* With a banner, the box paints no background of its own - the parts
+     under the banner do. The box's rounded corners clip the banner, and
+     under the desktop zoom (--ui-zoom) that clip lands on a fractional
+     pixel: the browser blends the banner's edge pixels with whatever is
+     painted beneath them, so the box's light surface (and its backdrop
+     blur) showed through as a 1px line along the top and right. */
+  .details-box.has-banner { background: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .details-box.has-banner .dt-body,
+  .details-box.has-banner .dt-hero.is-playing .dt-info {
+    background: var(--surface-solid);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+  }
   /* Zero-height sticky strip holding Back/Close, so both stay pinned to
      the top of the popup however far it's scrolled (they used to scroll
      away with the hero). */
@@ -1138,13 +1151,85 @@
 
   .dt-body { padding: 14px 22px 22px; }
 
-  /* One row: Download (with the release's quality/size) + where to. The
-     trailer is started from the banner's play button instead. */
+  /* One row: Play in <player>, Download (with the release's quality/size)
+     + where to. The trailer is started from the banner's play button. */
   .dt-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
   .dt-actions .inline-category-select { max-width: 220px; text-overflow: ellipsis; }
-  .dt-actions .btn-secondary, .dt-actions .btn-primary { padding: 9px 16px; font-size: 13px; display: inline-flex; align-items: center; gap: 7px; }
+  /* Every control in the row is the same height - Play's app logo made it
+     taller than Download and the folder picker. */
+  .dt-actions { --dt-action-h: 38px; }
+  .dt-actions .btn-secondary, .dt-actions .btn-primary { height: var(--dt-action-h); padding: 0 16px; font-size: 13px; display: inline-flex; align-items: center; gap: 7px; }
+  .dt-actions .inline-category-select, .dt-actions .dt-status-pill { height: var(--dt-action-h); padding-top: 0; padding-bottom: 0; display: inline-flex; align-items: center; }
   .dt-actions .btn-primary svg { width: 14px; height: 14px; }
   .dt-actions .dt-download-meta { font-weight: 500; opacity: 0.85; }
+
+  /* Play in Infuse/VLC: the saved player's own logo on the button, and a
+     ▾ beside it to pick another one. */
+  .play-split { display: inline-flex; align-items: stretch; border-radius: var(--radius-pill); box-shadow: var(--shadow-sm); }
+  .play-split .btn-primary { box-shadow: none; }
+  .dt-actions .play-split .play-main { border-radius: var(--radius-pill) 0 0 var(--radius-pill); padding-right: 14px; }
+  .dt-actions .play-split .play-more { border-radius: 0 var(--radius-pill) var(--radius-pill) 0; padding: 0 12px 0 10px; border-left: 1px solid rgba(255, 255, 255, 0.28); }
+  .play-split .play-more svg { width: 12px; height: 12px; }
+  .player-logo { width: 20px; height: 20px; border-radius: 5px; flex-shrink: 0; display: block; }
+  .dt-release .action-btn + .action-btn { margin-left: 2px; }
+
+  /* "Now playing": what's buffering, and the button that opens it. */
+  .dt-watch {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 14px;
+    padding: 12px 14px;
+    margin-top: 12px;
+    border-radius: var(--radius-md);
+    background: var(--accent-soft);
+  }
+  .dt-watch-info { flex: 1 1 220px; min-width: 0; }
+  .dt-watch-name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dt-watch-status { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+  .dt-watch-status.is-ready { color: var(--success); }
+  .dt-watch-status.is-error { color: var(--danger); }
+  .dt-watch-bar { height: 3px; border-radius: 2px; background: var(--border); margin-top: 7px; overflow: hidden; }
+  .dt-watch-bar > div { height: 100%; background: var(--accent); transition: width 0.4s; }
+  .dt-watch-actions { display: flex; align-items: center; gap: 6px; }
+  .dt-watch-actions .btn-primary, .dt-watch-actions .btn-secondary {
+    padding: 8px 14px;
+    font-size: 13px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    text-decoration: none;
+  }
+  .dt-watch-actions .player-logo { width: 18px; height: 18px; }
+  .dt-watch-actions .is-waiting { opacity: 0.55; pointer-events: none; }
+
+  /* Player picker */
+  .player-box { max-width: 380px; }
+  .player-list { display: flex; flex-direction: column; gap: 6px; }
+  .player-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text);
+    text-align: left;
+    font-weight: 400;
+  }
+  .player-option:hover:not(:disabled) { border-color: var(--accent); }
+  .player-option.is-current { border-color: var(--accent); background: var(--accent-soft); }
+  .player-option .player-logo { width: 40px; height: 40px; border-radius: 10px; }
+  .player-option-icon { width: 40px; height: 40px; border-radius: 10px; background: var(--border); color: var(--text-secondary); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .player-option-text { flex: 1; min-width: 0; }
+  .player-option-name { font-size: 14px; font-weight: 600; }
+  .player-option-sub { font-size: 12px; color: var(--text-secondary); margin-top: 1px; }
+  .player-option-check { color: var(--accent); display: none; }
+  .player-option.is-current .player-option-check { display: flex; }
+  .player-note { font-size: 12px; color: var(--text-tertiary); margin: 12px 2px 0; line-height: 1.45; }
   .dt-status-pill {
     font-size: 12.5px;
     font-weight: 600;
@@ -1293,12 +1378,26 @@
     .dt-title { font-size: 20px; }
     .dt-body { padding: 12px 16px 18px; }
     .dt-cols { grid-template-columns: 1fr; gap: 14px; }
-    .dt-actions { flex-wrap: nowrap; }
     .dt-actions > * { min-width: 0; justify-content: center; }
-    /* Download carries its size/quality - give it the room, one line. */
-    .dt-actions > .btn-primary, .dt-actions > .dt-status-pill { flex: 1 1 auto; white-space: nowrap; text-align: center; }
+    /* Play gets a full-width row of its own; Download + folder share the
+       next one. Download carries its size/quality - give it the room. */
+    .dt-actions > .play-split { flex: 1 1 100%; }
+    .dt-actions { --dt-action-h: 42px; }
+    .dt-actions .play-split .play-main { flex: 1; justify-content: center; font-size: 14px; }
+    .dt-actions > [data-act="download-best"], .dt-actions > .dt-status-pill { flex: 1 1 0; white-space: nowrap; text-align: center; }
     .dt-actions > [data-act="category"] { flex: 0 0 auto; }
-    .dt-actions > .btn-primary .dt-download-meta { overflow: hidden; text-overflow: ellipsis; }
+    .dt-actions > [data-act="download-best"] .dt-download-meta { overflow: hidden; text-overflow: ellipsis; }
+    .dt-watch-actions { flex: 1 1 100%; }
+    .dt-watch-actions > [data-role="open"] { flex: 1; padding-top: 10px; padding-bottom: 10px; }
+    /* The picker is a bottom sheet too. */
+    #playerModal.is-open { align-items: flex-end; padding: 0; }
+    #playerModal .player-box {
+      max-width: none;
+      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+      border-bottom: none;
+      padding-bottom: calc(22px + env(safe-area-inset-bottom));
+      animation: dt-sheet-in 0.22s ease-out;
+    }
     .dt-hero-play-icon { width: 56px; height: 56px; }
     .dt-hero-play, .dt-hero-play:active:not(:disabled) { transform: translate(-50%, -28px); }
     /* The banner is short on a phone - the label would sit on the title. */
@@ -1775,6 +1874,23 @@
       </div>
 
       <div class="settings-section">
+        <div class="section-label">Playback</div>
+        <div class="settings-row">
+          <div class="settings-row-label">Default player<button type="button" class="info-tip" data-tip="The app the Play button opens. The ▾ beside Play changes it too">i</button></div>
+          <select class="inline-category-select" id="settingsPlayer"></select>
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-label">Clear a stream after<button type="button" class="info-tip" data-tip="A stream is deleted from the server once no player has read it for this long. Keep it to save it to a folder instead">i</button></div>
+          <select class="inline-category-select" id="settingsStreamCache">
+            <option value="15">15 minutes</option>
+            <option value="60">1 hour</option>
+            <option value="360">6 hours</option>
+            <option value="1440">1 day</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="settings-section">
         <div class="section-label">Bandwidth &amp; Connections</div>
 
         <div class="settings-slider-row">
@@ -1901,6 +2017,14 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="playerModal">
+  <div class="modal-box player-box" role="dialog" aria-modal="true" aria-labelledby="playerModalTitle">
+    <div class="modal-title" id="playerModalTitle">Play in</div>
+    <div class="player-list" id="playerList"></div>
+    <p class="player-note">The film streams from this server while it downloads to a temporary cache. Nothing is kept after you stop watching, unless you tap Keep.</p>
+  </div>
+</div>
+
 <div class="modal-overlay" id="confirmModal">
   <div class="modal-box confirm-box">
     <div class="modal-title" id="confirmModalTitle">Are you sure?</div>
@@ -2000,6 +2124,8 @@ const settingsTabs = document.getElementById("settingsTabs");
 const settingsSave = document.getElementById("settingsSave");
 const settingsReset = document.getElementById("settingsReset");
 const settingsDefaultCategory = document.getElementById("settingsDefaultCategory");
+const settingsPlayer = document.getElementById("settingsPlayer");
+const settingsStreamCache = document.getElementById("settingsStreamCache");
 const settingsDownloadDir = document.getElementById("settingsDownloadDir");
 const settingsCategories = document.getElementById("settingsCategories");
 const settingsSearch = document.getElementById("settingsSearch");
@@ -2151,6 +2277,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   // One layer at a time: Escape in a popup opened from search results
   // closes just the popup, not the results list too.
+  if (playerModal.classList.contains("is-open")) { closePlayerPicker(); return; }
   if (detailsModal.classList.contains("is-open")) { closeDetails(); return; }
   closeSearchDropdown(); closeUploadModal(); closeSettings(); closeConfirm(false);
 });
@@ -2572,6 +2699,7 @@ async function loadConfig() {
     currentCategories = data.categories || [];
     searchEnabled = !!data.search_enabled;
     lastConfig = data;
+    if (data.default_player) defaultPlayerId = data.default_player;
   } catch (e) {}
 }
 
@@ -2582,6 +2710,10 @@ function renderSettings() {
     .map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`)
     .join("");
   settingsDefaultCategory.value = getDefaultCategory();
+  settingsPlayer.innerHTML = availablePlayers()
+    .map(id => `<option value="${id}">${escapeHtml(PLAYERS[id].name)}</option>`)
+    .join("");
+  settingsPlayer.value = currentPlayer();
 
   settingsDownloadDir.textContent = lastConfig.download_dir || "—";
   settingsCategories.innerHTML = currentCategories
@@ -2641,6 +2773,11 @@ function renderLimits() {
   settingsUploadLimitValue.textContent = formatSpeed(lastLimits.upload_rate_limit);
   settingsSeedAfterDownload.checked = (lastLimits.seed_after_download ?? 1) != 0;
   settingsRemoveAfterDownload.checked = (lastLimits.remove_after_download ?? 0) != 0;
+  const cacheMinutes = String(lastLimits.stream_cache_minutes ?? 60);
+  if (![...settingsStreamCache.options].some(o => o.value === cacheMinutes)) {
+    settingsStreamCache.add(new Option(`${cacheMinutes} minutes`, cacheMinutes));
+  }
+  settingsStreamCache.value = cacheMinutes;
   settingsMaxConnections.value = lastLimits.max_connections ?? 0;
   settingsMaxConnectionsValue.textContent = formatCount(lastLimits.max_connections, "Default");
   settingsMaxConnectionsPerTorrent.value = lastLimits.max_connections_per_torrent ?? 0;
@@ -2709,6 +2846,7 @@ async function saveLimits() {
     upload_rate_limit: sliderToKbps(settingsUploadLimit.value),
     seed_after_download: settingsSeedAfterDownload.checked ? 1 : 0,
     remove_after_download: settingsRemoveAfterDownload.checked ? 1 : 0,
+    stream_cache_minutes: settingsStreamCache.value,
     max_connections: settingsMaxConnections.value,
     max_connections_per_torrent: settingsMaxConnectionsPerTorrent.value,
     max_upload_slots: settingsMaxUploadSlots.value,
@@ -2766,6 +2904,7 @@ settingsTabs.addEventListener("click", e => {
   if (btn) switchSettingsTab(btn.dataset.tab);
 });
 settingsDefaultCategory.addEventListener("change", () => rememberCategory(settingsDefaultCategory.value));
+settingsPlayer.addEventListener("change", () => rememberPlayer(settingsPlayer.value));
 
 // A native title-attribute tooltip never fires on touch, so the "i" badges
 // are buttons that surface their hint as a toast instead - works the same
@@ -2781,7 +2920,7 @@ settingsMaxConnections.addEventListener("input", () => { settingsMaxConnectionsV
 settingsMaxConnectionsPerTorrent.addEventListener("input", () => { settingsMaxConnectionsPerTorrentValue.textContent = formatCount(settingsMaxConnectionsPerTorrent.value, "No cap"); });
 settingsMaxUploadSlots.addEventListener("input", () => { settingsMaxUploadSlotsValue.textContent = formatCount(settingsMaxUploadSlots.value, "Default"); });
 
-[settingsDownloadLimit, settingsUploadLimit, settingsSeedAfterDownload, settingsRemoveAfterDownload, settingsMaxConnections, settingsMaxConnectionsPerTorrent, settingsMaxUploadSlots,
+[settingsDownloadLimit, settingsUploadLimit, settingsSeedAfterDownload, settingsRemoveAfterDownload, settingsStreamCache, settingsMaxConnections, settingsMaxConnectionsPerTorrent, settingsMaxUploadSlots,
  settingsJackettUrl, settingsJackettApiKey, settingsJackettIndexer, settingsTmdbApiKey, settingsTmdbLanguage]
   .forEach(el => el.addEventListener("change", saveLimits));
 
@@ -2797,6 +2936,7 @@ settingsReset.addEventListener("click", async () => {
   settingsUploadLimitValue.textContent = "Unlimited";
   settingsSeedAfterDownload.checked = true;
   settingsRemoveAfterDownload.checked = false;
+  settingsStreamCache.value = "60";
   settingsMaxConnections.value = 0;
   settingsMaxConnectionsValue.textContent = "Default";
   settingsMaxConnectionsPerTorrent.value = 0;
@@ -2949,6 +3089,276 @@ const detailsBody = document.getElementById("detailsBody");
 const detailsClose = document.getElementById("detailsClose");
 const detailsBack = document.getElementById("detailsBack");
 const PLAY_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7-11-7z"/></svg>`;
+
+// ---------- Play in Infuse / VLC ----------
+// Play starts the torrent in streaming mode on the server (video file
+// only, fetched in playback order, into a temporary cache) and gets back a
+// URL with Range support. Infuse or VLC opens that URL through its own
+// link scheme and does the playing - every container, codec, audio track
+// and subtitle, which a browser <video> can't. The server deletes the
+// stream once no player has read it for a while (Settings > Playback).
+const IS_ANDROID = /Android/i.test(navigator.userAgent);
+// iPadOS reports itself as a Mac - touch points tell them apart.
+const IS_IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+
+const PLAYERS = {
+  infuse: {
+    name: "Infuse",
+    icon: "/static/players/infuse.png",
+    sub: "iPhone, iPad, Apple TV and Mac",
+    store: "https://apps.apple.com/app/id1136220934",
+    link: url => `infuse://x-callback-url/play?url=${encodeURIComponent(url)}`,
+  },
+  vlc: {
+    name: "VLC",
+    icon: "/static/players/vlc.png",
+    sub: IS_IOS || IS_ANDROID ? "Free, plays almost anything" : "Copies the link - paste it in VLC's Open Network",
+    store: IS_ANDROID ? "https://play.google.com/store/apps/details?id=org.videolan.vlc" : "https://apps.apple.com/app/id650377962",
+    // Desktop VLC registers no link scheme - the picker copies the URL.
+    link: url => {
+      if (IS_IOS) return `vlc-x-callback://x-callback-url/stream?url=${encodeURIComponent(url)}`;
+      if (IS_ANDROID) {
+        const u = new URL(url);
+        return `intent://${u.host}${u.pathname}#Intent;scheme=${u.protocol.replace(":", "")};package=org.videolan.vlc;type=video/*;end`;
+      }
+      return null;
+    },
+  },
+};
+
+// One player for the whole app, saved on the server (Settings > Playback >
+// Default player, or the ▾ beside Play) - Infuse unless changed.
+let defaultPlayerId = "infuse";
+function availablePlayers() {
+  return Object.keys(PLAYERS);
+}
+function currentPlayer() {
+  return PLAYERS[defaultPlayerId] ? defaultPlayerId : "infuse";
+}
+async function rememberPlayer(id) {
+  if (!PLAYERS[id] || id === defaultPlayerId) return;
+  defaultPlayerId = id;
+  lastConfig.default_player = id;
+  try {
+    const data = await fetch("/api/settings", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ default_player: id }),
+    }).then(r => r.json());
+    if (data.error) throw new Error(data.error);
+    lastLimits = data;
+  } catch (e) {
+    showToast("Couldn't save the default player", true);
+  }
+}
+function playerLogo(id) {
+  return `<img class="player-logo" src="${PLAYERS[id].icon}" alt="" width="20" height="20">`;
+}
+const CHEVRON_DOWN = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>`;
+const CLOSE_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>`;
+const LINK_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.5.5l3-3a5 5 0 00-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 00-7.5-.5l-3 3a5 5 0 007 7l1.7-1.7"/></svg>`;
+
+const playerModal = document.getElementById("playerModal");
+const playerList = document.getElementById("playerList");
+let playerPickerThen = null;
+
+// The picker: each player with its logo, plus Copy link once a stream
+// exists. `then` runs after a choice - Play on a device that hasn't
+// picked a player yet opens this first, then starts the stream.
+function openPlayerPicker(then = null) {
+  playerPickerThen = then;
+  const current = currentPlayer();
+  const st = detailsState && detailsState.stream;
+  playerList.innerHTML = availablePlayers().map(id => `
+    <button type="button" class="player-option${id === current ? " is-current" : ""}" data-player="${id}">
+      <img class="player-logo" src="${PLAYERS[id].icon}" alt="" width="40" height="40">
+      <div class="player-option-text">
+        <div class="player-option-name">${escapeHtml(PLAYERS[id].name)}</div>
+        <div class="player-option-sub">${escapeHtml(PLAYERS[id].sub)}</div>
+      </div>
+      <span class="player-option-check">${ICONS.check}</span>
+    </button>`).join("") + (st && st.url ? `
+    <button type="button" class="player-option" data-player="copy">
+      <span class="player-option-icon">${LINK_ICON}</span>
+      <div class="player-option-text">
+        <div class="player-option-name">Copy link</div>
+        <div class="player-option-sub">For any other player that opens a URL</div>
+      </div>
+    </button>` : "");
+  playerModal.classList.add("is-open");
+}
+function closePlayerPicker() {
+  playerModal.classList.remove("is-open");
+  playerPickerThen = null;
+}
+playerModal.addEventListener("click", (e) => {
+  if (e.target === playerModal) { closePlayerPicker(); return; }
+  const opt = e.target.closest("[data-player]");
+  if (!opt) return;
+  const id = opt.dataset.player;
+  if (id === "copy") { copyStreamLink(); closePlayerPicker(); return; }
+  rememberPlayer(id);
+  const then = playerPickerThen;
+  closePlayerPicker();
+  if (detailsState) { renderDetailsBody(); }
+  if (then) then();
+});
+
+function copyStreamLink() {
+  const st = detailsState && detailsState.stream;
+  if (!st || !st.url) return;
+  const done = () => showToast("Stream link copied");
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(st.url).then(done, () => showToast(st.url));
+  } else {
+    // Plain http on the LAN isn't a secure context - no Clipboard API.
+    const ta = document.createElement("textarea");
+    ta.value = st.url;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy") ? done() : showToast(st.url); } catch (e) { showToast(st.url); }
+    ta.remove();
+  }
+}
+
+function requestPlay(release) {
+  startStream(release);
+}
+
+async function startStream(release) {
+  const s = detailsState;
+  if (!s || (s.stream && s.stream.state === "starting")) return;
+  clearTimeout(s.streamTimer);
+  s.stream = { state: "starting", release };
+  renderDetailsBody();
+  const body = s.torrent ? { id: s.torrent.id }
+    : release.magnet ? { magnet: release.magnet } : { download_link: release.download_link };
+  try {
+    const res = await fetch("/api/stream", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    if (detailsState !== s) return;
+    s.stream = { state: "ready", release, ...data, url: location.origin + data.url };
+    pollStream(s);
+  } catch (e) {
+    if (detailsState !== s) return;
+    s.stream = { state: "error", release, error: e.message || "Couldn't start playback" };
+  }
+  renderDetailsBody();
+}
+
+function pollStream(s) {
+  clearTimeout(s.streamTimer);
+  if (!s.stream || s.stream.done) return;
+  s.streamTimer = setTimeout(async () => {
+    if (detailsState !== s || !s.stream || !s.stream.id) return;
+    try {
+      const status = await fetch(`/api/stream/${encodeURIComponent(s.stream.id)}/${s.stream.file}`).then(r => r.json());
+      if (detailsState !== s || !s.stream) return;
+      const wasReady = s.stream.ready;
+      Object.assign(s.stream, status);
+      // Ready flips the Open button on - redraw the panel; otherwise just
+      // the status line and bar, so a tap in progress isn't lost.
+      if (wasReady !== s.stream.ready) renderDetailsBody();
+      else updateWatchStatus(s.stream);
+    } catch (e) {}
+    pollStream(s);
+  }, 1500);
+}
+
+function streamStatusText(st) {
+  if (st.done) return "Fully downloaded · ready";
+  const peers = st.num_peers ? ` · ${st.num_peers} peer${st.num_peers === 1 ? "" : "s"}` : " · looking for peers";
+  const speed = st.download_rate ? ` · ${formatSpeed(Math.round(st.download_rate / 1024))}` : "";
+  return st.ready
+    ? `Ready · ${st.progress}% downloaded${speed}${peers}`
+    : `Buffering the start… ${st.head_progress || 0}%${speed}${peers}`;
+}
+
+function updateWatchStatus(st) {
+  const el = document.getElementById("dtWatchStatus");
+  if (el) { el.className = `dt-watch-status${st.ready ? " is-ready" : ""}`; el.textContent = streamStatusText(st); }
+  const bar = document.getElementById("dtWatchBar");
+  if (bar) bar.style.width = `${st.ready ? st.progress : st.head_progress || 0}%`;
+}
+
+function renderWatchPanel(s) {
+  const st = s.stream;
+  if (!st) return "";
+  if (st.state === "starting") {
+    return `<div class="dt-watch"><div class="dt-watch-info"><div class="dt-watch-name">Starting…</div>
+      <div class="dt-watch-status">Getting the torrent's file list from peers</div>
+      <div class="dt-watch-bar"><div style="width:0%"></div></div></div></div>`;
+  }
+  if (st.state === "error") {
+    return `<div class="dt-watch"><div class="dt-watch-info"><div class="dt-watch-name">Couldn't start playback</div>
+      <div class="dt-watch-status is-error">${escapeHtml(st.error)}</div></div>
+      <div class="dt-watch-actions"><button type="button" class="btn-secondary" data-act="stream-dismiss">OK</button></div></div>`;
+  }
+  const id = currentPlayer();
+  const link = PLAYERS[id].link(st.url);
+  const label = st.ready ? `Open in ${PLAYERS[id].name}` : "Buffering…";
+  // A real link, so the tap itself opens the app - iOS blocks app links
+  // opened from a timer or after an await.
+  const open = link
+    ? `<a class="btn-primary btn-pill${st.ready ? "" : " is-waiting"}" data-role="open" data-act="open-player" href="${escapeHtml(link)}">${playerLogo(id)}${label}</a>`
+    : `<button type="button" class="btn-primary btn-pill${st.ready ? "" : " is-waiting"}" data-role="open" data-act="copy-stream">${LINK_ICON}${st.ready ? "Copy link for VLC" : "Buffering…"}</button>`;
+  return `<div class="dt-watch">
+    <div class="dt-watch-info">
+      <div class="dt-watch-name" title="${escapeHtml(st.name)}">${escapeHtml(st.name)} · ${escapeHtml(st.size_label)}</div>
+      <div class="dt-watch-status${st.ready ? " is-ready" : ""}" id="dtWatchStatus">${escapeHtml(streamStatusText(st))}</div>
+      <div class="dt-watch-bar"><div id="dtWatchBar" style="width:${st.ready ? st.progress : st.head_progress || 0}%"></div></div>
+    </div>
+    <div class="dt-watch-actions">
+      ${open}
+      ${st.cached ? `<button type="button" class="btn-secondary" data-act="stream-keep" title="Download it to the folder picked beside Download, instead of clearing it">${ICONS.download}Keep</button>
+      <button type="button" class="action-btn" data-act="stream-stop" title="Stop and clear it now" aria-label="Stop and clear">${CLOSE_ICON}</button>` : ""}
+    </div>
+  </div>`;
+}
+
+// No app behind the link: iOS shows "cannot open the page" and the page
+// stays visible. If it's still visible a moment later, say what's missing.
+function watchAppOpened(id) {
+  let left = false;
+  const onHide = () => { if (document.hidden) left = true; };
+  document.addEventListener("visibilitychange", onHide);
+  window.addEventListener("pagehide", onHide);
+  setTimeout(() => {
+    document.removeEventListener("visibilitychange", onHide);
+    window.removeEventListener("pagehide", onHide);
+    if (!left && !document.hidden) showToast(`${PLAYERS[id].name} didn't open? Install it from the app store, or pick another player with ▾`);
+  }, 2500);
+}
+
+async function keepStream() {
+  const s = detailsState, st = s && s.stream;
+  if (!st || !st.id) return;
+  try {
+    const data = await fetch(`/api/stream/${encodeURIComponent(st.id)}/keep`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ category: s.category }),
+    }).then(r => r.json());
+    if (data.error) throw new Error(data.error);
+    st.cached = false;
+    if (st.release) s.added.add(releaseKey(st.release));
+    showToast(`Kept - it's downloading to ${data.category || s.category}`);
+    refresh();
+  } catch (e) {
+    showToast(e.message || "Couldn't keep it", true);
+  }
+  if (detailsState === s) renderDetailsBody();
+}
+
+async function stopStream() {
+  const s = detailsState, st = s && s.stream;
+  if (!st || !st.id) return;
+  clearTimeout(s.streamTimer);
+  s.stream = null;
+  renderDetailsBody();
+  try { await fetch(`/api/stream/${encodeURIComponent(st.id)}`, { method: "DELETE" }); } catch (e) {}
+  showToast("Stream stopped and cleared");
+}
 const RELEASES_SHOWN = 5;
 
 let detailsRequestId = 0;
@@ -3082,6 +3492,7 @@ function setDetailsBackVisible(visible) {
 
 function closeDetails() {
   destroyTrailerPlayer(detailsState);
+  if (detailsState) clearTimeout(detailsState.streamTimer);
   detailsModal.classList.remove("is-open");
   detailsRequestId++;          // drop any response still in flight
   detailsBody.innerHTML = "";  // also stops a playing trailer
@@ -3320,6 +3731,7 @@ function renderDetailsHero() {
   const s = detailsState;
   const hasBackdrop = !!d.backdrop;
   hero.className = `dt-hero ${hasBackdrop ? "has-backdrop" : "no-backdrop"}${playing ? " is-playing" : ""}${s.playerReady ? " player-ready" : ""}`;
+  detailsModal.querySelector(".details-box").classList.toggle("has-banner", hasBackdrop);
 
   let overlay = "";
   if (playing) {
@@ -3348,9 +3760,17 @@ function renderDetailsBody() {
   if (!body || !detailsState) return;
   const s = detailsState, d = s.data, item = s.item;
 
-  // --- actions: Download + folder. The trailer plays from the banner's
-  // centre button; a title without a banner gets a button here instead. ---
+  // --- actions: Play in <player>, Download + folder. The trailer plays
+  // from the banner's centre button; a title without a banner gets a
+  // button here instead. ---
   const actions = [];
+  const playable = s.torrent || primaryRelease();
+  const busy = s.stream && s.stream.state === "starting";
+  const playerId = currentPlayer();
+  actions.push(`<div class="play-split">
+    <button type="button" class="btn-primary btn-pill play-main" data-act="play"${!playable || busy ? " disabled" : ""}>${playerLogo(playerId)}${busy ? "Starting…" : `Play in ${escapeHtml(PLAYERS[playerId].name)}`}</button>
+    <button type="button" class="btn-primary btn-pill play-more" data-act="pick-player" title="Choose the player" aria-label="Choose the player">${CHEVRON_DOWN}</button>
+  </div>`);
   if (!d.backdrop && !s.playing && !s.loading) {
     if (s.noTrailer) {
       const q = [d.title || item.title, d.year, "trailer"].filter(Boolean).join(" ");
@@ -3376,7 +3796,7 @@ function renderDetailsBody() {
       ? (s.releases === "loading" || s.loading ? "Finding releases…" : "No releases found")
       : added ? "Added" : "Download";
     const bestMeta = best ? [releaseTags(best.title).find(t => t.res)?.label, best.size_label].filter(Boolean).join(" · ") : "";
-    actions.push(`<button type="button" class="btn-primary btn-pill" data-act="download-best"${!best || added ? " disabled" : ""}>${added ? ICONS.check : ICONS.download}${label}${best && !added && bestMeta ? ` <span class="dt-download-meta">${escapeHtml(bestMeta)}</span>` : ""}</button>`);
+    actions.push(`<button type="button" class="btn-secondary" data-act="download-best"${!best || added ? " disabled" : ""}>${added ? ICONS.check : ICONS.download}${label}${best && !added && bestMeta ? ` <span class="dt-download-meta">${escapeHtml(bestMeta)}</span>` : ""}</button>`);
     actions.push(`<select class="inline-category-select" data-act="category" title="Download to">${currentCategories.map(c =>
       `<option value="${escapeHtml(c)}"${c === s.category ? " selected" : ""}>${escapeHtml(c)}</option>`).join("")}</select>`);
   }
@@ -3437,6 +3857,7 @@ function renderDetailsBody() {
           <div class="dt-release-title" title="${escapeHtml(r.title)}">${escapeHtml(r.title)}</div>
         </div>
         <div class="dt-release-stats">${escapeHtml(r.size_label)}<br><span class="seeders">${r.seeders}</span> seeds</div>
+        <button type="button" class="action-btn" data-act="play-release" data-index="${i}" title="Play this release in ${escapeHtml(PLAYERS[playerId].name)}">${ICONS.play}</button>
         <button type="button" class="action-btn" data-act="download-release" data-index="${i}" title="Download this release"${added ? " disabled" : ""}>${added ? ICONS.check : ICONS.download}</button>
       </div>`;
     }).join("")}</div>`;
@@ -3457,6 +3878,7 @@ function renderDetailsBody() {
 
   body.innerHTML = `
     <div class="dt-actions">${actions.join("")}</div>
+    ${renderWatchPanel(s)}
     <div class="dt-cols">
       <div>${overview}</div>
       ${facts.length ? `<div class="dt-facts">${facts.join("")}</div>` : ""}
@@ -3507,6 +3929,14 @@ detailsBody.addEventListener("click", (e) => {
       else findYoutubeTrailers();
       break;
     case "download-best": { const best = primaryRelease(); if (best) downloadRelease(best); break; }
+    case "play": requestPlay(s.torrent ? null : primaryRelease()); break;
+    case "play-release": requestPlay((s.showAllReleases ? s.releases : s.releases.slice(0, RELEASES_SHOWN))[Number(el.dataset.index)]); break;
+    case "pick-player": openPlayerPicker(); break;
+    case "open-player": watchAppOpened(currentPlayer()); break;
+    case "copy-stream": copyStreamLink(); break;
+    case "stream-keep": keepStream(); break;
+    case "stream-stop": stopStream(); break;
+    case "stream-dismiss": s.stream = null; renderDetailsBody(); break;
     case "download-release": downloadRelease((s.showAllReleases ? s.releases : s.releases.slice(0, RELEASES_SHOWN))[Number(el.dataset.index)]); break;
     case "toggle-releases": s.showAllReleases = !s.showAllReleases; renderDetailsBody(); break;
     case "more": {
