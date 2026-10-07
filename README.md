@@ -189,12 +189,33 @@ button to keep it as a download in your default folder. Download on the
 same release does the same.
 
 The **▾** beside Play (or Settings > Playback > *Default player*) picks the
-player for the whole app - Infuse unless changed. VLC opens directly on
-iPhone, iPad and Android. Desktop VLC registers no link a web page can
-open, so on a computer the button reads **Copy link for VLC**: paste the
-link in VLC's *File > Open Network*. A copied link downloads nothing until
-VLC opens it, and like any other stream it's deleted 30 seconds after VLC
-closes it. A ▶ on each release row plays that release.
+player for the whole app - Infuse unless changed. A ▶ on each release row
+plays that release.
+
+### VLC on a computer
+
+VLC opens directly on iPhone, iPad and Android. Desktop VLC registers no
+link a web page can open, so a Mac or Windows PC needs a small helper,
+installed once - the first Play in VLC (or Settings > Playback > *VLC
+helper*) shows the command:
+
+```bash
+curl -fsSL http://<server>:5058/helper/vlc-mac.sh | sh
+```
+
+```powershell
+irm http://<server>:5058/helper/vlc-windows.ps1 | iex
+```
+
+The helper registers a `torrenttube-vlc:` link that hands a play link to
+VLC, and accepts only play links from the server it was installed from.
+On a Mac it's built locally into `~/Applications` (nothing to quarantine);
+on Windows it's a per-user registry entry plus a small script in
+`%LOCALAPPDATA%\TorrentTube`, no administrator rights. Each script's header
+says how to remove it. VLC doesn't call back when it closes, so the server
+sees its connection close instead: the stream stops 5 seconds later and is
+deleted 30 seconds after. A computer that isn't a Mac or Windows PC gets
+**Copy link for VLC** - paste it in VLC's *File > Open Network*.
 
 The phone must reach the server at the same address the page uses - on the
 LAN, or over a VPN.

@@ -288,6 +288,20 @@ def index():
     return render_template("index.html")
 
 
+HELPER_SCRIPTS = {"vlc-mac.sh", "vlc-windows.ps1"}
+
+
+@app.route("/helper/<name>")
+def helper_script(name):
+    """One-time installers that let a computer's browser open VLC: they
+    register a torrenttube-vlc: link handler that only accepts play links
+    from this server - its address, as the browser reached it, is filled in."""
+    if name not in HELPER_SCRIPTS:
+        return jsonify({"error": "No such helper"}), 404
+    body = render_template(f"helpers/{name}", origin=request.host_url.rstrip("/"))
+    return Response(body, mimetype="text/plain; charset=utf-8")
+
+
 @app.route("/api/config")
 def config():
     search_enabled = bool(JACKETT_URL and JACKETT_API_KEY)

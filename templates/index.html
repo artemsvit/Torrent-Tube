@@ -1212,6 +1212,19 @@
   .player-option-check { color: var(--accent); display: none; }
   .player-option.is-current .player-option-check { display: flex; }
   .player-note { font-size: 12px; color: var(--text-tertiary); margin: 12px 2px 0; line-height: 1.45; }
+
+  /* VLC helper setup */
+  .helper-box { max-width: 460px; }
+  .helper-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .helper-head .player-logo { width: 40px; height: 40px; border-radius: 10px; }
+  .helper-head .modal-title { margin: 0; }
+  .helper-text { font-size: 13.5px; line-height: 1.5; color: var(--text-secondary); margin: 0 0 12px; }
+  .helper-text.helper-small { font-size: 12px; color: var(--text-tertiary); margin-top: 10px; }
+  .helper-text a { color: var(--accent); }
+  .helper-steps { font-size: 13.5px; line-height: 1.6; margin: 0 0 8px; padding-left: 20px; }
+  .helper-command { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 12px; border-radius: var(--radius-md); background: var(--border); }
+  .helper-command code { flex: 1; min-width: 0; font-size: 12px; word-break: break-all; user-select: all; }
+  .helper-command .btn-secondary { padding: 6px 12px; font-size: 12px; }
   .dt-status-pill {
     font-size: 12.5px;
     font-weight: 600;
@@ -1870,6 +1883,10 @@
           <div class="settings-row-label">Default player<button type="button" class="info-tip" data-tip="The app the Play button opens. The ▾ beside Play changes it too">i</button></div>
           <select class="inline-category-select" id="settingsPlayer"></select>
         </div>
+        <div class="settings-row" id="settingsVlcHelperRow" hidden>
+          <div class="settings-row-label">VLC helper<button type="button" class="info-tip" data-tip="Lets Play open VLC on this computer, like Infuse. Install once per computer">i</button></div>
+          <button type="button" class="btn-secondary" id="settingsVlcHelper">Set up</button>
+        </div>
       </div>
 
       <div class="settings-section">
@@ -2004,6 +2021,28 @@
     <div class="modal-title" id="playerModalTitle">Play in</div>
     <div class="player-list" id="playerList"></div>
     <p class="player-note">Play opens the film in this app straight away. It streams from this server through a temporary file, which is deleted when you close the player.</p>
+  </div>
+</div>
+
+<!-- One-time setup on a computer: desktop VLC has no link a page can
+     open, so a small helper (installed by one command) adds one. -->
+<div class="modal-overlay" id="helperModal">
+  <div class="modal-box helper-box" role="dialog" aria-modal="true" aria-labelledby="helperModalTitle">
+    <div class="helper-head">
+      <img class="player-logo" src="/static/players/vlc.png" alt="" width="40" height="40">
+      <div class="modal-title" id="helperModalTitle">Set up VLC on this computer</div>
+    </div>
+    <p class="helper-text">Once per computer: a small helper lets Play open films in VLC, just like Infuse. It only opens films from this server.</p>
+    <ol class="helper-steps">
+      <li id="helperStepOpen"></li>
+      <li>Paste this command and press Return:</li>
+    </ol>
+    <div class="helper-command"><code id="helperCommand"></code><button type="button" class="btn-secondary" id="helperCopy">Copy</button></div>
+    <p class="helper-text helper-small" id="helperVlcNote">VLC itself must be installed: <a href="https://www.videolan.org/vlc/" target="_blank" rel="noopener">videolan.org</a>.</p>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="helperCancel">Cancel</button>
+      <button class="btn-primary btn-pill" id="helperDone">Installed - play</button>
+    </div>
   </div>
 </div>
 
@@ -2271,6 +2310,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   // One layer at a time: Escape in a popup opened from search results
   // closes just the popup, not the results list too.
+  if (helperModal.classList.contains("is-open")) { closeVlcHelper(); return; }
   if (playerModal.classList.contains("is-open")) { closePlayerPicker(); return; }
   if (detailsModal.classList.contains("is-open")) { closeDetails(); return; }
   closeSearchDropdown(); closeUploadModal(); closeSettings(); closeConfirm(false);
@@ -3142,8 +3182,15 @@ const PLAY_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="current
 // and subtitle, which a browser <video> can't. The server deletes the
 // stream once no player has read it for a while (Settings > Playback).
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
+const IS_WINDOWS = /Windows/i.test(navigator.userAgent);
 // iPadOS reports itself as a Mac - touch points tell them apart.
 const IS_IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+const IS_MAC = /Macintosh/.test(navigator.userAgent) && !IS_IOS;
+// Computers the VLC helper can be installed on (templates/helpers/).
+const VLC_HELPER_OS = IS_MAC ? "mac" : IS_WINDOWS ? "windows" : null;
+function vlcHelperInstalled() {
+  try { return localStorage.getItem("torrenttube-vlc-helper") === "1"; } catch (e) { return false; }
+}
 
 const PLAYERS = {
   infuse: {
@@ -3159,16 +3206,22 @@ const PLAYERS = {
   vlc: {
     name: "VLC",
     icon: "/static/players/vlc.png",
-    canOpen: IS_IOS || IS_ANDROID,  // a page can open VLC only on a phone or tablet
-    sub: IS_IOS || IS_ANDROID ? "Free, plays almost anything" : "Copies the link - paste it in VLC's Open Network",
+    // On a phone VLC has its own link; on a Mac or Windows PC the helper
+    // adds one (torrenttube-vlc:); elsewhere the link is copied.
+    canOpen: IS_IOS || IS_ANDROID || !!VLC_HELPER_OS,
+    sub: IS_IOS || IS_ANDROID ? "Free, plays almost anything"
+      : VLC_HELPER_OS ? "Free, plays almost anything - needs a one-time helper on this computer"
+      : "Copies the link - paste it in VLC's Open Network",
     store: IS_ANDROID ? "https://play.google.com/store/apps/details?id=org.videolan.vlc" : "https://apps.apple.com/app/id650377962",
-    // Desktop VLC registers no link scheme - the picker copies the URL.
     link: (url, closed) => {
       if (IS_IOS) return `vlc-x-callback://x-callback-url/stream?url=${encodeURIComponent(url)}&x-success=${encodeURIComponent(closed)}&x-error=${encodeURIComponent(closed)}`;
       if (IS_ANDROID) {
         const u = new URL(url);
         return `intent://${u.host}${u.pathname}#Intent;scheme=${u.protocol.replace(":", "")};package=org.videolan.vlc;type=video/*;end`;
       }
+      // Desktop VLC registers no link of its own - the helper's. No close
+      // callback here: the server sees VLC's connection close instead.
+      if (VLC_HELPER_OS) return `torrenttube-vlc:${url}`;
       return null;
     },
   },
@@ -3307,7 +3360,7 @@ function playLink(release, torrent) {
   }
   let name = (title || "video").replace(/[\\/:*?"<>|#%]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 150);
   if (!/\.(mkv|mp4|m4v|avi|mov|ts|webm)$/i.test(name)) name += /\bmp4\b/i.test(name) ? ".mp4" : ".mkv";
-  return { token, source, title, url: `${location.origin}/play/${token}/${encodeURIComponent(name)}`, closedUrl: `${location.origin}/played/${token}` };
+  return { token, source, title, url: `${location.origin}/play/${token}/${encodeURIComponent(name).replace(/'/g, "%27")}`, closedUrl: `${location.origin}/played/${token}` };
 }
 
 // One tap: the player opens straight away with the play link, and the
@@ -3331,6 +3384,10 @@ function playRelease(release) {
   if (!s || (!release && !s.torrent)) return;
   const link = playLink(release, s.torrent);
   const id = currentPlayer();
+  if (id === "vlc" && VLC_HELPER_OS && !vlcHelperInstalled()) {
+    openVlcHelper(() => playRelease(release));
+    return;
+  }
   const appLink = PLAYERS[id].link(link.url, link.closedUrl);
   registerPlayLink(link, !!appLink);
   if (appLink) {
@@ -3342,18 +3399,64 @@ function playRelease(release) {
   }
 }
 
+// ---------- VLC helper (Mac / Windows) ----------
+const helperModal = document.getElementById("helperModal");
+const helperCommand = document.getElementById("helperCommand");
+let helperThen = null;
+
+function vlcHelperCommand() {
+  return VLC_HELPER_OS === "mac"
+    ? `curl -fsSL ${location.origin}/helper/vlc-mac.sh | sh`
+    : `irm ${location.origin}/helper/vlc-windows.ps1 | iex`;
+}
+
+// `then` runs from the Installed button's own tap, so it can still open VLC.
+function openVlcHelper(then = null) {
+  helperThen = then;
+  document.getElementById("helperStepOpen").textContent = VLC_HELPER_OS === "mac"
+    ? "Open Terminal (Applications > Utilities)."
+    : "Open PowerShell (Start menu, type PowerShell).";
+  helperCommand.textContent = vlcHelperCommand();
+  document.getElementById("helperDone").textContent = then ? "Installed - play" : "Installed";
+  helperModal.classList.add("is-open");
+}
+function closeVlcHelper() {
+  helperModal.classList.remove("is-open");
+  helperThen = null;
+}
+document.getElementById("helperCopy").addEventListener("click", () => copyText(vlcHelperCommand(), "Command copied"));
+document.getElementById("helperCancel").addEventListener("click", closeVlcHelper);
+document.getElementById("helperDone").addEventListener("click", () => {
+  try { localStorage.setItem("torrenttube-vlc-helper", "1"); } catch (e) {}
+  const then = helperThen;
+  closeVlcHelper();
+  if (detailsState) renderDetailsBody();
+  if (then) then();
+});
+helperModal.addEventListener("click", e => { if (e.target === helperModal) closeVlcHelper(); });
+document.getElementById("settingsVlcHelperRow").hidden = !VLC_HELPER_OS;
+document.getElementById("settingsVlcHelper").addEventListener("click", () => openVlcHelper());
+
 // No app behind the link: iOS shows "cannot open the page" and the page
 // stays visible. If it's still visible a moment later, say what's missing.
+// On a computer the page stays visible behind the app, so the window
+// losing focus counts as opened too.
 function watchAppOpened(id) {
   let left = false;
   const onHide = () => { if (document.hidden) left = true; };
+  const onBlur = () => { left = true; };
   document.addEventListener("visibilitychange", onHide);
   window.addEventListener("pagehide", onHide);
+  window.addEventListener("blur", onBlur);
   setTimeout(() => {
     document.removeEventListener("visibilitychange", onHide);
     window.removeEventListener("pagehide", onHide);
-    if (!left && !document.hidden) showToast(`${PLAYERS[id].name} didn't open? Install it from the app store, or pick another player with ▾`);
-  }, 2500);
+    window.removeEventListener("blur", onBlur);
+    if (left || document.hidden) return;
+    showToast(id === "vlc" && VLC_HELPER_OS
+      ? "VLC didn't open? Set up the VLC helper again in Settings > Playback"
+      : `${PLAYERS[id].name} didn't open? Install it from the app store, or pick another player with ▾`);
+  }, VLC_HELPER_OS ? 6000 : 2500);  // the browser's "open this app?" prompt takes a moment
 }
 
 // Save a stream (from its Downloads row) as a download in the default folder.
