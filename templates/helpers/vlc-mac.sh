@@ -14,8 +14,14 @@ ORIGIN="{{ origin }}"
 APP="$HOME/Applications/Torrent Tube VLC Helper.app"
 LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 
-if [ ! -d /Applications/VLC.app ] && [ ! -d "$HOME/Applications/VLC.app" ]; then
-  echo "Note: VLC isn't installed yet - get it from https://www.videolan.org/vlc/ before playing."
+# Is VLC here? (Spotlight finds it wherever it's installed.) Reported to
+# the page, which can't see installed apps itself.
+VLC_FOUND=0
+if [ -d /Applications/VLC.app ] || [ -d "$HOME/Applications/VLC.app" ] \
+   || [ -n "$(mdfind "kMDItemCFBundleIdentifier == 'org.videolan.vlc'" 2>/dev/null | head -1)" ]; then
+  VLC_FOUND=1
+else
+  echo "Note: VLC isn't installed yet - get it from https://www.videolan.org/vlc/"
 fi
 
 TMP=$(mktemp -d)
@@ -54,7 +60,7 @@ codesign --force --deep --sign - "$APP" 2>/dev/null   # re-sign after editing In
 "$LSREGISTER" -f "$APP"
 {% if key %}
 # Tell the Torrent Tube page this computer is ready, so it can go on by itself.
-curl -fsS -X POST "$ORIGIN/api/helper/{{ key }}" >/dev/null 2>&1 || true
+curl -fsS -X POST -d "vlc=$VLC_FOUND" "$ORIGIN/api/helper/{{ key }}" >/dev/null 2>&1 || true
 {% endif %}
 echo "Done: Torrent Tube VLC Helper is installed in ~/Applications."
 echo "Press Play in VLC in Torrent Tube - your browser asks once whether to open the helper."

@@ -1213,19 +1213,43 @@
   .player-option.is-current .player-option-check { display: flex; }
   .player-note { font-size: 12px; color: var(--text-tertiary); margin: 12px 2px 0; line-height: 1.45; }
 
-  /* VLC helper setup */
-  .helper-box { max-width: 460px; }
-  .helper-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
-  .helper-head .player-logo { width: 40px; height: 40px; border-radius: 10px; }
-  .helper-head .modal-title { margin: 0; }
-  .helper-text { font-size: 13.5px; line-height: 1.5; color: var(--text-secondary); margin: 0 0 12px; }
-  .helper-text.helper-small { font-size: 12px; color: var(--text-tertiary); margin-top: 10px; }
-  .helper-text a { color: var(--accent); }
-  .helper-steps { font-size: 13.5px; line-height: 1.6; margin: 0 0 8px; padding-left: 20px; }
+  /* Player setup checklist: a numbered mark per step that turns into a
+     green ✓ when done, or an orange ! when something's missing. */
+  .setup-box { max-width: 480px; }
+  .setup-box [hidden] { display: none !important; }  /* over the flex/inline-block below */
+  .setup-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .setup-head .player-logo { width: 44px; height: 44px; border-radius: 11px; }
+  .setup-head .modal-title { margin: 0; }
+  .setup-sub { font-size: 12.5px; color: var(--text-tertiary); margin-top: 2px; }
+  .setup-step { display: flex; gap: 12px; padding: 12px 0; border-top: 1px solid var(--border); }
+  .setup-mark {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .setup-step.is-done .setup-mark { background: rgba(31, 157, 75, 0.15); color: var(--success); }
+  .setup-step.is-warn .setup-mark { background: rgba(255, 143, 0, 0.16); color: #ff8f00; }
+  .setup-body { flex: 1; min-width: 0; }
+  .setup-title { font-size: 14px; font-weight: 600; }
+  .setup-step.is-done .setup-title { color: var(--success); }
+  .setup-text { font-size: 13px; line-height: 1.5; color: var(--text-secondary); margin-top: 2px; }
+  .setup-link, .setup-links a { display: inline-block; margin-top: 6px; font-size: 13px; font-weight: 600; color: var(--accent); text-decoration: none; }
+  .setup-link:hover, .setup-links a:hover { text-decoration: underline; }
+  .setup-links { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+  .setup-substeps { font-size: 13px; line-height: 1.6; margin: 8px 0; padding-left: 18px; }
+  .setup-foot { font-size: 12px; color: var(--text-tertiary); margin: 4px 0 0; }
   .helper-command { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 12px; border-radius: var(--radius-md); background: var(--border); }
   .helper-command code { flex: 1; min-width: 0; font-size: 12px; word-break: break-all; user-select: all; }
   .helper-command .btn-secondary { padding: 6px 12px; font-size: 12px; }
-  .helper-wait { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--text-secondary); margin-top: 12px; }
+  .helper-wait { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--text-secondary); margin-top: 10px; }
   .helper-wait .spinner-ring {
     width: 14px;
     height: 14px;
@@ -1235,7 +1259,6 @@
     animation: dt-spin 0.8s linear infinite;
     flex-shrink: 0;
   }
-  .helper-ready { font-size: 15px; font-weight: 600; color: var(--success); }
   .dt-status-pill {
     font-size: 12.5px;
     font-weight: 600;
@@ -2035,30 +2058,75 @@
   </div>
 </div>
 
-<!-- One-time setup on a computer: desktop VLC has no link a page can
-     open, so a small helper (installed by one command) adds one. -->
+<!-- Setting up a player, as a checklist. On a computer, VLC needs a small
+     helper (desktop VLC has no link a page can open); the helper's
+     installer also says whether VLC is there - a page can't see apps. -->
 <div class="modal-overlay" id="helperModal">
-  <div class="modal-box helper-box" role="dialog" aria-modal="true" aria-labelledby="helperModalTitle">
-    <div class="helper-head">
+  <div class="modal-box setup-box" role="dialog" aria-modal="true" aria-labelledby="helperModalTitle">
+    <div class="setup-head">
       <img class="player-logo" src="/static/players/vlc.png" alt="" width="40" height="40">
-      <div class="modal-title" id="helperModalTitle">Set up VLC on this computer</div>
+      <div>
+        <div class="modal-title" id="helperModalTitle">Play in VLC on this computer</div>
+        <div class="setup-sub" id="helperModalSub">Two steps, once per computer.</div>
+      </div>
     </div>
-    <div id="helperSetup">
-      <p class="helper-text">Once per computer, so Play opens films in VLC just like Infuse. It only opens films from this server.</p>
-      <ol class="helper-steps">
-        <li id="helperStepOpen"></li>
-        <li id="helperStepPaste"></li>
-      </ol>
-      <div class="helper-command"><code id="helperCommand"></code><button type="button" class="btn-secondary" id="helperCopy">Copy</button></div>
-      <div class="helper-wait"><span class="spinner-ring"></span>Waiting for the install to finish…</div>
-      <p class="helper-text helper-small">VLC itself must be installed: <a href="https://www.videolan.org/vlc/" target="_blank" rel="noopener">videolan.org</a>. Already set up? <button type="button" class="dt-link-btn" id="helperAlready">Skip</button></p>
+    <div class="setup-step" id="helperStepVlc">
+      <span class="setup-mark">1</span>
+      <div class="setup-body">
+        <div class="setup-title">VLC player</div>
+        <div class="setup-text" id="helperVlcText"></div>
+        <a class="setup-link" href="https://www.videolan.org/vlc/" target="_blank" rel="noopener" id="helperVlcLink">Download VLC from videolan.org</a>
+      </div>
     </div>
-    <div id="helperReady" hidden>
-      <p class="helper-text helper-ready">✓ Play now opens films in VLC on this computer.</p>
+    <div class="setup-step" id="helperStepHelper">
+      <span class="setup-mark">2</span>
+      <div class="setup-body">
+        <div class="setup-title">Torrent Tube helper</div>
+        <div class="setup-text" id="helperHelperText">Your browser can't start VLC by itself. This small helper lets Play open VLC, just like Infuse. It only opens films from this server.</div>
+        <ol class="setup-substeps" id="helperSubsteps">
+          <li id="helperStepOpen"></li>
+          <li id="helperStepPaste"></li>
+        </ol>
+        <div class="helper-command" id="helperCommandBox"><code id="helperCommand"></code><button type="button" class="btn-secondary" id="helperCopy">Copy</button></div>
+        <div class="helper-wait" id="helperWait"><span class="spinner-ring"></span>Waiting for the helper to install…</div>
+      </div>
     </div>
+    <p class="setup-foot" id="helperFoot">Already set up? <button type="button" class="dt-link-btn" id="helperAlready">Skip</button></p>
     <div class="modal-actions">
       <button class="btn-secondary" id="helperCancel">Cancel</button>
       <button class="btn-primary btn-pill" id="helperDone" hidden>Play</button>
+    </div>
+  </div>
+</div>
+
+<!-- A player app that didn't open - most likely not installed. -->
+<div class="modal-overlay" id="getAppModal">
+  <div class="modal-box setup-box" role="dialog" aria-modal="true" aria-labelledby="getAppTitle">
+    <div class="setup-head">
+      <img class="player-logo" id="getAppLogo" src="" alt="" width="40" height="40">
+      <div>
+        <div class="modal-title" id="getAppTitle"></div>
+        <div class="setup-sub">It may not be installed on this device.</div>
+      </div>
+    </div>
+    <div class="setup-step is-warn">
+      <span class="setup-mark">1</span>
+      <div class="setup-body">
+        <div class="setup-title" id="getAppStepTitle"></div>
+        <div class="setup-text" id="getAppText"></div>
+        <div class="setup-links" id="getAppLinks"></div>
+      </div>
+    </div>
+    <div class="setup-step">
+      <span class="setup-mark">2</span>
+      <div class="setup-body">
+        <div class="setup-title">Press Try again</div>
+        <div class="setup-text">Or choose another player.</div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="getAppOther">Other player</button>
+      <button class="btn-primary btn-pill" id="getAppRetry">Try again</button>
     </div>
   </div>
 </div>
@@ -2328,6 +2396,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   // One layer at a time: Escape in a popup opened from search results
   // closes just the popup, not the results list too.
+  if (getAppModal.classList.contains("is-open")) { closeGetApp(); return; }
   if (helperModal.classList.contains("is-open")) { closeVlcHelper(); return; }
   if (playerModal.classList.contains("is-open")) { closePlayerPicker(); return; }
   if (detailsModal.classList.contains("is-open")) { closeDetails(); return; }
@@ -3410,7 +3479,7 @@ function playRelease(release) {
   registerPlayLink(link, !!appLink);
   if (appLink) watchPlayStart(link.token);
   if (appLink) {
-    watchAppOpened(id);
+    watchAppOpened(id, () => playRelease(release));
     location.href = appLink;
   } else {
     // Desktop VLC registers no link a page can open - the link is copied.
@@ -3419,9 +3488,10 @@ function playRelease(release) {
 }
 
 // ---------- VLC helper (Mac / Windows) ----------
-// Setup is one paste: the command is copied on the tap that opens this,
-// and the installer reports back to the server under this browser's own
-// random key, so the window turns into "VLC is ready" by itself.
+// A two-step checklist: 1 VLC itself, 2 the helper. Setting up is one
+// paste - the command is copied on the tap that opens this - and the
+// installer reports back (under this browser's own random key) that it's
+// done and whether it found VLC, which the page can't see by itself.
 const helperModal = document.getElementById("helperModal");
 const helperCommand = document.getElementById("helperCommand");
 const helperDone = document.getElementById("helperDone");
@@ -3443,18 +3513,41 @@ function vlcHelperCommand() {
   return VLC_HELPER_OS === "mac" ? `curl -fsSL "${url}" | sh` : `irm "${url}" | iex`;
 }
 
-function showHelperReady(ready) {
-  document.getElementById("helperModalTitle").textContent = ready ? "VLC is ready" : "Set up VLC on this computer";
-  document.getElementById("helperSetup").hidden = ready;
-  document.getElementById("helperReady").hidden = !ready;
-  helperDone.hidden = !ready;
+function setStep(el, state, mark) {
+  el.classList.toggle("is-done", state === "done");
+  el.classList.toggle("is-warn", state === "warn");
+  el.querySelector(".setup-mark").textContent = state === "done" ? "✓" : state === "warn" ? "!" : mark;
+}
+
+// vlc: true / false / null (not known yet - only the installer can tell).
+function renderVlcHelper(installed, vlc) {
+  const vlcStep = document.getElementById("helperStepVlc");
+  const vlcText = document.getElementById("helperVlcText");
+  setStep(vlcStep, vlc === true ? "done" : vlc === false ? "warn" : "todo", "1");
+  vlcText.textContent = vlc === true ? "VLC is installed."
+    : vlc === false ? "VLC isn't on this computer yet. Download and install it, then press Play."
+    : "The free player that plays the film. Don't have it yet? Install it first.";
+  document.getElementById("helperVlcLink").hidden = vlc === true;
+
+  const helperStep = document.getElementById("helperStepHelper");
+  setStep(helperStep, installed ? "done" : "todo", "2");
+  document.getElementById("helperHelperText").textContent = installed
+    ? "Helper installed - Play now opens VLC."
+    : "Your browser can't start VLC by itself. This small helper lets Play open VLC, just like Infuse. It only opens films from this server.";
+  for (const id of ["helperSubsteps", "helperCommandBox", "helperWait", "helperFoot"]) document.getElementById(id).hidden = installed;
+
+  const ready = installed && vlc !== false;
+  document.getElementById("helperModalTitle").textContent = ready ? "VLC is ready" : installed ? "Almost ready" : "Play in VLC on this computer";
+  document.getElementById("helperModalSub").textContent = ready ? "All set on this computer."
+    : installed ? "Install VLC, then press Play." : "Two steps, once per computer.";
+  helperDone.hidden = !installed;
   helperDone.textContent = helperThen ? "Play" : "Done";
 }
 
-function markVlcHelperInstalled() {
+function markVlcHelperInstalled(vlc = null) {
   try { localStorage.setItem("torrenttube-vlc-helper", "1"); } catch (e) {}
   clearInterval(helperPoll);
-  showHelperReady(true);
+  renderVlcHelper(true, vlc);
   if (detailsState) renderDetailsBody();
 }
 
@@ -3463,13 +3556,13 @@ function openVlcHelper(then = null) {
   helperThen = then;
   const mac = VLC_HELPER_OS === "mac";
   document.getElementById("helperStepOpen").textContent = mac
-    ? "Open Terminal (press ⌘ Space, type Terminal, press Return)."
-    : "Open PowerShell (Start menu, type PowerShell, press Enter).";
+    ? "Open Terminal: press ⌘ Space, type Terminal, press Return."
+    : "Open PowerShell: press the Windows key, type PowerShell, press Enter.";
   document.getElementById("helperStepPaste").textContent = mac
-    ? "Press ⌘ V, then Return - the command is already copied."
-    : "Press Ctrl + V, then Enter - the command is already copied.";
+    ? "Press ⌘ V, then Return - the command below is already copied."
+    : "Press Ctrl + V, then Enter - the command below is already copied.";
   helperCommand.textContent = vlcHelperCommand();
-  showHelperReady(false);
+  renderVlcHelper(false, null);
   helperModal.classList.add("is-open");
   copyText(vlcHelperCommand(), `Command copied - paste it in ${mac ? "Terminal" : "PowerShell"}`);
   clearInterval(helperPoll);
@@ -3477,7 +3570,7 @@ function openVlcHelper(then = null) {
     if (!helperModal.classList.contains("is-open")) { clearInterval(helperPoll); return; }
     try {
       const d = await fetch(`/api/helper/${vlcHelperKey()}`).then(r => r.json());
-      if (d.installed) markVlcHelperInstalled();
+      if (d.installed) markVlcHelperInstalled(d.vlc);
     } catch (e) {}
   }, 1500);
 }
@@ -3488,7 +3581,7 @@ function closeVlcHelper() {
 }
 document.getElementById("helperCopy").addEventListener("click", () => copyText(vlcHelperCommand(), "Command copied"));
 document.getElementById("helperCancel").addEventListener("click", closeVlcHelper);
-document.getElementById("helperAlready").addEventListener("click", markVlcHelperInstalled);
+document.getElementById("helperAlready").addEventListener("click", () => markVlcHelperInstalled());
 helperDone.addEventListener("click", () => {
   const then = helperThen;
   closeVlcHelper();
@@ -3497,6 +3590,55 @@ helperDone.addEventListener("click", () => {
 helperModal.addEventListener("click", e => { if (e.target === helperModal) closeVlcHelper(); });
 document.getElementById("settingsVlcHelperRow").hidden = !VLC_HELPER_OS;
 document.getElementById("settingsVlcHelper").addEventListener("click", () => openVlcHelper());
+
+// ---------- A player that didn't open ----------
+// A page can't see installed apps, only that the app didn't open - then
+// this says where to get it (official sites and stores).
+const getAppModal = document.getElementById("getAppModal");
+let getAppRetry = null;
+const GET_APP = {
+  infuse: {
+    text: "Infuse plays the film from this server. Get it on the App Store - for iPhone, iPad, Apple TV and Mac.",
+    links: [["App Store", "https://apps.apple.com/app/id1136220934"], ["firecore.com/infuse", "https://firecore.com/infuse"]],
+  },
+  vlc: {
+    text: "VLC is a free player that plays the film from this server.",
+    links: IS_ANDROID
+      ? [["Google Play", "https://play.google.com/store/apps/details?id=org.videolan.vlc"], ["videolan.org", "https://www.videolan.org/vlc/"]]
+      : IS_IOS
+      ? [["App Store", "https://apps.apple.com/app/id650377962"], ["videolan.org", "https://www.videolan.org/vlc/"]]
+      : [["videolan.org", "https://www.videolan.org/vlc/"]],
+  },
+};
+
+function openGetApp(id, retry) {
+  getAppRetry = retry;
+  const p = PLAYERS[id];
+  document.getElementById("getAppLogo").src = p.icon;
+  document.getElementById("getAppTitle").textContent = `${p.name} didn't open`;
+  document.getElementById("getAppStepTitle").textContent = `Install ${p.name}`;
+  document.getElementById("getAppText").textContent = GET_APP[id].text;
+  const links = document.getElementById("getAppLinks");
+  links.replaceChildren(...GET_APP[id].links.map(([label, href]) => {
+    const a = document.createElement("a");
+    Object.assign(a, { href, textContent: label, target: "_blank", rel: "noopener" });
+    return a;
+  }));
+  getAppModal.classList.add("is-open");
+}
+function closeGetApp() {
+  getAppModal.classList.remove("is-open");
+  getAppRetry = null;
+}
+document.getElementById("getAppRetry").addEventListener("click", () => {
+  const retry = getAppRetry;
+  closeGetApp();
+  if (retry) retry();
+});
+document.getElementById("getAppOther").addEventListener("click", () => { closeGetApp(); openPlayerPicker(); });
+getAppModal.addEventListener("click", e => { if (e.target === getAppModal) closeGetApp(); });
+// The app opened after all (a slow "Open in …?" prompt) - nothing to say.
+document.addEventListener("visibilitychange", () => { if (document.hidden) closeGetApp(); });
 
 // The player only says "can't open" if the stream fails to start (a dead
 // tracker link, no peers) - ask the server why for up to a minute and say it.
@@ -3514,10 +3656,10 @@ function watchPlayStart(token) {
 }
 
 // No app behind the link: iOS shows "cannot open the page" and the page
-// stays visible. If it's still visible a moment later, say what's missing.
-// On a computer the page stays visible behind the app, so the window
-// losing focus counts as opened too.
-function watchAppOpened(id) {
+// stays visible; on a computer nothing happens. Still visible and in focus
+// a few seconds later (the "Open in …?" prompt takes a moment): show how
+// to get the app - or, for VLC on a computer, the helper setup again.
+function watchAppOpened(id, retry) {
   let left = false;
   const onHide = () => { if (document.hidden) left = true; };
   const onBlur = () => { left = true; };
@@ -3529,10 +3671,9 @@ function watchAppOpened(id) {
     window.removeEventListener("pagehide", onHide);
     window.removeEventListener("blur", onBlur);
     if (left || document.hidden) return;
-    showToast(id === "vlc" && VLC_HELPER_OS
-      ? "VLC didn't open? Set up the VLC helper again in Settings > Playback"
-      : `${PLAYERS[id].name} didn't open? Install it from the app store, or pick another player with ▾`);
-  }, VLC_HELPER_OS ? 6000 : 2500);  // the browser's "open this app?" prompt takes a moment
+    if (id === "vlc" && VLC_HELPER_OS) openVlcHelper(retry);
+    else openGetApp(id, retry);
+  }, 5000);
 }
 
 // Save a stream (from its Downloads row) as a download in the default folder.

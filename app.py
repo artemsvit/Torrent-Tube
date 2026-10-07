@@ -292,7 +292,7 @@ HELPER_SCRIPTS = {"vlc-mac.sh", "vlc-windows.ps1"}
 
 
 HELPER_KEY_RE = re.compile(r"^[0-9a-f]{16,32}$")
-HELPER_INSTALLED = {}  # browser's helper key -> when its installer finished
+HELPER_INSTALLED = {}  # browser's helper key -> {"at", "vlc"}: installer finished, found VLC or not
 
 
 @app.route("/helper/<name>")
@@ -312,16 +312,20 @@ def helper_script(name):
 
 @app.route("/api/helper/<key>", methods=["GET", "POST"])
 def helper_status(key):
-    """POST: an installer saying it finished. GET: the page asking."""
+    """POST: an installer saying it finished (vlc=1/0: whether it found VLC
+    on that computer - a web page can't see installed apps). GET: the page
+    asking."""
     if not HELPER_KEY_RE.match(key):
         return jsonify({"error": "Bad key"}), 400
     if request.method == "POST":
+        vlc = request.values.get("vlc")
         with LOCK:
-            HELPER_INSTALLED[key] = time.time()
-            for old in [k for k, at in HELPER_INSTALLED.items() if time.time() - at > 86400]:
+            HELPER_INSTALLED[key] = {"at": time.time(), "vlc": None if vlc is None else vlc == "1"}
+            for old in [k for k, v in HELPER_INSTALLED.items() if time.time() - v["at"] > 86400]:
                 HELPER_INSTALLED.pop(old, None)
-        stream_log(f"VLC helper installed ({request.headers.get('User-Agent', '?')[:60]!r})")
-    return jsonify({"installed": key in HELPER_INSTALLED})
+        stream_log(f"VLC helper installed, VLC {'found' if vlc == '1' else 'not found'} ({request.headers.get('User-Agent', '?')[:60]!r})")
+    entry = HELPER_INSTALLED.get(key)
+    return jsonify({"installed": bool(entry), "vlc": entry["vlc"] if entry else None})
 
 
 @app.route("/api/config")

@@ -192,16 +192,23 @@ The **▾** beside Play (or Settings > Playback > *Default player*) picks the
 player for the whole app - Infuse unless changed. A ▶ on each release row
 plays that release.
 
+If the player doesn't open within a few seconds - most likely it isn't
+installed - Torrent Tube says so, with its official download links
+(Infuse: App Store / firecore.com; VLC: App Store, Google Play or
+videolan.org), **Try again** and **Other player**.
+
 ### VLC on a computer
 
 VLC opens directly on iPhone, iPad and Android. Desktop VLC registers no
 link a web page can open, so a Mac or Windows PC needs a small helper,
-installed once. No web page can install anything by itself, so it's one
-paste: the first Play in VLC (or Settings > Playback > *VLC helper*)
-copies the command on that tap and shows where to paste it. The installer
-reports back under the page's own random key (`?k=`), so the window turns
-into "VLC is ready" with a Play button by itself. The command, without
-that key:
+installed once. The first Play in VLC (or Settings > Playback > *VLC
+helper*) shows a two-step checklist: **1 VLC player** (with its official
+download link) and **2 Torrent Tube helper** - one paste, as no web page
+can install anything by itself: the command is copied on that tap. The
+installer reports back under the page's own random key (`?k=`) that it's
+done and whether it found VLC (a page can't see installed apps), and each
+step turns into a ✓ by itself - or a ! with the download link if VLC is
+missing. The command, without that key:
 
 ```bash
 curl -fsSL http://<server>:5058/helper/vlc-mac.sh | sh
