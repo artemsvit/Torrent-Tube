@@ -162,9 +162,12 @@ while it downloads, and nothing is kept afterwards:
    `.stream-cache` folder under your downloads. Infuse's first request
    waits until the file list is in, then the film starts. Infuse handles
    MKV, HEVC, every audio track and subtitle, which a browser can't.
-2. Close Infuse. The server sees the player's connection close, and a
-   couple of minutes later (Settings > Playback > *Delete a stream after*,
-   2 minutes by default) deletes the stream and its files.
+2. Close Infuse. The server watches whether the player still takes data -
+   not whether its connection is open, because iOS can keep a closed
+   player's connection open. About 30 seconds after the player stops
+   taking data the download pauses, and once it has stopped for
+   Settings > Playback > *Delete a stream after* (2 minutes by default)
+   the stream is deleted with its files and its connection closed.
 3. Opening the same title again - or Infuse resuming after a long pause -
    uses the same link, so the server simply starts it again, and Infuse
    remembers where you stopped.

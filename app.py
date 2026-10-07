@@ -4,6 +4,7 @@ import mimetypes
 import os
 import re
 import shutil
+import socket
 import threading
 import time
 import urllib.parse
@@ -1371,9 +1372,18 @@ STREAM_FILES = {}
 STREAM_CACHE_DIR = DOWNLOAD_DIR / ".stream-cache"
 STREAM_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 STREAM_CACHE_IDS = set()   # torrents that live in the cache, not in Downloads
-STREAM_LAST_USED = {}      # tid -> when a player last read from it
-STREAM_READERS = {}        # tid -> open /stream responses right now
+# A player that's closed doesn't always close its connection - iOS can
+# keep a suspended app's socket open, so it just stops reading. So "is it
+# playing" is judged by data flowing, not by an open connection: the time
+# a player last took data (or was waiting on a piece) in STREAM_LAST_USED.
+# STREAM_PAUSE_AFTER seconds without that pauses the download; the
+# stream_idle_minutes setting deletes it, and force-closes its sockets so
+# their threads aren't left waiting forever on a reader that's gone.
+STREAM_LAST_USED = {}      # tid -> when a player last took data from it
 STREAM_OPENED = set()      # tids a player has connected to at least once
+STREAM_SOCKETS = {}        # tid -> sockets of its open responses
+STREAM_IDLE_PAUSED = set() # tids paused because no player is reading
+STREAM_PAUSE_AFTER = 30
 
 
 def _info_hash_hex(magnet: str = None, info=None) -> str:
@@ -1411,15 +1421,18 @@ def stream_idle_seconds() -> int:
     return max(1, LIMITS.get("stream_idle_minutes", 2)) * 60
 
 
+def stream_idle_for(tid: str) -> float:
+    return time.time() - STREAM_LAST_USED.get(tid, time.time())
+
+
 def stream_activity(tid: str) -> dict:
-    """Is a player reading this stream right now, and - for a cached one
-    nothing is reading - how many seconds until it's deleted."""
+    """Is a player taking data from this stream right now, and - for a
+    cached one it isn't - how many seconds until it's deleted."""
     cached = tid in STREAM_CACHE_IDS
-    playing = STREAM_READERS.get(tid, 0) > 0
+    playing = tid in STREAM_OPENED and stream_idle_for(tid) < STREAM_PAUSE_AFTER
     clears_in = None
     if cached and not playing:
-        idle = stream_idle_seconds()
-        clears_in = max(0, int(idle - (time.time() - STREAM_LAST_USED.get(tid, time.time()))))
+        clears_in = max(0, int(stream_idle_seconds() - stream_idle_for(tid)))
     return {"cached": cached, "playing": playing, "opened": tid in STREAM_OPENED, "clears_in": clears_in}
 
 
@@ -1491,11 +1504,11 @@ def begin_stream(source: dict) -> tuple:
             with LOCK:
                 if tid not in HANDLES:
                     raise StreamError("That download is gone", 404)
-        elif magnet.lower().startswith("magnet:?"):
-            info, tid = None, _info_hash_hex(magnet=magnet)
-        elif source.get("torrent_hex"):
+        elif source.get("torrent_hex"):  # before magnet: no metadata to wait for
             info = lt.torrent_info(bytes.fromhex(source["torrent_hex"]))
             tid = _info_hash_hex(info=info)
+        elif magnet.lower().startswith("magnet:?"):
+            info, tid = None, _info_hash_hex(magnet=magnet)
         elif download_link:
             req = urllib.request.Request(download_link, headers={"User-Agent": "TorrentTube"})
             with urllib.request.urlopen(req, timeout=25) as resp:
@@ -1705,10 +1718,12 @@ def adopt_cached_stream(tid: str, category: str) -> "str | None":
         if tid not in STREAM_CACHE_IDS or not handle or not handle.is_valid():
             return None
         STREAM_CACHE_IDS.discard(tid)
+    STREAM_IDLE_PAUSED.discard(tid)
     handle.move_storage(resolve_save_path(category))
     if handle.status().has_metadata:
         handle.prioritize_files([4] * handle.torrent_file().files().num_files())
     handle.set_flags(lt.torrent_flags.auto_managed)
+    handle.resume()
     return tid
 
 
@@ -1719,10 +1734,51 @@ def drop_cached_stream(tid: str):
         STREAM_CACHE_IDS.discard(tid)
     STREAM_LAST_USED.pop(tid, None)
     STREAM_OPENED.discard(tid)
+    STREAM_IDLE_PAUSED.discard(tid)
     for key in [k for k in STREAM_FILES if k[0] == tid]:
         STREAM_FILES.pop(key, None)
+    # A player that stopped reading leaves its response's thread blocked in
+    # waitress's output buffer, and waitress never times out a connection
+    # mid-response - shutting the socket down is what wakes that thread.
+    for sock in STREAM_SOCKETS.pop(tid, set()):
+        try:
+            sock.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
     if handle and handle.is_valid():
+        if handle.status().has_metadata:
+            remember_torrent_file(tid, handle)
         ses.remove_torrent(handle, lt.session.delete_files)
+
+
+def remember_torrent_file(tid: str, handle):
+    """Keep a dropped stream's .torrent with its play links, so opening one
+    again starts at once instead of fetching a magnet's metadata again."""
+    with LOCK:
+        links = [l for t, l in PLAY_LINKS.items() if t == f"m-{tid}"]
+    if not links:
+        return
+    ti = handle.torrent_file()
+    raw = lt.bencode({"info": lt.bdecode(ti.info_section())}).hex()
+    for link in links:
+        link["torrent_hex"] = raw
+    save_play_links()
+
+
+def pause_idle_stream(tid: str):
+    with LOCK:
+        handle = HANDLES.get(tid)
+    if handle and handle.is_valid() and tid not in STREAM_IDLE_PAUSED:
+        STREAM_IDLE_PAUSED.add(tid)
+        handle.pause()
+
+
+def wake_stream(tid: str, handle):
+    """A player is asking again - resume a stream paused for being idle."""
+    if tid in STREAM_IDLE_PAUSED:
+        STREAM_IDLE_PAUSED.discard(tid)
+        if tid not in PAUSED_IDS and handle.is_valid():
+            handle.resume()
 
 
 @app.route("/api/stream/<tid>/keep", methods=["POST"])
@@ -1763,9 +1819,12 @@ def clean_stream_cache():
     now = time.time()
     dropped = False
     for tid in list(STREAM_CACHE_IDS):
-        if STREAM_READERS.get(tid, 0) == 0 and now - STREAM_LAST_USED.get(tid, now) > idle:
+        idle_for = now - STREAM_LAST_USED.get(tid, now)
+        if idle_for > idle:
             drop_cached_stream(tid)
             dropped = True
+        elif idle_for > STREAM_PAUSE_AFTER and tid in STREAM_OPENED:
+            pause_idle_stream(tid)  # player stopped taking data - stop downloading
     if dropped:
         save_registry()
 
@@ -1794,7 +1853,7 @@ def clean_stream_cache():
 
 def stream_cache_loop():
     while True:
-        time.sleep(20)
+        time.sleep(10)
         try:
             clean_stream_cache()
         except Exception:
@@ -1855,13 +1914,15 @@ def stream_file(tid, index, name):
                 piece, _ = _file_pieces(ti, index, pos, pos + 1)
                 piece_end = min((piece + 1) * ti.piece_length() - fs.file_offset(index), size)
                 if not handle.have_piece(piece):
+                    wake_stream(tid, handle)
                     rush_pieces(handle, *_file_pieces(ti, index, pos, min(size, pos + STREAM_READAHEAD)))
                     waited = time.time()
                     while not handle.have_piece(piece):
-                        if not handle.is_valid():
+                        if not handle.is_valid() or dropped():
                             break
                         if time.time() - waited > STREAM_PIECE_TIMEOUT:
                             return
+                        STREAM_LAST_USED[tid] = time.time()  # the player is waiting, not gone
                         time.sleep(0.1)
                 chunk_end = min(end + 1, piece_end)
             else:
@@ -1888,20 +1949,29 @@ def stream_file(tid, index, name):
     if match:
         headers["Content-Range"] = f"bytes {start}-{end}/{size}"
 
+    # waitress's channel, to reach the socket if the player goes quiet
+    # (see drop_cached_stream). Read here: the generator runs after the
+    # request context is gone.
+    channel = getattr(request.environ.get("waitress.client_disconnected"), "__self__", None)
+    sock = getattr(channel, "socket", None)
+
     def tracked():
-        # An open response keeps a cached stream alive however long the
-        # player sits paused on it; the idle timer starts once it closes.
-        STREAM_READERS[tid] = STREAM_READERS.get(tid, 0) + 1
+        # Each chunk handed on means the player took the previous one -
+        # waitress blocks here once its buffer is full and nobody reads.
         STREAM_OPENED.add(tid)
+        if sock is not None:
+            STREAM_SOCKETS.setdefault(tid, set()).add(sock)
         try:
             for data in generate():
                 STREAM_LAST_USED[tid] = time.time()
                 yield data
         finally:
-            STREAM_READERS[tid] = max(0, STREAM_READERS.get(tid, 1) - 1)
-            STREAM_LAST_USED[tid] = time.time()
+            if sock is not None:
+                STREAM_SOCKETS.get(tid, set()).discard(sock)
 
     STREAM_LAST_USED[tid] = time.time()
+    if live:
+        wake_stream(tid, handle)
     return Response(tracked(), status=206 if match else 200, headers=headers, direct_passthrough=True)
 
 
@@ -1918,4 +1988,7 @@ if __name__ == "__main__":
     # Each open stream holds a worker thread for as long as it plays, and
     # players open several connections (probing, seeking) - waitress's
     # default of 4 would leave the UI unresponsive during playback.
-    serve(app, host=host, port=port, threads=24)
+    # A 4MB output buffer (waitress's default is 16MB) per connection: a
+    # player that stops reading is noticed once it fills - see
+    # STREAM_LAST_USED - so a smaller one notices a closed player sooner.
+    serve(app, host=host, port=port, threads=24, outbuf_high_watermark=4 * 1024 * 1024)
