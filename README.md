@@ -292,6 +292,7 @@ The env vars below only seed their *initial* value (handy for a from-scratch
 | `TORRENTTUBE_PORT`            | `5058`                            | Bind port                     |
 | `TORRENTTUBE_DOWNLOAD_DIR`    | `~/Downloads/TorrentTube` (`/downloads` in Docker) | Where files are saved |
 | `TORRENTTUBE_CATEGORIES`      | `Cartoon,Movies,TV Shows`        | Comma-separated destination subfolders shown in the UI |
+| `TORRENTTUBE_HOST_DOWNLOAD_DIR` | worked out on a Synology       | The downloads folder's real path on the server, for Settings (the container only sees `/downloads`) |
 | `JACKETTAPI_URL`              | `http://jackett:9117` (the bundled service) | Base URL of a Jackett instance |
 | `JACKETTAPI_KEY`              | unset                            | Jackett's own API key (its dashboard, top right) |
 | `JACKETTAPI_INDEXER`          | `all`                            | Jackett indexer id to search, or `all` |

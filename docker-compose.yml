@@ -46,6 +46,9 @@ services:
       - TZ=Etc/UTC
       # Must match real subfolder names under the mounted volume above.
       - TORRENTTUBE_CATEGORIES=Cartoon,Movies,TV Shows
+      # Settings shows where downloads really are on the server. On a
+      # Synology it's worked out from the mount above; elsewhere set it:
+      # - TORRENTTUBE_HOST_DOWNLOAD_DIR=/volume1/homes/artsvit/Media
       # Everything below is optional and only seeds the *initial* value -
       # once you enter it from the app's own Settings screen (Search &
       # Metadata section), that's saved to settings.json next to your

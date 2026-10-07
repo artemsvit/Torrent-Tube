@@ -27,6 +27,35 @@ CATEGORIES = [
 for _category in CATEGORIES:
     (DOWNLOAD_DIR / _category).mkdir(parents=True, exist_ok=True)
 
+def host_download_dir() -> "str | None":
+    """Where the downloads folder really is on the server, when this runs in
+    a container (DOWNLOAD_DIR is then the path inside it, e.g. /downloads).
+    TORRENTTUBE_HOST_DOWNLOAD_DIR says it outright; otherwise a Synology
+    volume is worked out from the container's own mount table: the mount's
+    root /@syno/<path> on device .../volume_<n> is /volume<n>/<path>."""
+    explicit = os.environ.get("TORRENTTUBE_HOST_DOWNLOAD_DIR", "").strip()
+    if explicit:
+        return explicit
+    if not Path("/.dockerenv").exists():
+        return str(DOWNLOAD_DIR)  # not in a container - the path is the real one
+    try:
+        mounts = Path("/proc/self/mountinfo").read_text().splitlines()
+    except OSError:
+        return None  # not Linux - not a container either
+    target = str(DOWNLOAD_DIR.resolve())
+    for line in mounts:
+        fields = line.split()
+        if len(fields) < 10 or fields[4] != target or "-" not in fields:
+            continue
+        root, source = fields[3], fields[fields.index("-") + 2]
+        volume = re.search(r"volume_?(\d+)$", source)
+        if volume and root.startswith("/@syno/"):
+            return f"/volume{volume.group(1)}/{root[len('/@syno/'):]}"
+    return None
+
+
+HOST_DOWNLOAD_DIR = host_download_dir()
+
 STATE_DIR = Path(os.environ.get("TORRENTTUBE_STATE_DIR") or (DOWNLOAD_DIR / ".torrenttube"))
 STATE_DIR.mkdir(parents=True, exist_ok=True)
 RESUME_FILE = STATE_DIR / "torrents.json"
@@ -339,6 +368,9 @@ def config():
     search_enabled = bool(JACKETT_URL and JACKETT_API_KEY)
     return jsonify({
         "download_dir": str(DOWNLOAD_DIR),
+        # The same folder as the server's own path (None when it isn't
+        # known) - what Settings shows, as /downloads means little.
+        "download_dir_host": HOST_DOWNLOAD_DIR,
         "categories": CATEGORIES,
         "search_enabled": search_enabled,
         # Descriptive only - never the Jackett/TMDB API keys themselves.

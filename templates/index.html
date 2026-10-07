@@ -2934,7 +2934,12 @@ function renderSettings() {
     .join("");
   settingsPlayer.value = currentPlayer();
 
-  settingsDownloadDir.textContent = lastConfig.download_dir || "—";
+  // The server's real folder when known; the container's own path (e.g.
+  // /downloads) says little, so it's only shown as a fallback, labelled.
+  const hostDir = lastConfig.download_dir_host;
+  settingsDownloadDir.textContent = hostDir || (lastConfig.download_dir ? `${lastConfig.download_dir} (inside the container)` : "—");
+  settingsDownloadDir.title = hostDir && lastConfig.download_dir && hostDir !== lastConfig.download_dir
+    ? `${lastConfig.download_dir} inside the container` : "";
   settingsCategories.innerHTML = currentCategories
     .map(c => `<span class="category-badge">${escapeHtml(c)}</span>`)
     .join("");
