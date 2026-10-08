@@ -126,8 +126,8 @@ struct MobileTitle: View {
                             let current = selection.number == season
                             Button { withAnimation(.snappy) { season = selection.number } } label: {
                                 Text(selection.name.isEmpty ? L("Season %ld", selection.number) : selection.name)
-                                    .font(.subheadline.weight(.semibold))
-                                    .padding(.horizontal, 14).padding(.vertical, 8)
+                                    .font(HeroFont.chip)
+                                    .padding(HeroFont.chipPadding)
                                     .foregroundStyle(current ? .black : .white)
                                     .background(current ? Color.white : Color.white.opacity(0.12), in: Capsule())
                             }

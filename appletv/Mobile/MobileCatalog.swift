@@ -13,6 +13,8 @@ enum HeroFont {
     static let overview = Font.system(size: 16)
     static let button = Font.system(size: 15, weight: .semibold)
     static let buttonHeight: CGFloat = 40
+    static let chip = Font.system(size: 16, weight: .semibold)
+    static let chipPadding = EdgeInsets(top: 10, leading: 20, bottom: 10, trailing: 20)
     static func titleSize(regular: Bool) -> CGFloat { 60 }
     static func title(regular: Bool) -> Font { .system(size: titleSize(regular: regular), weight: .heavy) }
     #else
@@ -21,6 +23,8 @@ enum HeroFont {
     static let overview = Font.subheadline
     static let button = Font.headline
     static let buttonHeight: CGFloat = 36
+    static let chip = Font.subheadline.weight(.semibold)
+    static let chipPadding = EdgeInsets(top: 8, leading: 14, bottom: 8, trailing: 14)
     static func titleSize(regular: Bool) -> CGFloat { regular ? 48 : 34 }
     static func title(regular: Bool) -> Font { .system(size: titleSize(regular: regular), weight: .heavy) }
     #endif
@@ -275,8 +279,8 @@ struct MobileChips: View {
                 ForEach(options, id: \.0) { key, label in
                     let current = selected == key
                     Button { withAnimation(.snappy) { selected = key } } label: {
-                        Text(L(label)).font(.subheadline.weight(.semibold))
-                            .padding(.horizontal, 14).padding(.vertical, 8)
+                        Text(L(label)).font(HeroFont.chip)
+                            .padding(HeroFont.chipPadding)
                             .foregroundStyle(current ? .black : .white)
                             .background(current ? Color.white : Color.white.opacity(0.12), in: Capsule())
                     }
