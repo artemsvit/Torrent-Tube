@@ -36,7 +36,14 @@ struct MobileTitle: View {
                     hero(height: heroHeight)
                     VStack(alignment: .leading, spacing: 16) {
                         if let tagline = details?.tagline, !tagline.isEmpty {
-                            Text(tagline).font(HeroFont.overview.weight(.semibold)).foregroundStyle(.white.opacity(0.85))
+                            Text(tagline).font(HeroFont.overview).foregroundStyle(.white.opacity(0.75))
+                        }
+                        // "Read more" opens the full description here, below the
+                        // banner, so nothing above it moves.
+                        if expanded, let overview = details?.overview ?? value.overview, !overview.isEmpty {
+                            Text(overview).font(HeroFont.overview).foregroundStyle(.white.opacity(0.75))
+                                .fixedSize(horizontal: false, vertical: true)
+                                .transition(.opacity)
                         }
                     }.padding(.horizontal, edge).frame(maxWidth: 820, alignment: .leading)
                     if details?.mediaType == "tv", let seasons = details?.seasonList, !seasons.isEmpty { episodesSection(seasons) }

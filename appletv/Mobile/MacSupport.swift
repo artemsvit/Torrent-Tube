@@ -82,19 +82,77 @@ extension View {
     func statusBarHidden(_ hidden: Bool = true) -> some View { self }
     func keyboardType(_ kind: KeyboardKind) -> some View { self }
 
+    /// On the Mac a full-screen cover (the player, a trailer) fills the whole
+    /// window, over the top row too - shown by the window's MacCoverHost.
     func fullScreenCover<Content: View>(isPresented: Binding<Bool>, onDismiss: (() -> Void)? = nil,
                                         @ViewBuilder content: @escaping () -> Content) -> some View {
-        sheet(isPresented: isPresented, onDismiss: onDismiss) { content().macCover() }
+        modifier(MacCover(shown: isPresented.wrappedValue, key: "cover", close: { isPresented.wrappedValue = false },
+                          onDismiss: onDismiss, cover: { AnyView(content()) }))
     }
     func fullScreenCover<Item: Identifiable, Content: View>(item: Binding<Item?>, onDismiss: (() -> Void)? = nil,
                                                             @ViewBuilder content: @escaping (Item) -> Content) -> some View {
-        sheet(item: item, onDismiss: onDismiss) { content($0).macCover() }
+        modifier(MacCover(shown: item.wrappedValue != nil, key: item.wrappedValue.map { "\($0.id)" } ?? "", close: { item.wrappedValue = nil },
+                          onDismiss: onDismiss, cover: { item.wrappedValue.map { AnyView(content($0)) } ?? AnyView(EmptyView()) }))
     }
-    fileprivate func macCover() -> some View {
-        frame(minWidth: 900, idealWidth: 1280, minHeight: 560, idealHeight: 780)
+}
+
+/// The one cover the Mac window shows at a time.
+@MainActor @Observable final class MacCovers {
+    var current: AnyView?
+    var owner: UUID?
+    var close: (() -> Void)?
+}
+
+private struct MacCover: ViewModifier {
+    let shown: Bool
+    let key: String
+    let close: () -> Void
+    let onDismiss: (() -> Void)?
+    let cover: () -> AnyView
+    @Environment(MacCovers.self) private var covers
+    @State private var id = UUID()
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: "\(shown)|\(key)", initial: true) { _, _ in
+                if shown {
+                    covers.current = cover(); covers.owner = id; covers.close = close
+                } else if covers.owner == id {
+                    covers.current = nil; covers.owner = nil; covers.close = nil
+                    onDismiss?()
+                }
+            }
+            .onDisappear { if covers.owner == id { covers.current = nil; covers.owner = nil; covers.close = nil } }
+    }
+}
+
+/// Shows the current cover over the whole window; Esc closes it.
+struct MacCoverHost: ViewModifier {
+    @Environment(MacCovers.self) private var covers
+    func body(content: Content) -> some View {
+        content.overlay {
+            if let cover = covers.current {
+                cover
+                    .environment(\.closeCover) { covers.close?() }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.black)
+                    .ignoresSafeArea()
+                    .onExitCommand { covers.close?() }
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: covers.owner)
     }
 }
 #endif
+
+/// The Mac's way to close a full-window cover; nil elsewhere (the system's dismiss is used).
+private struct CloseCoverKey: EnvironmentKey { static let defaultValue: (@MainActor () -> Void)? = nil }
+extension EnvironmentValues {
+    var closeCover: (@MainActor () -> Void)? {
+        get { self[CloseCoverKey.self] }
+        set { self[CloseCoverKey.self] = newValue }
+    }
+}
 
 extension View {
     /// The Search screen has its own field and close button.

@@ -204,6 +204,9 @@ struct MobileRoot: View {
     }
     // Each tab's own stack; tapping the current tab again (or leaving it) returns to its top.
     @State private var paths: [String: NavigationPath] = [:]
+    #if os(macOS)
+    @State private var covers = MacCovers()
+    #endif
     var body: some View {
         root
             .environment(\.mobileEdge, sizeClass == .regular ? 32 : 16)
@@ -219,6 +222,11 @@ struct MobileRoot: View {
                     .environment(catalog)
                     .environment(context)
             }
+            #if os(macOS)
+            // Outermost, so every cover in the window (Search's too) can reach it.
+            .modifier(MacCoverHost())
+            .environment(covers)
+            #endif
     }
     private func select(_ new: String) {
         if new == tab { paths[tab] = NavigationPath() }

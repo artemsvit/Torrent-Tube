@@ -52,7 +52,7 @@ struct HeroInfo<Actions: View>: View {
             if let overview, !overview.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(overview).font(HeroFont.overview).foregroundStyle(.white.opacity(0.75))
-                        .lineLimit(expanded ? nil : 3)
+                        .lineLimit(3)  // the full text opens below the banner
                     if let toggleMore {
                         Button(L(expanded ? "Show less" : "Read more"), action: toggleMore)
                             .font(HeroFont.overview.weight(.semibold)).foregroundStyle(.white)

@@ -153,7 +153,8 @@ struct MobilePlayback: View {
                 .foregroundStyle(.black).background(.white, in: Capsule())
         }.buttonStyle(.plain)
     }
-    private func close() { model.close(); dismiss() }
+    @Environment(\.closeCover) private var closeCover
+    private func close() { model.close(); if let closeCover { closeCover() } else { dismiss() } }
 }
 
 private struct MobilePlaybackBackdrop: View {
@@ -467,5 +468,6 @@ struct MobileTrailer: View {
                                         audioURL: try stream.audioUrl.map(api.mediaURL), subtitleURL: try stream.subtitleUrl.map(api.mediaURL), subtitleName: stream.subtitleName)
         } catch is CancellationError {} catch { if current == generation { self.error = error.localizedDescription } }
     }
-    private func close() { generation = UUID(); controller?.stop(); dismiss() }
+    @Environment(\.closeCover) private var closeCover
+    private func close() { generation = UUID(); controller?.stop(); if let closeCover { closeCover() } else { dismiss() } }
 }
