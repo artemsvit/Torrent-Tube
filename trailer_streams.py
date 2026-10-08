@@ -63,6 +63,9 @@ class TrailerStreams:
         self.ttl = ttl
         self._items = {}
         self._previews = {}
+        # Top Shelf trailers asked for recently: kept resolved, so a preview
+        # starts at once instead of after a ~5 s YouTube lookup.
+        self._wanted_previews = {}
         self._lock = threading.Lock()
         self._resolvers = threading.BoundedSemaphore(2)
 
@@ -100,9 +103,13 @@ class TrailerStreams:
         executable = os.environ.get("TORRENTTUBE_YTDLP") or shutil.which("yt-dlp")
         if not executable:
             raise TrailerError("Update your server to enable trailer playback", 503)
-        if not self._resolvers.acquire(blocking=False):
+        # Top Shelf asks for several previews at once: wait for a free slot.
+        if not (self._resolvers.acquire(timeout=60) if preview else self._resolvers.acquire(blocking=False)):
             raise TrailerError("Another trailer is preparing. Try again in a moment.", 429)
-        video_format = ("b[ext=mp4][vcodec^=avc1][acodec^=mp4a][height<=1080]/b[ext=mp4][vcodec^=h264][height<=1080]"
+        # Previews: one H.264/AAC MP4, else YouTube's own HLS picture and sound
+        # (most trailers no longer have the MP4), joined by master_playlist().
+        video_format = ("b[ext=mp4][vcodec^=avc1][acodec^=mp4a][height<=1080]"
+                        "/bv*[protocol=m3u8_native][vcodec^=avc1][height<=1080]+ba[protocol=m3u8_native]"
                         if preview else "b[height>=720][height<=1080]/bv[height<=1080]+ba/b/bv+ba")
         try:
             result = subprocess.run([
@@ -123,15 +130,27 @@ class TrailerStreams:
             tracks = info.get("requested_formats") or [info]
             tracks = [track for track in tracks if track.get("url")]
             video = next(track for track in tracks if track.get("vcodec") not in (None, "none"))
-            audio = next((track for track in tracks if track.get("vcodec") == "none" and track.get("acodec") not in (None, "none")), None)
+            # YouTube's HLS sound has no codec name (acodec None): no picture is enough.
+            audio = next((track for track in tracks if track.get("vcodec") == "none" and track.get("acodec") != "none"), None)
             headers = {k: str(v) for k, v in info.get("http_headers", {}).items()
                        if k.lower() in ("user-agent", "referer", "origin", "accept", "accept-language")}
-            if preview and (audio is not None or video.get("ext") != "mp4"
-                            or not str(video.get("vcodec", "")).startswith(("avc1", "h264"))
-                            or not str(video.get("acodec", "")).startswith(("mp4a", "aac"))):
+            hls = audio is not None and video.get("protocol") == "m3u8_native" and audio.get("protocol") == "m3u8_native"
+            if preview and not str(video.get("vcodec", "")).startswith(("avc1", "h264")):
+                raise TrailerError("A compatible trailer preview is not available.")
+            if preview and not hls and (audio is not None or video.get("ext") != "mp4"
+                                        or not str(video.get("acodec", "")).startswith(("mp4a", "aac"))):
                 raise TrailerError("A compatible trailer preview is not available.")
             token = self.register(video["url"], headers)
             audio_resource = self.resource(token, audio["url"]) if audio else None
+            if preview and hls:
+                with self._lock:
+                    self._items[token]["master"] = {
+                        "audio": audio_resource,
+                        "bandwidth": int(((video.get("tbr") or 1500) + (audio.get("tbr") or 130)) * 1000),
+                        "resolution": f"{video['width']}x{video['height']}" if video.get("width") and video.get("height") else None,
+                    }
+                return {"url": f"/trailer-stream/{token}/master.m3u8", "audio_url": None, "subtitle_url": None,
+                        "subtitle_language": None, "title": info.get("title") or "Trailer", "expires_after": self.ttl}
             # "uk,en": the first language whose subtitles can actually be had.
             # YouTube often refuses its auto-translated captions (HTTP 429)
             # while the uploader's own ones work - hence a fallback.
@@ -164,16 +183,34 @@ class TrailerStreams:
         if not isinstance(key, str) or not re.fullmatch(r"[A-Za-z0-9_-]{11}", key):
             raise TrailerError("Invalid trailer identifier", 400)
         with self._lock:
+            self._wanted_previews[key] = self.clock()
             self._expire()
             cached = self._previews.get(key)
             if cached:
                 return cached["url"]
+        return self._resolve_preview(key)
+
+    def _resolve_preview(self, key):
         result = self.resolve(key, preview=True)
         with self._lock:
             if len(self._previews) >= 128:
                 self._previews.pop(next(iter(self._previews)))
             self._previews[key] = {"url": result["url"], "expires": self.clock() + self.ttl - min(30, self.ttl / 5)}
         return result["url"]
+
+    def refresh_previews(self, keep_for=24 * 3600, ahead=600):
+        """Renew the Top Shelf previews asked for in the last day before
+        their links expire. Called from a background loop."""
+        now = self.clock()
+        with self._lock:
+            self._wanted_previews = {k: t for k, t in self._wanted_previews.items() if now - t < keep_for}
+            due = [k for k in self._wanted_previews
+                   if k not in self._previews or self._previews[k]["expires"] - now < ahead]
+        for key in due[:20]:
+            try:
+                self._resolve_preview(key)
+            except TrailerError:
+                continue
 
     def register(self, url, headers=None):
         if not allowed_url(url):
@@ -210,6 +247,19 @@ class TrailerStreams:
             if not 0 <= index < len(item["urls"]):
                 raise TrailerError("Unknown trailer resource", 404)
             return item["urls"][index], dict(item["headers"])
+
+    def master_playlist(self, token):
+        """One HLS playlist with the picture (resource 0) and its sound, so
+        the system player can show a preview with sound."""
+        with self._lock:
+            self._expire()
+            master = (self._items.get(token) or {}).get("master")
+        if not master:
+            raise TrailerError("The trailer link expired. Open the trailer again.", 410)
+        resolution = f",RESOLUTION={master['resolution']}" if master["resolution"] else ""
+        return ("#EXTM3U\n#EXT-X-INDEPENDENT-SEGMENTS\n"
+                f'#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",NAME="Audio",DEFAULT=YES,AUTOSELECT=YES,URI="{master["audio"]}"\n'
+                f'#EXT-X-STREAM-INF:BANDWIDTH={master["bandwidth"]}{resolution},AUDIO="audio"\n0\n')
 
     def rewrite_manifest(self, token, base, manifest):
         def target(uri):

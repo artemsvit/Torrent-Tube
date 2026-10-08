@@ -108,7 +108,7 @@ class TrailerStreamTests(unittest.TestCase):
         options = run.call_args.args[0]
         selected_format = options[options.index("--format") + 1]
         self.assertIn("ext=mp4", selected_format)
-        self.assertNotIn("+ba", selected_format)
+        self.assertTrue(selected_format.startswith("b[ext=mp4]"), "one MP4 first, HLS only as the fallback")
         now[0] = 9
         self.assertNotEqual(streams.preview("abcdefghijk"), first)
         self.assertEqual(run.call_count, 2)
@@ -116,6 +116,24 @@ class TrailerStreamTests(unittest.TestCase):
             "url": "https://rr1.googlevideo.com/video", "ext": "mp4", "vcodec": "avc1", "acodec": "none"}), "")
         with self.assertRaises(TrailerError):
             streams.resolve("abcdefghijk", preview=True)
+
+    @patch("trailer_streams.subprocess.run")
+    @patch("trailer_streams.shutil.which", return_value="/tools/yt-dlp")
+    def test_preview_joins_hls_picture_and_sound(self, which, run):
+        run.return_value = subprocess.CompletedProcess([], 0, json.dumps({"title": "Trailer", "requested_formats": [
+            {"url": "https://manifest.googlevideo.com/video.m3u8", "protocol": "m3u8_native", "vcodec": "avc1.4D401F",
+             "acodec": "none", "width": 1280, "height": 720, "tbr": 1383},
+            {"url": "https://manifest.googlevideo.com/audio.m3u8", "protocol": "m3u8_native", "vcodec": "none", "acodec": None}]}), "")
+        streams = TrailerStreams()
+        url = streams.preview("abcdefghijk")
+        self.assertRegex(url, r"^/trailer-stream/[\w-]+/master\.m3u8$")
+        token = url.split("/")[2]
+        playlist = streams.master_playlist(token)
+        self.assertIn('TYPE=AUDIO,GROUP-ID="audio"', playlist)
+        self.assertIn('URI="1"', playlist)
+        self.assertIn("RESOLUTION=1280x720", playlist)
+        self.assertTrue(playlist.rstrip().endswith("\n0"))
+        self.assertEqual(streams.lookup(token, 1)[0], "https://manifest.googlevideo.com/audio.m3u8")
 
     def test_relay_forwards_range_to_provider(self):
         streams = TrailerStreams()

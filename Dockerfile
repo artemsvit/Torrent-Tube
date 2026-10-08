@@ -13,9 +13,11 @@ COPY --from=trailer-js /usr/local/bin/node /usr/local/bin/node
 # ca-certificates: without it Python's SSL context has no trusted root
 # store, so any https:// call (TMDB search enrichment, torrent files served
 # over https) fails with CERTIFICATE_VERIFY_FAILED.
+# libchromaprint-tools: fpcalc, the sound fingerprints "Skip intro" compares.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
        python3 python3-venv python3-libtorrent python3-flask python3-waitress gosu curl ca-certificates libstdc++6 \
+       libchromaprint-tools \
     && rm -rf /var/lib/apt/lists/*
 
 COPY trailer-requirements.txt /tmp/trailer-requirements.txt
@@ -29,6 +31,7 @@ COPY app.py .
 COPY playback_sessions.py .
 COPY media_library.py .
 COPY trailer_streams.py .
+COPY intro_detection.py .
 COPY templates/ templates/
 COPY static/ static/
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh

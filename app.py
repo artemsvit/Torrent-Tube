@@ -18,6 +18,7 @@ from pathlib import Path
 
 import libtorrent as lt
 from media_library import MediaLibrary
+from intro_detection import IntroDetector
 from playback_sessions import PlaybackSessions
 from trailer_streams import TrailerError, TrailerStreams
 from flask import Flask, Response, jsonify, redirect, render_template, request, send_file
@@ -1457,6 +1458,15 @@ def trailer_subtitles(token):
         return jsonify({"error": str(error)}), error.status
 
 
+@app.route("/trailer-stream/<token>/master.m3u8")
+def trailer_master_playlist(token):
+    try:
+        return Response(TRAILER_STREAMS.master_playlist(token), content_type="application/vnd.apple.mpegurl",
+                        headers={"Cache-Control": "no-store"})
+    except TrailerError as error:
+        return jsonify({"error": str(error)}), error.status
+
+
 @app.route("/trailer-stream/<token>/<int:index>")
 def relay_trailer_stream(token, index):
     try:
@@ -2346,6 +2356,7 @@ def get_stream_status(tid, index):
 LIBRARY = MediaLibrary(DOWNLOAD_DIR, CATEGORIES, VIDEO_EXTS,
                        describe=lambda name: (lambda t: (t[0], t[2]))(extract_title_and_year(name)))
 LIBRARY_PREFIX = "lib:"
+INTROS = IntroDetector(LIBRARY, STATE_DIR / "intros.json")
 
 
 # A file name that is an episode: "S01E05", "1x05", "E05", "Episode 5", "Серія 5", "05. Name".
@@ -2467,6 +2478,16 @@ def list_library():
     # max-age=0: the apps poll this while matches are pending and after a
     # rescan, so their URL cache must ask every time (a 304 when unchanged).
     return make_etag_response({"items": items, "metadata_pending": pending}, max_age=0, stale_revalidate=0)
+
+
+@app.route("/api/intro")
+def library_intro():
+    """Skip intro: where the opening of a library episode starts and ends,
+    found by comparing its sound with the next (or previous) episode."""
+    result = INTROS.intro(request.args.get("path", ""))
+    if result is None:
+        return jsonify({"error": "Not a library file"}), 404
+    return jsonify(result)
 
 
 @app.route("/api/library/metadata", methods=["DELETE"])
@@ -2719,6 +2740,18 @@ def stream_file(tid, index, name):
 load_registry()
 threading.Thread(target=registry_saver_loop, daemon=True).start()
 threading.Thread(target=stream_cache_loop, daemon=True).start()
+
+
+def trailer_preview_loop():
+    while True:
+        time.sleep(300)
+        try:
+            TRAILER_STREAMS.refresh_previews()
+        except Exception:
+            pass
+
+
+threading.Thread(target=trailer_preview_loop, daemon=True).start()
 
 
 if __name__ == "__main__":
