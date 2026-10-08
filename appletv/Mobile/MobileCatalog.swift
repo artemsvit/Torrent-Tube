@@ -69,7 +69,7 @@ struct HeroInfo<Actions: View>: View {
                             .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(.white.opacity(0.6), lineWidth: 1))
                     }
                 }
-                .font(HeroFont.facts).foregroundStyle(.white.opacity(0.85)).padding(.top, 6)
+                .font(HeroFont.facts).foregroundStyle(.white.opacity(0.85)).padding(.top, 12)
                 if (tagline ?? "").isEmpty == false || (overview ?? "").isEmpty == false {
                     VStack(alignment: .leading, spacing: 4) {
                         if let tagline, !tagline.isEmpty {

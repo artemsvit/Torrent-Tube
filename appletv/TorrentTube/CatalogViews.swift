@@ -424,7 +424,7 @@ struct CinemaHero<Actions: View>: View {
                                 .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.white.opacity(0.6), lineWidth: 2))
                         }
                     }
-                    .font(.system(size: 24, weight: .medium)).foregroundStyle(.white.opacity(0.85)).padding(.top, 8)
+                    .font(.system(size: 24, weight: .medium)).foregroundStyle(.white.opacity(0.85)).padding(.top, 14)
                     if showsOverview, (details?.tagline ?? "").isEmpty == false || (details?.overview ?? item.overview ?? "").isEmpty == false {
                         VStack(alignment: .leading, spacing: 6) {
                             // The tagline heads the description.
