@@ -96,7 +96,7 @@ struct SettingsView: View {
                                 subtitle: "Forget the saved posters and details and look them up again.") {
                             Task {
                                 refreshingMetadata = true
-                                catalog.refreshMetadata(api: api)
+                                await catalog.refreshMetadata(api: api)
                                 await catalog.loadLibrary(api: api)
                                 await catalog.enrich(catalog.library.map(libraryItem), api: api, config: config)
                                 updateCacheSummary()

@@ -58,7 +58,14 @@ struct LibraryView: View {
             }.padding(.horizontal, 70).padding(.top, ScreenLayout.top).padding(.bottom, 70)
         }
         .background(.black)
-        .task { await catalog.loadLibrary(api: api) }
+        .task {
+            await catalog.loadLibrary(api: api)
+            // The server is still matching titles: show them as they come in.
+            while catalog.libraryPending > 0 && !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(4)) } catch { return }
+                await catalog.loadLibrary(api: api)
+            }
+        }
     }
     @ViewBuilder private var favoritesSection: some View {
         let all = favorites.entries(server: api.baseURL)

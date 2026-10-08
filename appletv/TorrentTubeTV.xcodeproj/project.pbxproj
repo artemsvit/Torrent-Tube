@@ -198,9 +198,9 @@
 		6678DF7D498601C48AD29A18 /* TorrentTubeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TorrentTubeApp.swift; sourceTree = "<group>"; };
 		671BE38B6BEAEF589E876417 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		6B4E2EC276B1D4238FF6702C /* ContentProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentProvider.swift; sourceTree = "<group>"; };
-		70416E3D1D4C6ED2CED5480B /* TorrentTubeTVTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = TorrentTubeTVTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		707EB0EE06D5AFF8D6842476 /* TorrentTubeMobileUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = TorrentTubeMobileUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		70BAD8858B7465E1FA4BFA09 /* TorrentTubeTVUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = TorrentTubeTVUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		70416E3D1D4C6ED2CED5480B /* TorrentTubeTVTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TorrentTubeTVTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		707EB0EE06D5AFF8D6842476 /* TorrentTubeMobileUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TorrentTubeMobileUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		70BAD8858B7465E1FA4BFA09 /* TorrentTubeTVUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TorrentTubeTVUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		73FAD0F0DF6007CEE3CB2D89 /* AudioToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AudioToolbox.framework; path = System/Library/Frameworks/AudioToolbox.framework; sourceTree = SDKROOT; };
 		840516573A7D129F34EB2464 /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
 		8AF81EAAE61687D3F3BCA7E6 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -209,7 +209,7 @@
 		9313F054C34514F89BDA2676 /* PlaybackCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackCoordinator.swift; sourceTree = "<group>"; };
 		93B6416135A1054336A63724 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
 		9505B15A8E246BFEAC5A0C14 /* EmbeddedPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmbeddedPlayer.swift; sourceTree = "<group>"; };
-		9E1A2F536436176E7799F2E7 /* TorrentTubeMobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = TorrentTubeMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9E1A2F536436176E7799F2E7 /* TorrentTubeMobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TorrentTubeMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9F3DF0F11AC1F113D5C1F47C /* MobilePlayback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobilePlayback.swift; sourceTree = "<group>"; };
 		A29B62872FA4CE7AE756E592 /* TVServices.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = TVServices.framework; path = System/Library/Frameworks/TVServices.framework; sourceTree = SDKROOT; };
 		A3326A31C705AB4555B128F2 /* libc++.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = "libc++.tbd"; path = "usr/lib/libc++.tbd"; sourceTree = SDKROOT; };
@@ -217,7 +217,7 @@
 		A8BAB5F7C3828DD11D693895 /* TVFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVFlowTests.swift; sourceTree = "<group>"; };
 		AB9FF9917E06F9F8EFFAD885 /* MobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileApp.swift; sourceTree = "<group>"; };
 		AF1A420622CDC82C5A5D4000 /* TrailerChoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrailerChoice.swift; sourceTree = "<group>"; };
-		B294FEA73C459906CA7F221A /* TorrentTubeTopShelf.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = TorrentTubeTopShelf.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		B294FEA73C459906CA7F221A /* TorrentTubeTopShelf.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TorrentTubeTopShelf.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		C3114F54CC33BEF74FB2C7A2 /* MobileTitle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileTitle.swift; sourceTree = "<group>"; };
 		C76538026EAF172676674FCD /* LibrarySections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibrarySections.swift; sourceTree = "<group>"; };
 		C84FE74D0A8474C123177914 /* ResumeHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResumeHistory.swift; sourceTree = "<group>"; };
@@ -231,10 +231,10 @@
 		EF424FB4D2A5E5001039589F /* EpisodeIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EpisodeIdentity.swift; sourceTree = "<group>"; };
 		F04622AD9C96A92C8D6EAEF1 /* TopShelf.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TopShelf.entitlements; sourceTree = "<group>"; };
 		F38F92ED4922DDE605547A98 /* libbz2.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libbz2.tbd; path = usr/lib/libbz2.tbd; sourceTree = SDKROOT; };
-		F48DC9D80CED9625493EFA0B /* TorrentTubeMobileTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = TorrentTubeMobileTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		F48DC9D80CED9625493EFA0B /* TorrentTubeMobileTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TorrentTubeMobileTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F956844B578C2F00A954EDBB /* FavoritesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoritesStore.swift; sourceTree = "<group>"; };
 		FBEBD6015146BF295DE3D97C /* Localization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Localization.swift; sourceTree = "<group>"; };
-		FE051AEF08E359BBDC553626 /* TorrentTubeTV.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = TorrentTubeTV.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		FE051AEF08E359BBDC553626 /* TorrentTubeTV.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TorrentTubeTV.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FEF172EB5DE966BDE80D244F /* MediaHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaHelpers.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -594,7 +594,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 1430;
+				LastUpgradeCheck = 2700;
 				TargetAttributes = {
 					6013FD2D5A99E447E52D481B = {
 						ProvisioningStyle = Automatic;
@@ -814,6 +814,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -846,9 +848,11 @@
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -864,6 +868,7 @@
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = com.artsvit.torrenttube.tv;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_STRICT_CONCURRENCY = targeted;
@@ -877,6 +882,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -909,9 +916,11 @@
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -934,6 +943,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = com.artsvit.torrenttube.tv;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_STRICT_CONCURRENCY = targeted;
@@ -982,6 +992,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = 8KK8V96Q6B;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"\"Vendor\"",
@@ -1024,6 +1035,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = 8KK8V96Q6B;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"\"Vendor\"",

@@ -418,7 +418,14 @@ struct MobileLibrary: View {
             }.padding(.vertical, 8)
         }
         .refreshable { await catalog.loadLibrary(api: api) }
-        .task { await catalog.loadLibrary(api: api) }
+        .task {
+            await catalog.loadLibrary(api: api)
+            // The server is still matching titles: show them as they come in.
+            while catalog.libraryPending > 0 && !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(4)) } catch { return }
+                await catalog.loadLibrary(api: api)
+            }
+        }
     }
 }
 

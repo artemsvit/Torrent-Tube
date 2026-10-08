@@ -100,7 +100,15 @@ struct Trailer: Codable, Identifiable, Hashable {
     var thumbnailURL: String? { isValid ? "https://i.ytimg.com/vi/\(key)/hqdefault.jpg" : nil }
 }
 struct TrailerResponse: Decodable { let videos: [Trailer] }
-struct TrailerStreamResponse: Decodable { let url: String; let audioUrl: String?; let subtitleUrl: String? }
+struct TrailerStreamResponse: Decodable {
+    let url: String; let audioUrl: String?; let subtitleUrl: String?
+    /// "uk" or "en" - which language the server found subtitles in.
+    var subtitleLanguage: String? = nil
+    /// The subtitle track's name in the player menu.
+    var subtitleName: String? {
+        switch subtitleLanguage { case "uk": "Українська"; case "en": "English"; default: subtitleLanguage }
+    }
+}
 
 /// Finished torrents - the library of servers without /api/library.
 struct TorrentListResponse: Decodable { let torrents: [TorrentListEntry] }
@@ -125,8 +133,15 @@ struct LibraryTitle: Decodable, Identifiable, Hashable {
     /// When it arrived on the server (seconds since 1970).
     var added: Double = 0
     var isTorrent = false
+    /// The server's TMDB match for it (newer servers), so the apps need not look it up.
+    var displayTitle: String? = nil
+    var poster: String? = nil
+    var rating: Double? = nil
+    var overview: String? = nil
+    var tmdbId: Int? = nil
+    var mediaType: String? = nil
     var source: PlaybackSource { isTorrent ? PlaybackSource(id: id) : PlaybackSource(path: id) }
-    private enum CodingKeys: String, CodingKey { case id, name, title, year, kind, files, added }
+    private enum CodingKeys: String, CodingKey { case id, name, title, year, kind, files, added, displayTitle, poster, rating, overview, tmdbId, mediaType }
     init(id: String, name: String, kind: String = "movie", files: Int = 1, added: Double = 0, isTorrent: Bool = false) {
         self.id = id; self.name = name; self.kind = kind; self.files = files; self.added = added; self.isTorrent = isTorrent
     }
@@ -138,10 +153,20 @@ struct LibraryTitle: Decodable, Identifiable, Hashable {
         year = try c.decodeIfPresent(String.self, forKey: .year)
         kind = try c.decodeIfPresent(String.self, forKey: .kind) ?? "movie"
         files = try c.decodeIfPresent(Int.self, forKey: .files) ?? 1
+        displayTitle = try c.decodeIfPresent(String.self, forKey: .displayTitle)
+        poster = try c.decodeIfPresent(String.self, forKey: .poster)
+        rating = try c.decodeIfPresent(Double.self, forKey: .rating)
+        overview = try c.decodeIfPresent(String.self, forKey: .overview)
+        tmdbId = try c.decodeIfPresent(Int.self, forKey: .tmdbId)
+        mediaType = try c.decodeIfPresent(String.self, forKey: .mediaType)
         added = try c.decodeIfPresent(Double.self, forKey: .added) ?? 0
     }
 }
-struct LibraryResponse: Decodable { let items: [LibraryTitle] }
+struct LibraryResponse: Decodable {
+    let items: [LibraryTitle]
+    /// Titles the server is still matching on TMDB (nil on older servers).
+    var metadataPending: Int? = nil
+}
 struct Episode: Decodable, Identifiable {
     let number: Int
     let name: String

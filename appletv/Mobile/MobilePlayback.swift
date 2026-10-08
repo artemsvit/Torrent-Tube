@@ -251,7 +251,7 @@ struct MobileTrailer: View {
             try Task.checkCancellation()
             guard current == generation else { return }
             controller = EmbeddedPlayer(url: try api.mediaURL(stream.url), resumePosition: position,
-                                        audioURL: try stream.audioUrl.map(api.mediaURL), subtitleURL: try stream.subtitleUrl.map(api.mediaURL))
+                                        audioURL: try stream.audioUrl.map(api.mediaURL), subtitleURL: try stream.subtitleUrl.map(api.mediaURL), subtitleName: stream.subtitleName)
         } catch is CancellationError {} catch { if current == generation { self.error = error.localizedDescription } }
     }
     private func close() { generation = UUID(); controller?.stop(); dismiss() }

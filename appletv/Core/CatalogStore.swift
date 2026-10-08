@@ -14,11 +14,17 @@ final class CatalogStore {
     var library: [LibraryTitle] = []
     var libraryError: String?
     var libraryLoading = false
+    /// The server matches library titles itself (and says how many are left);
+    /// then the apps never look those titles up on their own.
+    var libraryMatchedByServer = false
+    var libraryPending = 0
     private var enriching: Set<String> = []
     private var fetchingDetails: Set<String> = []
 
     func resolved(_ item: MediaItem) -> MediaItem {
         var value = item
+        // A library title the server matched carries its own metadata.
+        if item.sourceOverride?.path != nil && libraryMatchedByServer { return value }
         if let meta = metadata[item.title] {
             value.cleanTitle = meta.cleanTitle ?? value.cleanTitle
             value.poster = meta.poster ?? value.poster
@@ -63,20 +69,21 @@ final class CatalogStore {
         return cache
     }
     /// Settings: forget the saved matches and details, so they are looked up again.
-    func refreshMetadata(api: TorrentTubeAPI) {
+    func refreshMetadata(api: TorrentTubeAPI) async {
+        try? await api.command("api/library/metadata", method: "DELETE")  // the server's matches too
         metadataCache(api.baseURL).clear()
         metadata = [:]
         details = [:]
     }
     /// Library titles are looked up only while "Posters and details" is on.
-    static var libraryMetadataEnabled: Bool { UserDefaults.standard.object(forKey: "libraryMetadata") as? Bool ?? true }
+    nonisolated static var libraryMetadataEnabled: Bool { UserDefaults.standard.object(forKey: "libraryMetadata") as? Bool ?? true }
 
     func enrich(_ items: [MediaItem], api: TorrentTubeAPI, config: ServerConfig) async {
         guard config.tmdbEnabled else { return }
         let cache = metadataCache(api.baseURL)
         var titles: [String] = []
         for item in items where metadata[item.title] == nil && !enriching.contains(item.title) && !titles.contains(item.title) {
-            if item.sourceOverride?.path != nil && !Self.libraryMetadataEnabled { continue }
+            if item.sourceOverride?.path != nil && (!Self.libraryMetadataEnabled || libraryMatchedByServer) { continue }
             if let saved = cache.match(for: item.title) {
                 if let found = saved.metadata { metadata[item.title] = found }
                 continue  // a match, or a recent "no match" - nothing to ask
@@ -117,6 +124,8 @@ final class CatalogStore {
             // Everything in the category folders; an older server only knows its finished torrents.
             if let result: LibraryResponse = try? await api.request("api/library") {
                 library = result.items
+                libraryMatchedByServer = result.metadataPending != nil
+                libraryPending = result.metadataPending ?? 0
             } else {
                 try Task.checkCancellation()
                 let result: TorrentListResponse = try await api.request("api/torrents")

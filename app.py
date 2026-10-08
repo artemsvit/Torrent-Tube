@@ -500,6 +500,9 @@ COLLECTION_WORDS_RE = re.compile(
 )
 
 
+# "S01", "Season 2", "Сезон 1", "S01E05" in a name - a show, not a film.
+SERIES_NAME_RE = re.compile(r"(?i)(?:^|[^a-z0-9])(?:s\d{1,2}(?:e\d{1,3})?|season\s*\d+|seasons\b|сезон\w*\s*\d*)(?![a-z0-9])")
+
 RELEASE_TAIL_RE = re.compile(
     r"\b(?:(?:19|20)\d{2}|S\d{1,2}(?:E\d{1,3})?(?:-\d{1,2})?|Season\s*\d+|Сезон\s*\d+|\d{3,4}p|WEB(?:-?DL|Rip)?|BDRip|BluRay|"
     r"HDRip|DVDRip|HDTV|UHD|x26[45]|H\s?26[45]|HEVC|AMZN|NF)\b", re.I)
@@ -557,30 +560,61 @@ def _tmdb_get(path: str, **params):
         return json.loads(resp.read())
 
 
-def _tmdb_search(query: str, year: str = None):
+def _tmdb_candidates(query: str) -> list:
+    """Films and shows for a name, in TMDB's own order. (/search/multi has no
+    year filter - the year is weighed in _tmdb_pick instead.)"""
     params = {"query": query, "include_adult": "false", "language": TMDB_LANGUAGE}
-    if year:
-        params["year"] = year
     data = _tmdb_get("/search/multi", **params)
-    for item in data.get("results", []):
-        if item.get("media_type") in ("movie", "tv"):
-            return item
-    return None
+    return [item for item in data.get("results", []) if item.get("media_type") in ("movie", "tv")]
 
 
-def tmdb_lookup(title: str, base: str, year: str):
+def _normalized_name(text) -> str:
+    return re.sub(r"[\W_]+", " ", (text or "").lower()).strip()
+
+
+def _tmdb_pick(results: list, title: str, year: str = None, hint: str = None):
+    """The best candidate, and whether it is a confident match. TMDB's first
+    result is often a same-named show ("Nobody (2021)" -> "Nobody Wants
+    This"), so the release year, an exact name and the expected type (one
+    file -> film, a folder of episodes -> show) all count, not only order."""
+    wanted = _normalized_name(title)
+    best, best_score, best_confident = None, None, False
+    for rank, item in enumerate(results[:12]):
+        score = -1.5 * rank
+        names = {_normalized_name(item.get(k)) for k in ("title", "name", "original_title", "original_name")}
+        exact = wanted in names
+        score += 6 if exact else 0
+        item_year = (item.get("release_date") or item.get("first_air_date") or "")[:4]
+        year_close = False
+        if year and item_year.isdigit():
+            diff = abs(int(item_year) - int(year))
+            # A show's year in a release name is often a later season's.
+            year_close = diff <= (1 if item.get("media_type") == "movie" else 30)
+            score += 10 if diff == 0 else 5 if year_close else -8
+        if hint:
+            score += 7 if item.get("media_type") == hint else -4
+        score += min(item.get("vote_count") or 0, 5000) / 2500  # a tie-break for well-known titles
+        if best_score is None or score > best_score:
+            confident = (bool(year) and year_close and (exact or rank == 0 or item.get("media_type") == hint)) or \
+                        (exact and (not hint or item.get("media_type") == hint))
+            best, best_score, best_confident = item, score, confident
+    return best, best_confident
+
+
+def tmdb_lookup(title: str, base: str, year: str, hint: str = None):
+    """hint: "movie" or "tv" when the files say which it is."""
     if not TMDB_API_KEY or not title:
         return None
-    cache_key = (title.lower(), base.lower(), year)
+    cache_key = (title.lower(), base.lower(), year, hint)
     cached = TMDB_CACHE.get(cache_key)
     if cached and time.time() - cached[0] < TMDB_CACHE_TTL:
         return cached[1]
 
-    item = None
+    item, confident = None, False
     try:
-        item = _tmdb_search(title, year) or _tmdb_search(title)
+        item, confident = _tmdb_pick(_tmdb_candidates(title), title, year, hint)
         if not item and base and base.lower() != title.lower():
-            item = _tmdb_search(base, year) or _tmdb_search(base)
+            item, confident = _tmdb_pick(_tmdb_candidates(base), base, year, hint)
     except Exception:
         item = None
 
@@ -596,6 +630,8 @@ def tmdb_lookup(title: str, base: str, year: str):
             "year": (item.get("release_date") or item.get("first_air_date") or "")[:4],
             "media_type": item.get("media_type"),
             "genre_ids": item.get("genre_ids") or [],
+            "confident": confident,
+            "votes": item.get("vote_count") or 0,
         }
     TMDB_CACHE[cache_key] = (time.time(), result)
     return result
@@ -1199,7 +1235,7 @@ def discover_enrich():
 
     def enrich_one(raw_title):
         title, base, year = extract_title_and_year(raw_title)
-        meta = tmdb_lookup(title, base, year)
+        meta = tmdb_lookup(title, base, year, "tv" if SERIES_NAME_RE.search(raw_title) else None)
         if not meta:
             return raw_title, None
         return raw_title, {
@@ -2201,10 +2237,112 @@ LIBRARY = MediaLibrary(DOWNLOAD_DIR, CATEGORIES, VIDEO_EXTS,
 LIBRARY_PREFIX = "lib:"
 
 
+# A file name that is an episode: "S01E05", "1x05", "E05", "Episode 5", "Серія 5", "05. Name".
+EPISODE_FILE_RE = re.compile(r"(?i)(?:^|[^a-z0-9])(?:s\d{1,2}[ ._-]*e\d{1,3}|\d{1,2}x\d{2,3}|ep?\d{2,3}|episode[ ._-]?\d+|сері[яї][ ._-]?\d+)(?![a-z0-9])|^\d{1,3}[ ._-]")
+LIBRARY_META_FILE = STATE_DIR / "library-metadata.json"
+LIBRARY_META_LOCK = threading.Lock()
+LIBRARY_META_PENDING = set()
+LIBRARY_META_RETRY = 7 * 24 * 3600  # a title TMDB didn't know is asked again after a week
+try:
+    LIBRARY_META = json.loads(LIBRARY_META_FILE.read_text())
+except (OSError, ValueError):
+    LIBRARY_META = {}
+
+
+def library_structure(files: list) -> str:
+    """"tv" for a folder of episodes; "movie" for one file or a collection of films."""
+    episodes = sum(1 for f in files if EPISODE_FILE_RE.search(Path(f["name"]).stem))
+    return "tv" if len(files) > 1 and episodes >= 2 else "movie"
+
+
+def classify_library_item(folder_kind: str, structure: str, meta) -> str:
+    """Which Library tab a title belongs in. A confident TMDB match decides
+    animation (Мультфільми) - so a live-action film left in the Cartoon folder
+    moves to Фільми - and the files decide film or show. Without one, the
+    folder it is in decides, as before."""
+    if meta and meta.get("confident"):
+        if meta.get("animation"):
+            return "cartoon"
+        # Leaving the Cartoon folder takes a well-known match: a misspelled
+        # "Shreck" can match an obscure film of that name.
+        if folder_kind == "cartoon" and (meta.get("votes") or 0) < 200:
+            return "cartoon"
+        return "tv" if structure == "tv" else "movie"
+    if folder_kind == "cartoon":
+        return "cartoon"
+    return "tv" if structure == "tv" else folder_kind
+
+
+def _lookup_library_item(item: dict):
+    try:
+        files = LIBRARY.files(item["id"]) or []
+        structure = library_structure(files)
+        if len(files) > 1 and SERIES_NAME_RE.search(item["name"]):
+            structure = "tv"  # "Патрік Мелроуз (Сезон 1)": the folder says so even if the files don't
+        title, base, year = extract_title_and_year(item["name"])
+        hint = "tv" if structure == "tv" or SERIES_NAME_RE.search(item["name"]) else "movie"
+        meta = tmdb_lookup(title, base, year, hint)
+        entry = {"checked": time.time(), "structure": structure}
+        if meta:
+            entry.update({
+                "confident": meta.get("confident", False),
+                "animation": TMDB_ANIMATION_GENRE_ID in (meta.get("genre_ids") or []),
+                "display_title": meta["title"], "poster": meta["poster"], "rating": meta["rating"],
+                "overview": meta["overview"], "tmdb_id": meta["id"], "media_type": meta["media_type"],
+                "tmdb_year": meta.get("year"), "votes": meta.get("votes", 0),
+            })
+        with LIBRARY_META_LOCK:
+            LIBRARY_META[item["id"]] = entry
+            LIBRARY_META_FILE.write_text(json.dumps(LIBRARY_META, ensure_ascii=False))
+    except Exception:
+        pass
+    finally:
+        with LIBRARY_META_LOCK:
+            LIBRARY_META_PENDING.discard(item["id"])
+
+
+def _library_with_metadata(items: list) -> list:
+    """Each title with its saved TMDB match and its tab; titles not looked up
+    yet are queued (in the background) and keep their folder's tab meanwhile."""
+    now = time.time()
+    result = []
+    with LIBRARY_META_LOCK:
+        for item in items:
+            entry = LIBRARY_META.get(item["id"])
+            stale = entry is None or (not entry.get("tmdb_id") and now - entry.get("checked", 0) > LIBRARY_META_RETRY)
+            if stale and TMDB_API_KEY and item["id"] not in LIBRARY_META_PENDING:
+                LIBRARY_META_PENDING.add(item["id"])
+                TMDB_EXECUTOR.submit(_lookup_library_item, item)
+            merged = dict(item, folder_kind=item["kind"])
+            if entry:
+                merged["kind"] = classify_library_item(item["kind"], entry.get("structure", "movie"), entry)
+                for key in ("poster", "rating", "overview", "tmdb_id", "media_type", "display_title"):
+                    if entry.get(key) is not None:
+                        merged[key] = entry[key]
+            result.append(merged)
+        pending = len(LIBRARY_META_PENDING)
+    return result, pending
+
+
 @app.route("/api/library")
 def list_library():
-    """Everything already in the category folders, newest first."""
-    return jsonify({"items": LIBRARY.items(refresh=request.args.get("refresh") == "1")})
+    """Everything already in the category folders, newest first, with each
+    title's TMDB match and the tab it belongs in."""
+    items, pending = _library_with_metadata(LIBRARY.items(refresh=request.args.get("refresh") == "1"))
+    return jsonify({"items": items, "metadata_pending": pending})
+
+
+@app.route("/api/library/metadata", methods=["DELETE"])
+def reset_library_metadata():
+    """Forget every saved match; the next /api/library looks them all up again."""
+    with LIBRARY_META_LOCK:
+        LIBRARY_META.clear()
+        try:
+            LIBRARY_META_FILE.unlink()
+        except OSError:
+            pass
+    TMDB_CACHE.clear()
+    return jsonify({"ok": True})
 
 
 def _library_files(payload):

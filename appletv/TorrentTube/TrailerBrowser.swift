@@ -44,7 +44,7 @@ struct TrailerPlayer: View {
             try Task.checkCancellation()
             let audio = try stream.audioUrl.map { try api.mediaURL($0) }
             let subtitleURL = try stream.subtitleUrl.map { try api.mediaURL($0) }
-            controller = EmbeddedPlayer(url: try api.mediaURL(stream.url), resumePosition: 0, audioURL: audio, subtitleURL: subtitleURL)
+            controller = EmbeddedPlayer(url: try api.mediaURL(stream.url), resumePosition: 0, audioURL: audio, subtitleURL: subtitleURL, subtitleName: stream.subtitleName)
         } catch is CancellationError {} catch { self.error = error.localizedDescription }
     }
     private func close() { controller?.stop(); dismiss() }

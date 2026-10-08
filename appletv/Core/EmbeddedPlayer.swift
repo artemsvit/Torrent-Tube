@@ -30,10 +30,19 @@ final class EmbeddedPlayer {
     @ObservationIgnored private var started = false
 
     @ObservationIgnored private let subtitleURL: URL?
+    /// The subtitle file, saved on the device, and whether VLC has it yet.
+    @ObservationIgnored private var subtitleFile: URL?
+    @ObservationIgnored private var subtitleAttached = false
+    @ObservationIgnored private var subtitleSelected = false
+    /// VLC's id for the added subtitle track - named by language in the menu.
+    @ObservationIgnored private var externalSubtitleID: Int32?
 
-    init(url: URL, resumePosition: Double, audioURL: URL? = nil, subtitleURL: URL? = nil) {
+    @ObservationIgnored private let subtitleName: String
+
+    init(url: URL, resumePosition: Double, audioURL: URL? = nil, subtitleURL: URL? = nil, subtitleName: String? = nil) {
         self.resumePosition = resumePosition
         self.subtitleURL = subtitleURL
+        self.subtitleName = subtitleName ?? "Subtitles"
         let media = VLCMedia(url: url)
         media.addOption(":network-caching=2500")
         if let audioURL { media.addOption(":input-slave=\(audioURL.absoluteString)") }
@@ -44,11 +53,36 @@ final class EmbeddedPlayer {
         if !started {
             started = true
             player.play()
-            // A separate subtitle file (trailers): shown from the start.
-            if let subtitleURL { player.addPlaybackSlave(subtitleURL, type: .subtitle, enforce: true) }
+            // A separate subtitle file (trailers). VLC drops a track added before
+            // the video opens, and fetches remote ones unreliably - so the file is
+            // saved first and attached once playback runs (see refresh()).
+            if let subtitleURL { Task { await downloadSubtitles(subtitleURL) } }
         }
     }
+    private func downloadSubtitles(_ url: URL) async {
+        guard let (data, response) = try? await URLSession.shared.data(from: url),
+              (response as? HTTPURLResponse)?.statusCode == 200, !data.isEmpty else { return }
+        // Its own folder, named after the language - VLC shows the file name in the track menu.
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let file = folder.appendingPathComponent("\(subtitleName).vtt")
+        guard (try? data.write(to: file)) != nil else { return }
+        subtitleFile = file
+        attachSubtitlesIfReady()
+    }
+    private func attachSubtitlesIfReady() {
+        guard !subtitleAttached, let subtitleFile, player.isPlaying else { return }
+        subtitleAttached = true
+        player.addPlaybackSlave(subtitleFile, type: .subtitle, enforce: true)
+    }
     func refresh() {
+        attachSubtitlesIfReady()
+        // Once VLC lists the added track, make sure it is the one shown.
+        if subtitleAttached && !subtitleSelected, let track = subtitleTracks.last(where: { $0.id >= 0 }) {
+            subtitleSelected = true
+            externalSubtitleID = track.id
+            player.currentVideoSubTitleIndex = track.id
+        }
         seconds = max(0, Double(player.time.intValue) / 1000)
         duration = max(0, Double(player.media?.length.intValue ?? 0) / 1000)
         playing = player.isPlaying
@@ -69,11 +103,19 @@ final class EmbeddedPlayer {
         seconds = max(0, min(duration - 1, value))
         player.time = VLCTime(int: Int32(min(Double(Int32.max), seconds * 1000)))
     }
-    func stop() { player.stop(); player.drawable = nil }
+    func stop() {
+        player.stop(); player.drawable = nil
+        if let subtitleFile { try? FileManager.default.removeItem(at: subtitleFile.deletingLastPathComponent()) }
+    }
 
     struct Track: Identifiable { let id: Int32; let name: String }
     var audioTracks: [Track] { tracks(names: player.audioTrackNames, indexes: player.audioTrackIndexes) }
-    var subtitleTracks: [Track] { tracks(names: player.videoSubTitlesNames, indexes: player.videoSubTitlesIndexes) }
+    var subtitleTracks: [Track] {
+        // VLC calls an added file "Track 1"; show its language instead.
+        tracks(names: player.videoSubTitlesNames, indexes: player.videoSubTitlesIndexes).map { track in
+            track.id == externalSubtitleID ? Track(id: track.id, name: subtitleName) : track
+        }
+    }
     private func tracks(names: [Any]?, indexes: [Any]?) -> [Track] {
         zip(names ?? [], indexes ?? []).compactMap { name, index in
             guard let number = index as? NSNumber else { return nil }

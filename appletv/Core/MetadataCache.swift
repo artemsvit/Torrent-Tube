@@ -20,8 +20,12 @@ final class MetadataCache {
     init(server: URL) {
         let name = server.absoluteString.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "server"
         let folder = Self.folder
-        matchesFile = folder?.appendingPathComponent("metadata-\(name).json")
-        detailsFile = folder?.appendingPathComponent("details-\(name).json")
+        // "v2": matches saved before the server weighed year and type are dropped.
+        matchesFile = folder?.appendingPathComponent("metadata-v2-\(name).json")
+        detailsFile = folder?.appendingPathComponent("details-v2-\(name).json")
+        for old in ["metadata-\(name).json", "details-\(name).json"] {
+            if let file = folder?.appendingPathComponent(old) { try? FileManager.default.removeItem(at: file) }
+        }
         let decoder = JSONDecoder()
         if let file = matchesFile, let data = try? Data(contentsOf: file) {
             matches = (try? decoder.decode([String: Match].self, from: data)) ?? [:]
