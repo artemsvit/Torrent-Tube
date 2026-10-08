@@ -35,11 +35,6 @@ struct MobileTitle: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 26) {
                     hero(height: heroHeight)
-                    VStack(alignment: .leading, spacing: 16) {
-                        if let tagline = details?.tagline, !tagline.isEmpty {
-                            Text(tagline).font(HeroFont.overview).foregroundStyle(.white.opacity(0.75))
-                        }
-                    }.padding(.horizontal, edge).frame(maxWidth: 820, alignment: .leading)
                     if details?.mediaType == "tv", let seasons = details?.seasonList, !seasons.isEmpty { episodesSection(seasons) }
                     if let people = details?.people, !people.isEmpty { castSection(people) }
                     information(width: screen.size.width)
@@ -97,8 +92,9 @@ struct MobileTitle: View {
             )
             .frame(height: height).frame(maxHeight: .infinity, alignment: .top)  // the image keeps its size
             HeroInfo(kind: mobileKind(value, details), title: details?.title ?? value.displayTitle, item: value, details: details,
-                     overview: details?.overview ?? value.overview, expanded: expanded,
-                     toggleMore: (details?.overview ?? value.overview ?? "").count > 160 ? { withAnimation { expanded.toggle() } } : nil,
+                     overview: details?.overview ?? value.overview, tagline: details?.tagline, expanded: expanded,
+                     // No animation: the text opens downward at once.
+                     toggleMore: (details?.overview ?? value.overview ?? "").count > 160 ? { expanded.toggle() } : nil,
                      growth: $heroGrowth) {
                 Button { episode = nil; play(source: item.source) } label: {
                     Label(L("Play"), systemImage: "play.fill").font(HeroFont.button).frame(maxWidth: regular ? 220 : .infinity, minHeight: HeroFont.buttonHeight)

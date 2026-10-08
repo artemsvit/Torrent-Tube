@@ -360,6 +360,8 @@ struct CinemaHero<Actions: View>: View {
     var bottomInset: CGFloat = 70
     /// The Title page shows the full description under the hero instead.
     var showsOverview = true
+    /// Home shows three lines of the description; a title page more.
+    var overviewLines = 3
     var preview: EmbeddedPlayer? = nil
     var nextArtwork: String? = nil
     @ViewBuilder let actions: () -> Actions
@@ -429,9 +431,14 @@ struct CinemaHero<Actions: View>: View {
                     }
                     Text(facts.joined(separator: "  ·  ")).font(.system(size: 23, weight: .medium))
                 }.foregroundStyle(.white.opacity(0.85))
+                // The tagline heads the description, as on iPhone, iPad and Mac.
+                if showsOverview, let tagline = details?.tagline, !tagline.isEmpty {
+                    Text(tagline).font(.system(size: 25, weight: .semibold)).foregroundStyle(.white.opacity(0.9))
+                        .lineLimit(2).frame(maxWidth: 860, alignment: .leading)
+                }
                 if showsOverview, let overview = details?.overview ?? item.overview, !overview.isEmpty {
                     Text(overview).font(.system(size: 25)).foregroundStyle(.white.opacity(0.78)).lineSpacing(4)
-                        .lineLimit(3).frame(maxWidth: 860, alignment: .leading)
+                        .lineLimit(overviewLines).frame(maxWidth: 860, alignment: .leading)
                 }
                 actions().padding(.top, 12).focusSection()
             }

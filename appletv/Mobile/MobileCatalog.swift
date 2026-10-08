@@ -35,6 +35,8 @@ struct HeroInfo<Actions: View>: View {
     let item: MediaItem
     let details: Details?
     var overview: String?
+    /// The title's tagline: the heading of its description.
+    var tagline: String? = nil
     var expanded = false
     /// A long description: "Read more" right under it opens it in full.
     var toggleMore: (() -> Void)? = nil
@@ -53,6 +55,10 @@ struct HeroInfo<Actions: View>: View {
                 .lineLimit(2).minimumScaleFactor(0.7).tightTitleLines(size: HeroFont.titleSize(regular: sizeClass == .regular))
                 .frame(maxWidth: 900, alignment: .leading)
             MobileFacts(item: item, details: details)
+            if let tagline, !tagline.isEmpty {
+                Text(tagline).font(HeroFont.overview.weight(.semibold)).foregroundStyle(.white.opacity(0.9))
+                    .lineLimit(2).frame(maxWidth: 640, alignment: .leading)
+            }
             if let overview, !overview.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(overview).font(HeroFont.overview).foregroundStyle(.white.opacity(0.75))
@@ -409,7 +415,7 @@ struct MobileHome: View {
                 ], startPoint: .top, endPoint: .bottom)
             )
             HeroInfo(kind: mobileKind(item, details), title: details?.title ?? item.displayTitle, item: item, details: details,
-                     overview: details?.overview ?? item.overview) {
+                     overview: details?.overview ?? item.overview, tagline: details?.tagline) {
                 Button {
                     if config.supportsPlayback {
                         playback = PlaybackRequest(source: item.source, title: item.displayTitle,

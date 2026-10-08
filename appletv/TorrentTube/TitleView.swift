@@ -54,7 +54,7 @@ struct TitleView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 38) {
-                CinemaHero(item: value, details: details, height: 960, showsOverview: false) {
+                CinemaHero(item: value, details: details, height: 960, overviewLines: 6) {
                     HStack(spacing: 28) {
                         Button { play() } label: { Label(L("Play"), systemImage: "play.fill") }
                             .buttonStyle(.borderedProminent).tint(.white).foregroundStyle(.black).accessibilityIdentifier("title-play")
@@ -66,14 +66,6 @@ struct TitleView: View {
                             Button(L("Choose version")) { selectedEpisode = nil; showVersions = true }.buttonStyle(.bordered).tint(.white)
                         }
                     }
-                }
-                if let tagline = details?.tagline, !tagline.isEmpty {
-                    Text(tagline).font(.system(size: 27, weight: .semibold)).italic().foregroundStyle(.white.opacity(0.9))
-                        .padding(.horizontal, TVLayout.edge).padding(.bottom, -18)
-                }
-                if let overview = details?.overview ?? value.overview, !overview.isEmpty {
-                    Text(overview).font(.system(size: 27)).foregroundStyle(.white.opacity(0.8))
-                        .frame(maxWidth: 1300, alignment: .leading).padding(.horizontal, TVLayout.edge)
                 }
                 if details?.mediaType == "tv", let seasons = details?.seasonList, !seasons.isEmpty {
                     VStack(alignment: .leading, spacing: 28) {
