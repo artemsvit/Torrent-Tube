@@ -8,6 +8,7 @@ struct MobileTitle: View {
     @Environment(CatalogStore.self) private var catalog
     @Environment(FavoritesStore.self) private var favorites
     @State private var expanded = false
+    @State private var heroGrowth: CGFloat = 0
     @State private var season = 1
     @State private var episode: Int?
     @State private var episodes: [Episode] = []
@@ -38,13 +39,6 @@ struct MobileTitle: View {
                         if let tagline = details?.tagline, !tagline.isEmpty {
                             Text(tagline).font(HeroFont.overview).foregroundStyle(.white.opacity(0.75))
                         }
-                        // "Read more" opens the full description here, below the
-                        // banner, so nothing above it moves.
-                        if expanded, let overview = details?.overview ?? value.overview, !overview.isEmpty {
-                            Text(overview).font(HeroFont.overview).foregroundStyle(.white.opacity(0.75))
-                                .fixedSize(horizontal: false, vertical: true)
-                                .transition(.opacity)
-                        }
                     }.padding(.horizontal, edge).frame(maxWidth: 820, alignment: .leading)
                     if details?.mediaType == "tv", let seasons = details?.seasonList, !seasons.isEmpty { episodesSection(seasons) }
                     if let people = details?.people, !people.isEmpty { castSection(people) }
@@ -62,6 +56,9 @@ struct MobileTitle: View {
         .ignoresSafeArea(edges: .top)
         .background(AppBackground())
         .navigationBarTitleDisplayMode(.inline)
+        #if DEBUG
+        .task { if UserDefaults.standard.bool(forKey: "macExpand") { expanded = true } }  // screenshots: -macExpand YES
+        #endif
         .task {
             await catalog.enrich([item], api: api, config: config)
             await catalog.loadDetails(item, api: api, config: config)
@@ -98,9 +95,11 @@ struct MobileTitle: View {
                     .init(color: .clear, location: 1.0)
                 ], startPoint: .top, endPoint: .bottom)
             )
+            .frame(height: height).frame(maxHeight: .infinity, alignment: .top)  // the image keeps its size
             HeroInfo(kind: mobileKind(value, details), title: details?.title ?? value.displayTitle, item: value, details: details,
                      overview: details?.overview ?? value.overview, expanded: expanded,
-                     toggleMore: (details?.overview ?? value.overview ?? "").count > 160 ? { withAnimation { expanded.toggle() } } : nil) {
+                     toggleMore: (details?.overview ?? value.overview ?? "").count > 160 ? { withAnimation { expanded.toggle() } } : nil,
+                     growth: $heroGrowth) {
                 Button { episode = nil; play(source: item.source) } label: {
                     Label(L("Play"), systemImage: "play.fill").font(HeroFont.button).frame(maxWidth: regular ? 220 : .infinity, minHeight: HeroFont.buttonHeight)
                 }
@@ -118,7 +117,7 @@ struct MobileTitle: View {
             }
             .padding(.horizontal, edge).padding(.bottom, 12)
         }
-        .frame(height: height).clipped()
+        .frame(height: height + heroGrowth).clipped()
     }
 
     /// Seasons as a row of chips above the episodes, like the Apple TV app.

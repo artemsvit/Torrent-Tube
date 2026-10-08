@@ -38,6 +38,10 @@ struct HeroInfo<Actions: View>: View {
     var expanded = false
     /// A long description: "Read more" right under it opens it in full.
     var toggleMore: (() -> Void)? = nil
+    /// How much taller the open description is than its three lines - the
+    /// title page grows its banner by this, so the text opens downward.
+    var growth: Binding<CGFloat>? = nil
+    @State private var collapsedHeight: CGFloat = 0
     @ViewBuilder let actions: () -> Actions
     @Environment(\.horizontalSizeClass) private var sizeClass
     var body: some View {
@@ -52,7 +56,19 @@ struct HeroInfo<Actions: View>: View {
             if let overview, !overview.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(overview).font(HeroFont.overview).foregroundStyle(.white.opacity(0.75))
-                        .lineLimit(3)  // the full text opens below the banner
+                        .lineLimit(expanded ? nil : 3)
+                        .fixedSize(horizontal: false, vertical: expanded)
+                        // The three-line height, from a hidden copy of the current text.
+                        .background(alignment: .topLeading) {
+                            Text(overview).font(HeroFont.overview).lineLimit(3).hidden()
+                                .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { collapsedHeight = $0 }
+                        }
+                        .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { height in
+                            growth?.wrappedValue = expanded ? max(0, height - collapsedHeight) : 0
+                        }
+                        .onChange(of: collapsedHeight) { _, collapsed in
+                            if !expanded { growth?.wrappedValue = 0 }
+                        }
                     if let toggleMore {
                         Button(L(expanded ? "Show less" : "Read more"), action: toggleMore)
                             .font(HeroFont.overview.weight(.semibold)).foregroundStyle(.white)
