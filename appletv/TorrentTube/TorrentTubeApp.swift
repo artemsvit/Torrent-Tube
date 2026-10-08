@@ -13,6 +13,8 @@ struct TorrentTubeApp: App {
     @State private var history = ResumeHistory()
     @State private var favorites = FavoritesStore()
     @State private var didAttemptReconnect = false
+    /// At launch with a saved server: the splash, until the first try ends.
+    @State private var launching = !(UserDefaults.standard.string(forKey: "serverAddress") ?? "").isEmpty
     @State private var localizer = Localizer.shared
     init() {
         // Posters, backdrops and cast photos stay on the device between launches
@@ -37,10 +39,13 @@ struct TorrentTubeApp: App {
             Group {
                 if let api = store.api, let config = store.config {
                     MainView(store: store, api: api, config: config)
+                } else if launching {
+                    SplashView(host: URL(string: store.address)?.host)
                 } else {
                     ConnectionView(store: store)
                 }
             }
+            .animation(.easeInOut(duration: 0.35), value: launching)
             .onOpenURL { url in
                 guard url.scheme == "torrenttube", url.host == "title" else { return }
                 store.shelfTitleID = url.lastPathComponent
@@ -53,7 +58,14 @@ struct TorrentTubeApp: App {
             .task {
                 guard !didAttemptReconnect else { return }
                 didAttemptReconnect = true
-                if store.api == nil && !store.address.isEmpty { await store.connect() }
+                if store.api == nil && !store.address.isEmpty {
+                    let started = Date()
+                    await store.connect()
+                    // A short, calm splash rather than a flash.
+                    let shown = Date().timeIntervalSince(started)
+                    if store.api != nil, shown < 0.8 { try? await Task.sleep(for: .seconds(0.8 - shown)) }
+                }
+                launching = false
             }
         }
     }
@@ -89,12 +101,7 @@ struct ConnectionView: View {
                         .focused($field, equals: .address)
                         .accessibilityIdentifier("server-address")
                         .onSubmit { Task { await store.connect() } }
-                    Text(L("Example: %@", "http://192.168.0.102:5058")).font(.system(size: 22)).foregroundStyle(.white.opacity(0.45))
-                    if let error = store.error {
-                        Label(error, systemImage: "exclamationmark.triangle.fill")
-                            .font(.system(size: 24)).foregroundStyle(.orange)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+                    if let error = store.error { ConnectionProblemView(title: error, tip: store.errorTip) }
                     HStack(spacing: 20) {
                         Button { Task { await scanNetwork() } } label: {
                             HStack(spacing: 16) {

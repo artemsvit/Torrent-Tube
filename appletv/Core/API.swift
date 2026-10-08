@@ -291,7 +291,8 @@ struct TorrentTubeAPI: Sendable {
         var request = URLRequest(url: try url(path, query: query))
         request.httpMethod = method
         request.httpBody = body
-        request.timeoutInterval = (path.hasPrefix("api/playback") || path == "api/trailer/stream") ? 75 : 40
+        // The connection check gives up quickly, so a missing server is reported in seconds.
+        request.timeoutInterval = (path.hasPrefix("api/playback") || path == "api/trailer/stream") ? 75 : path == "api/config" ? 10 : 40
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         #if os(tvOS)

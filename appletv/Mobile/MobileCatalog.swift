@@ -97,13 +97,14 @@ struct MobileArtwork: View {
     }
 }
 
-/// An image filling its frame from the top - the hero backdrops.
+/// Full-height hero artwork, centered on iPhone.
 struct MobileBackdrop: View {
+    @Environment(\.horizontalSizeClass) private var sizeClass
     let url: String?
     var nextURL: String? = nil
     var body: some View {
         HeroBackdrop(url: url.flatMap { URL(string: higherResolution($0, backdrop: true)) },
-                     nextURL: nextURL.flatMap { URL(string: higherResolution($0, backdrop: true)) }, alignment: .top)
+                     nextURL: nextURL.flatMap { URL(string: higherResolution($0, backdrop: true)) }, alignment: sizeClass == .compact ? .center : .top)
     }
 }
 

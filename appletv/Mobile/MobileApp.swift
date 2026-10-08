@@ -11,6 +11,8 @@ struct TorrentTubeMobileApp: App {
     @State private var favorites = FavoritesStore()
     @State private var localizer = Localizer.shared
     @State private var reconnected = false
+    /// At launch with a saved server: the splash, until the first try ends.
+    @State private var launching = !(UserDefaults.standard.string(forKey: "serverAddress") ?? "").isEmpty
     init() {
         // Posters, backdrops and cast photos stay on the device between launches.
         URLCache.shared = URLCache(memoryCapacity: 64 << 20, diskCapacity: 1 << 30)
@@ -22,17 +24,27 @@ struct TorrentTubeMobileApp: App {
                 if let api = store.api, let config = store.config {
                     MobileRoot(store: store, api: api, config: config)
                         .id(api.baseURL)
+                } else if launching {
+                    SplashView(host: URL(string: store.address)?.host)
                 } else {
                     MobileConnection(store: store)
                 }
             }
+            .animation(.easeInOut(duration: 0.35), value: launching)
             .environment(history).environment(favorites)
             .environment(\.locale, localizer.language.locale)
             .preferredColorScheme(.dark).tint(.torrentAccent)
             .task {
                 guard !reconnected else { return }
                 reconnected = true
-                if !store.address.isEmpty { await store.connect() }
+                if !store.address.isEmpty {
+                    let started = Date()
+                    await store.connect()
+                    // A short, calm splash rather than a flash.
+                    let shown = Date().timeIntervalSince(started)
+                    if store.api != nil, shown < 0.8 { try? await Task.sleep(for: .seconds(0.8 - shown)) }
+                }
+                launching = false
             }
             #if os(macOS)
             .background(BarelessWindow())
@@ -83,16 +95,8 @@ struct MobileConnection: View {
                                 .strokeBorder(field == .address ? Color.torrentAccent : .white.opacity(0.12), lineWidth: field == .address ? 1.5 : 1))
                             .accessibilityIdentifier("server-address")
                             .onSubmit { Task { await store.connect() } }
-                        Text(L("Example: %@", "http://192.168.0.102:5058")).font(.caption).foregroundStyle(.white.opacity(0.45))
                         if let error = store.error {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-                                Text(L("Use the same Wi-Fi as your server. Allow Local Network access in Settings."))
-                                    .foregroundStyle(.white.opacity(0.6))
-                                Button(L("Open device settings")) { ScreenSleep.openNetworkSettings() }
-                                    .font(.footnote.weight(.semibold))
-                            }
-                            .font(.footnote).fixedSize(horizontal: false, vertical: true)
+                            ConnectionProblemView(title: error, tip: store.errorTip) { ScreenSleep.openNetworkSettings() }
                         }
                         actionButtons
                     }

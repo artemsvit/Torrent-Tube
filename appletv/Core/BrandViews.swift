@@ -167,6 +167,90 @@ struct BrandBackground: View {
     }
 }
 
+/// While the app connects to the saved server at launch: the brand mark
+/// breathing on the welcome screen's glow, a ripple, and the server's name.
+/// The connection screen appears only when connecting fails.
+struct SplashView: View {
+    let host: String?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var breathe = false
+    @State private var ripple = false
+    #if os(tvOS)
+    private let mark: CGFloat = 170, title: CGFloat = 76, caption: CGFloat = 28
+    #else
+    private let mark: CGFloat = 104, title: CGFloat = 36, caption: CGFloat = 16
+    #endif
+    var body: some View {
+        ZStack {
+            BrandBackground()
+            Circle().fill(Color.torrentAccent.opacity(0.22))
+                .frame(width: mark * 3.2, height: mark * 3.2).blur(radius: mark * 0.6)
+                .scaleEffect(breathe ? 1.15 : 0.85)
+            VStack(spacing: mark * 0.32) {
+                ZStack {
+                    ForEach(0..<2) { ring in
+                        RoundedRectangle(cornerRadius: mark * 0.3, style: .continuous)
+                            .strokeBorder(Color.torrentAccent.opacity(0.5), lineWidth: 2)
+                            .frame(width: mark, height: mark)
+                            .scaleEffect(ripple ? 1.7 : 1)
+                            .opacity(ripple ? 0 : 0.8)
+                            .animation(reduceMotion ? nil : .easeOut(duration: 2.2).repeatForever(autoreverses: false).delay(Double(ring) * 1.1), value: ripple)
+                    }
+                    BrandMark(size: mark).scaleEffect(breathe ? 1.04 : 0.98)
+                }
+                Text("Torrent Tube").font(.system(size: title, weight: .heavy)).foregroundStyle(.white)
+                HStack(spacing: 10) {
+                    ProgressView().tint(.white.opacity(0.7))
+                    Text(host.map { L("Connecting to %@…", $0) } ?? L("Connecting…"))
+                        .font(.system(size: caption, weight: .medium)).foregroundStyle(.white.opacity(0.6))
+                }
+            }
+        }
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) { breathe = true }
+            ripple = true
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// A failed connection on the connection screen: an icon, what happened and
+/// what to check, in a tinted panel.
+struct ConnectionProblemView: View {
+    let title: String
+    let tip: String?
+    var settings: (() -> Void)? = nil
+    #if os(tvOS)
+    private let icon: CGFloat = 30, titleSize: CGFloat = 28, tipSize: CGFloat = 24, pad: CGFloat = 26
+    #else
+    private let icon: CGFloat = 17, titleSize: CGFloat = 16, tipSize: CGFloat = 14, pad: CGFloat = 14
+    #endif
+    var body: some View {
+        HStack(alignment: .top, spacing: pad * 0.8) {
+            Image(systemName: "wifi.exclamationmark")
+                .font(.system(size: icon, weight: .semibold)).foregroundStyle(Color(red: 1, green: 0.62, blue: 0.3))
+                .frame(width: icon * 2.1, height: icon * 2.1)
+                .background(Color(red: 1, green: 0.55, blue: 0.2).opacity(0.16), in: Circle())
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(.system(size: titleSize, weight: .semibold)).foregroundStyle(.white)
+                if let tip { Text(tip).font(.system(size: tipSize)).foregroundStyle(.white.opacity(0.65)) }
+                if let settings {
+                    Button(L("Open device settings"), action: settings)
+                        .font(.system(size: tipSize, weight: .semibold)).foregroundStyle(Color.torrentAccent)
+                        .buttonStyle(.plain).padding(.top, 4)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(pad)
+        .background(Color(red: 1, green: 0.5, blue: 0.2).opacity(0.08), in: RoundedRectangle(cornerRadius: pad * 1.2, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: pad * 1.2, style: .continuous).strokeBorder(Color(red: 1, green: 0.55, blue: 0.25).opacity(0.25)))
+        .accessibilityElement(children: .combine)
+    }
+}
+
 /// Rounded play triangle outline matching the app brand icon.
 struct RoundedPlayShape: Shape {
     func path(in rect: CGRect) -> Path {
