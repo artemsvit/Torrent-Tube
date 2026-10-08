@@ -200,6 +200,7 @@ targets:
       - Core
       - Shared/Localization.swift
       - TorrentTube/VLCKit-COPYING.txt
+      - Mac/Assets.xcassets
     info:
       path: Mac/Info.plist
       properties:
@@ -218,7 +219,8 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.artsvit.torrenttube.mac
         PRODUCT_NAME: Torrent Tube
         DEVELOPMENT_TEAM: 8KK8V96Q6B
-        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # Mac sizes in the rounded Mac shape (the iPhone icon is a plain square).
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIconMac
         ENABLE_HARDENED_RUNTIME: YES
         LD_RUNPATH_SEARCH_PATHS: ['$(inherited)', '@executable_path/../Frameworks']
 schemes:

@@ -89,6 +89,7 @@
 		A2AA716389C22E97F97E3AB3 /* NetworkScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52E8A183743C2EEFC2BD19C9 /* NetworkScanner.swift */; };
 		A4223460D92B5FE266FC034B /* TVFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8BAB5F7C3828DD11D693895 /* TVFlowTests.swift */; };
 		A88B27F283EA2A57B095CDD2 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 671BE38B6BEAEF589E876417 /* SettingsView.swift */; };
+		A97BC3DE9BFC3E91089873C4 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4C90679E294FCB5A99025FA3 /* Assets.xcassets */; };
 		A984507D733EFD32F2272ED4 /* MobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB9FF9917E06F9F8EFFAD885 /* MobileApp.swift */; };
 		B29EDEFAA7425DA97196F8DF /* TrailerBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13FC790BD3F620DA0747F88A /* TrailerBrowser.swift */; };
 		B3EAA8E6A85F41D5659CC04B /* PlaybackCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9313F054C34514F89BDA2676 /* PlaybackCoordinator.swift */; };
@@ -225,7 +226,7 @@
 		049886025499167CAFC12234 /* TitleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TitleView.swift; sourceTree = "<group>"; };
 		0E8628FD9EF9860860E6B15A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		13FC790BD3F620DA0747F88A /* TrailerBrowser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrailerBrowser.swift; sourceTree = "<group>"; };
-		14831A815E2400B599EAB813 /* TorrentTubeMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = TorrentTubeMac.app; path = "Torrent Tube.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		14831A815E2400B599EAB813 /* TorrentTubeMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TorrentTubeMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1723EC0449D7755442600C23 /* CoreVideo.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreVideo.framework; path = System/Library/Frameworks/CoreVideo.framework; sourceTree = SDKROOT; };
 		19FCD6E903115D42F79948D4 /* CFNetwork.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CFNetwork.framework; path = System/Library/Frameworks/CFNetwork.framework; sourceTree = SDKROOT; };
 		1F0D5CC0D58366F7D6697DCA /* MobileVLCKit.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = MobileVLCKit.xcframework; path = Vendor/MobileVLCKit.xcframework; sourceTree = "<group>"; };
@@ -238,6 +239,7 @@
 		37420C8234A1DBF27FCF8520 /* Platform.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Platform.swift; sourceTree = "<group>"; };
 		3C66EF18AB2D944EB7539739 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		479640FFBB304485A7A278C6 /* MetadataCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataCache.swift; sourceTree = "<group>"; };
+		4C90679E294FCB5A99025FA3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		52E8A183743C2EEFC2BD19C9 /* NetworkScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkScanner.swift; sourceTree = "<group>"; };
 		5559DF315382AC9B66029175 /* HomeFeaturedCarousel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeFeaturedCarousel.swift; sourceTree = "<group>"; };
 		57C41546CB617412BF68F45C /* MobileCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileCatalog.swift; sourceTree = "<group>"; };
@@ -402,6 +404,7 @@
 			isa = PBXGroup;
 			children = (
 				DBA4B3CEBB4F1BF04AA1D44E /* Core */,
+				B5AD79537BC9C9FB3785DECD /* Mac */,
 				D96923B73E0FF465BC312E11 /* Mobile */,
 				40DAD1C010B3ACAB8D5530F4 /* MobileTests */,
 				37C02D794205E62DE10E5054 /* MobileUITests */,
@@ -438,6 +441,14 @@
 				D6B93C010622B78E63935915 /* VLCKit.xcframework */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		B5AD79537BC9C9FB3785DECD /* Mac */ = {
+			isa = PBXGroup;
+			children = (
+				4C90679E294FCB5A99025FA3 /* Assets.xcassets */,
+			);
+			path = Mac;
 			sourceTree = "<group>";
 		};
 		BA5AE0C54A4E3B52250E0F4F /* TorrentTube */ = {
@@ -752,6 +763,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				CD81F5CA07A52195F9C87BFD /* Assets.xcassets in Resources */,
+				A97BC3DE9BFC3E91089873C4 /* Assets.xcassets in Resources */,
 				D8D551D6E1D49D9B8C437139 /* InfoPlist.strings in Resources */,
 				FF0F2AC853A8BB0811EAFA0F /* VLCKit-COPYING.txt in Resources */,
 			);
@@ -1122,7 +1134,7 @@
 		183A516AF27525499432ED98 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIconMac;
 				COMBINE_HIDPI_IMAGES = YES;
 				DEVELOPMENT_TEAM = 8KK8V96Q6B;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1324,7 +1336,7 @@
 		9D1CE7F4AB941469CEF758B2 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIconMac;
 				COMBINE_HIDPI_IMAGES = YES;
 				DEVELOPMENT_TEAM = 8KK8V96Q6B;
 				ENABLE_HARDENED_RUNTIME = YES;
