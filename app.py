@@ -11,10 +11,14 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
+from functools import wraps
 from pathlib import Path
 
 import libtorrent as lt
-from flask import Flask, Response, jsonify, redirect, render_template, request
+from media_library import MediaLibrary
+from playback_sessions import PlaybackSessions
+from trailer_streams import TrailerError, TrailerStreams
+from flask import Flask, Response, jsonify, redirect, render_template, request, send_file
 
 DOWNLOAD_DIR = Path(os.environ.get("TORRENTTUBE_DOWNLOAD_DIR") or (Path.home() / "Downloads" / "TorrentTube"))
 DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -74,6 +78,7 @@ TMDB_EXECUTOR = ThreadPoolExecutor(max_workers=8)
 app = Flask(__name__)
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024  # .torrent files are tiny; 8MB is generous
+TRAILER_STREAMS = TrailerStreams()
 
 STATE_NAMES = {
     lt.torrent_status.checking_files: "checking",
@@ -258,10 +263,14 @@ def add_magnet(uri: str, save_path: str = None) -> str:
     return tid
 
 
-def add_torrent_file(info: "lt.torrent_info", save_path: str = None) -> str:
+def add_torrent_file(info: "lt.torrent_info", save_path: str = None, nothing_wanted: bool = False) -> str:
     params = lt.add_torrent_params()
     params.ti = info
     params.save_path = save_path or resolve_save_path()
+    if nothing_wanted:
+        # A stream starts with no file wanted, so a whole season pack never
+        # begins downloading - begin_stream turns on just the episode played.
+        params.file_priorities = [0] * info.num_files()
     params.storage_mode = lt.storage_mode_t.storage_mode_sparse
     handle = ses.add_torrent(params)
     apply_torrent_limits(handle)
@@ -367,6 +376,9 @@ def helper_status(key):
 def config():
     search_enabled = bool(JACKETT_URL and JACKETT_API_KEY)
     return jsonify({
+        "server": "torrenttube",
+        "api_version": 1,
+        "capabilities": {"file_selection": True, "playback_sessions": True, "library": True},
         "download_dir": str(DOWNLOAD_DIR),
         # The same folder as the server's own path (None when it isn't
         # known) - what Settings shows, as /downloads means little.
@@ -483,9 +495,14 @@ def settings_options():
 
 
 COLLECTION_WORDS_RE = re.compile(
-    r"\b(complete collection|full collection|collection|quadrilogy|trilogy|duology|anthology|saga)\b.*",
+    r"\b(complete collection|full collection|collection|quadrilogy|ouadrilogy|tetralogy|trilogy|duology|dilogy|anthology|saga)\b.*",
     re.I,
 )
+
+
+RELEASE_TAIL_RE = re.compile(
+    r"\b(?:(?:19|20)\d{2}|S\d{1,2}(?:E\d{1,3})?(?:-\d{1,2})?|Season\s*\d+|Сезон\s*\d+|\d{3,4}p|WEB(?:-?DL|Rip)?|BDRip|BluRay|"
+    r"HDRip|DVDRip|HDTV|UHD|x26[45]|H\s?26[45]|HEVC|AMZN|NF)\b", re.I)
 
 
 def extract_title_and_year(raw_title: str):
@@ -495,8 +512,14 @@ def extract_title_and_year(raw_title: str):
     Also returns a shorter "base" title (franchise name only, no "Complete
     Collection"/"Quadrilogy"/etc.) since those bundle-release words rarely
     match anything on TMDB, which indexes individual films."""
-    year_match = re.search(r"(19|20)\d{2}", raw_title)
-    year = year_match.group(0) if year_match else None
+    # Scene-style file names ("Yogi.Bear.2010.1080p.BluRay") use dots or
+    # underscores for spaces; a "/" means a tracker listing, left as is.
+    scene = "/" not in raw_title and re.match(r"^\S*?[._]\S*?[._]", raw_title) is not None
+    if scene:
+        raw_title = re.sub(r"(?<!\d)[._]|[._](?!\d)", " ", raw_title)
+    # The release year: "(2017)" first, so "Blade Runner 2049 (2017)" and "1917 (2019)" stay right.
+    year_match = re.search(r"\(\s*((?:19|20)\d{2})", raw_title) or re.search(r"(?<!\d)((?:19|20)\d{2})(?!\d)", raw_title)
+    year = year_match.group(1) if year_match else None
 
     # Names come before the "(year" / "|" - past it, a "/" is release info
     # ("4xUkr/Eng | Sub Ukr/Eng [Remastered, ...]"), and that tail must not
@@ -509,6 +532,18 @@ def extract_title_and_year(raw_title: str):
     candidate = re.sub(r"[\[\(].*", "", candidate)
     candidate = re.sub(r"\s+", " ", candidate).strip(" :-|/")
     candidate = re.sub(r"\s+\b(3D|4K|HDR|Remastered)\b\s*$", "", candidate, flags=re.I).strip()
+    # A bare year, season or quality tag ends the name: "Show S01 2026 WEB-DL" -> "Show".
+    # A bare year only counts in scene names, or when release tags follow it
+    # ("The Accountant 2 2025 AMZN") - elsewhere it can be part of the title.
+    def counts(m):
+        if scene or not re.fullmatch(r"(?:19|20)\d{2}", m.group(0)):
+            return True
+        return RELEASE_TAIL_RE.match(candidate[m.end():].lstrip(" .")) is not None
+    tail = next((m for m in RELEASE_TAIL_RE.finditer(candidate) if counts(m)), None)
+    if tail and tail.start() > 0:
+        candidate = candidate[:tail.start()].strip(" :-|/.")
+    candidate = re.sub(r"^\d{1,2}\.\s+", "", candidate)  # "1. The Lion King" - a numbered collection
+    candidate = re.sub(r"^S\d{1,2}(?:E\d{1,3})?\s+", "", candidate, flags=re.I)  # "s01 Pluribus"
 
     base = COLLECTION_WORDS_RE.split(candidate)[0].strip(" :.-")
     return candidate, base, year
@@ -1202,6 +1237,31 @@ def item_details():
         return jsonify({"error": "Couldn't reach TMDB"}), 502
 
 
+@app.route("/api/episodes")
+def season_episodes():
+    """Episode artwork and facts for native title/file selectors."""
+    if not TMDB_API_KEY:
+        return jsonify({"error": "Episode information is not configured"}), 503
+    series = request.args.get("id", "")
+    season = request.args.get("season", "")
+    if not series.isdigit() or not season.isdigit() or not 0 <= int(season) <= 999:
+        return jsonify({"error": "Invalid series or season"}), 400
+    key = ("episodes", int(series), int(season), TMDB_LANGUAGE)
+    cached = TMDB_CACHE.get(key)
+    if cached and time.time() - cached[0] < TMDB_CACHE_TTL:
+        return jsonify(cached[1])
+    try:
+        data = _tmdb_get(f"/tv/{int(series)}/season/{int(season)}", language=TMDB_LANGUAGE)
+        result = {"episodes": [{"number": e["episode_number"], "name": e.get("name") or f"Episode {e['episode_number']}",
+                                 "overview": e.get("overview"), "runtime": e.get("runtime"),
+                                 "still": _tmdb_image(e.get("still_path"), "w780")}
+                                for e in data.get("episodes", []) if isinstance(e.get("episode_number"), int)]}
+        TMDB_CACHE[key] = (time.time(), result)
+        return jsonify(result)
+    except Exception:
+        return jsonify({"error": "Couldn't reach episode information"}), 502
+
+
 # Appended to the YouTube query so results favour trailers dubbed into the
 # TMDB language when one exists, falling back to plain "trailer".
 TRAILER_WORDS = {"uk": "трейлер українською", "ru": "трейлер", "pl": "zwiastun", "de": "trailer deutsch",
@@ -1225,6 +1285,64 @@ def find_trailer():
         return jsonify({"videos": youtube_search(query), "query": query})
     except Exception:
         return jsonify({"error": "Couldn't reach YouTube", "videos": [], "query": query}), 502
+
+
+@app.route("/api/trailer/stream", methods=["POST"])
+def resolve_trailer_stream():
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "Expected a JSON object"}), 400
+    try:
+        return jsonify(TRAILER_STREAMS.resolve(payload.get("key"), payload.get("subtitles")))
+    except TrailerError as error:
+        return jsonify({"error": str(error)}), error.status
+
+
+@app.route("/trailer-stream/<token>/subtitles.vtt")
+def trailer_subtitles(token):
+    """The trailer's subtitles (asked for with "subtitles": "uk,en" - the
+    first language that works), held in
+    memory with its token - nothing is saved."""
+    try:
+        return Response(TRAILER_STREAMS.subtitles(token), content_type="text/vtt; charset=utf-8",
+                        headers={"Cache-Control": "no-store"})
+    except TrailerError as error:
+        return jsonify({"error": str(error)}), error.status
+
+
+@app.route("/trailer-stream/<token>/<int:index>")
+def relay_trailer_stream(token, index):
+    try:
+        upstream = TRAILER_STREAMS.relay(token, index, request.headers.get("Range"), request.method == "HEAD")
+        headers = {k: upstream.headers[k] for k in ("Content-Type", "Content-Length", "Content-Range", "Accept-Ranges") if k in upstream.headers}
+        headers["Cache-Control"] = "no-store"
+        status = upstream.status
+        if request.method == "HEAD":
+            upstream.close()
+            return Response(status=status, headers=headers)
+        content_type = upstream.headers.get("Content-Type", "").lower()
+        if "mpegurl" in content_type:
+            with upstream:
+                data = upstream.read(1024 * 1024 + 1)
+                if len(data) > 1024 * 1024:
+                    raise TrailerError("The trailer playlist is too large")
+                playlist = TRAILER_STREAMS.rewrite_manifest(token, upstream.geturl(), data.decode("utf-8"))
+            return Response(playlist, content_type="application/vnd.apple.mpegurl", headers={"Cache-Control": "no-store"})
+
+        def chunks():
+            try:
+                while True:
+                    data = upstream.read(64 * 1024)
+                    if not data:
+                        break
+                    yield data
+            finally:
+                upstream.close()
+        response = Response(chunks(), status=status, headers=headers, direct_passthrough=True)
+        response.call_on_close(upstream.close)
+        return response
+    except TrailerError as error:
+        return jsonify({"error": str(error)}), error.status
 
 
 # Torrents enforce_remove_policy() just took off the list, so the UI can
@@ -1479,6 +1597,16 @@ STREAM_NEVER_OPENED_AFTER = 180
 STREAM_LAST_CONNECTED = {}  # tid -> when it last had an open response
 STREAM_STOPPED = set()      # cached streams paused because no player is connected
 STREAM_STARTED = {}         # tid -> when its stream started (or was restored)
+STREAM_SETUP_LOCK = threading.RLock()
+PLAYBACK_SESSIONS = PlaybackSessions()
+
+
+def stream_transaction(func):
+    @wraps(func)
+    def wrapped(*args, **kwargs):
+        with STREAM_SETUP_LOCK:
+            return func(*args, **kwargs)
+    return wrapped
 
 
 def stream_log(message: str):
@@ -1592,7 +1720,14 @@ class StreamError(Exception):
         self.status = status
 
 
-def begin_stream(source: dict) -> tuple:
+def begin_stream(source: dict, prepare_only=False) -> tuple:
+    # Native sessions and cleanup use the same lock, so a stream cannot be
+    # deleted between preparing its files and registering a viewer.
+    with STREAM_SETUP_LOCK:
+        return _begin_stream(source, prepare_only)
+
+
+def _begin_stream(source: dict, prepare_only=False) -> tuple:
     """Start (or reuse) a torrent in streaming mode; returns (tid, file
     index). `source` is {"id"} (something in Downloads), {"magnet"},
     {"download_link"} or {"torrent_hex"} (a .torrent already fetched).
@@ -1628,7 +1763,7 @@ def begin_stream(source: dict) -> tuple:
     is_new = not (existing and existing.is_valid())
     if is_new:
         save_path = str(STREAM_CACHE_DIR)
-        tid = add_torrent_file(info, save_path) if info else add_magnet(magnet, save_path)
+        tid = add_torrent_file(info, save_path, nothing_wanted=True) if info else add_magnet(magnet, save_path)
         STREAM_CACHE_IDS.add(tid)
         STREAM_STARTED[tid] = time.time()
     STREAM_LAST_USED[tid] = time.time()
@@ -1643,7 +1778,16 @@ def begin_stream(source: dict) -> tuple:
 
     ti = handle.torrent_file()
     fs = ti.files()
-    index = pick_video_file(ti)
+    index = source.get("file", pick_video_file(ti))
+    if isinstance(index, bool) or not isinstance(index, int) or not 0 <= index < fs.num_files():
+        raise StreamError("Invalid video file index", 400)
+    if "file" in source and Path(fs.file_path(index)).suffix.lower() not in VIDEO_EXTS:
+        raise StreamError("That file is not a video", 400)
+    if prepare_only:
+        if is_new:
+            handle.prioritize_files([0] * fs.num_files())
+        save_registry()
+        return tid, index
     if (tid, index) in STREAM_FILES and handle.is_valid():
         return tid, index  # already streaming - don't re-rush the start on every request
 
@@ -1828,6 +1972,7 @@ def play_link_status(token):
 
 
 @app.route("/played/<token>")
+@stream_transaction
 def player_closed(token):
     """The player's x-success / x-error callback: it was closed (or
     playback failed), so stop the stream - a cached one is deleted with
@@ -1836,6 +1981,8 @@ def player_closed(token):
     tid = link.get("tid") or (token[2:] if token.startswith(("m-", "d-")) else None)
     stream_log(f"close callback {token} {request.query_string.decode()[:200]!r} from {request.headers.get('User-Agent', '?')[:80]!r}")
     deleted = False
+    if tid and PLAYBACK_SESSIONS.has_viewers(tid):
+        return redirect("/")
     if tid and tid in STREAM_CACHE_IDS:
         drop_cached_stream(tid)
         save_registry()
@@ -1890,6 +2037,7 @@ def adopt_cached_stream(tid: str, category: str) -> "str | None":
 
 
 def drop_cached_stream(tid: str):
+    PLAYBACK_SESSIONS.discard_torrent(tid)
     with LOCK:
         handle = HANDLES.pop(tid, None)
         PAUSED_IDS.discard(tid)
@@ -1942,10 +2090,13 @@ def keep_stream(tid):
 
 
 @app.route("/api/stream/<tid>", methods=["DELETE"])
+@stream_transaction
 def stop_stream(tid):
     """Stop a stream. A cached one is dropped with its data now instead of
     waiting for its player to close; a stream of something in Downloads just
     goes back to downloading normally (its files are the user's)."""
+    if PLAYBACK_SESSIONS.has_viewers(tid):
+        return jsonify({"error": "A native player is still using this stream"}), 409
     if tid in STREAM_CACHE_IDS:
         drop_cached_stream(tid)
         save_registry()
@@ -1960,6 +2111,11 @@ def stop_stream(tid):
 
 
 def clean_stream_cache():
+    with STREAM_SETUP_LOCK:
+        _clean_stream_cache()
+
+
+def _clean_stream_cache():
     """Drops cached streams no player has taken data from for
     STREAM_ABANDON_AFTER (the player never said it closed), and anything
     left in the cache folder that no stream owns (a crash, a restart
@@ -1967,6 +2123,12 @@ def clean_stream_cache():
     now = time.time()
     dropped = False
     for tid in list(STREAM_CACHE_IDS):
+        if PLAYBACK_SESSIONS.has_viewers(tid):
+            # A paused or fully buffered player may have no media socket.
+            STREAM_LAST_CONNECTED[tid] = now
+            STREAM_STARTED[tid] = now
+            STREAM_LAST_USED[tid] = now
+            continue
         if now - STREAM_LAST_USED.get(tid, now) > STREAM_ABANDON_AFTER:
             stream_log(f"deleting {tid}: no data taken for {STREAM_ABANDON_AFTER // 3600} h")
             drop_cached_stream(tid)
@@ -2026,7 +2188,140 @@ def stream_cache_loop():
 
 @app.route("/api/stream/<tid>/<int:index>")
 def get_stream_status(tid, index):
+    with LOCK:
+        handle = HANDLES.get(tid)
+    if handle and handle.is_valid() and handle.status().has_metadata:
+        if index >= handle.torrent_file().files().num_files():
+            return jsonify({"error": "No such file"}), 404
     return jsonify(stream_status(tid, index))
+
+
+LIBRARY = MediaLibrary(DOWNLOAD_DIR, CATEGORIES, VIDEO_EXTS,
+                       describe=lambda name: (lambda t: (t[0], t[2]))(extract_title_and_year(name)))
+LIBRARY_PREFIX = "lib:"
+
+
+@app.route("/api/library")
+def list_library():
+    """Everything already in the category folders, newest first."""
+    return jsonify({"items": LIBRARY.items(refresh=request.args.get("refresh") == "1")})
+
+
+def _library_files(payload):
+    path = payload.get("path")
+    if not isinstance(path, str):
+        raise StreamError("Library path must be text", 400)
+    files = LIBRARY.files(path)
+    if not files:
+        raise StreamError("That title is no longer on the server", 404)
+    return path, files
+
+
+@app.route("/media/<path:relative>")
+def library_file(relative):
+    """A library video straight from disk, with Range support for seeking."""
+    path = LIBRARY.resolve(relative)
+    if path is None or not path.is_file() or path.suffix.lower() not in VIDEO_EXTS:
+        return jsonify({"error": "No such file"}), 404
+    kind = "video/x-matroska" if path.suffix.lower() == ".mkv" else (mimetypes.guess_type(path.name)[0] or "application/octet-stream")
+    return send_file(path, mimetype=kind, conditional=True)
+
+
+@app.route("/api/playback/prepare", methods=["POST"])
+def prepare_native_playback():
+    """Resolve metadata and list episodes before opening a player."""
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "Expected a JSON object"}), 400
+    if "path" in payload:  # already on the server: list its files, nothing to fetch
+        try:
+            path, files = _library_files(payload)
+        except StreamError as e:
+            return jsonify({"error": str(e)}), e.status
+        selected = max(files, key=lambda f: f["size"])["index"]
+        return jsonify({"id": LIBRARY_PREFIX + path, "selected": selected, "files": files})
+    if any(k in payload and not isinstance(payload[k], str) for k in ("id", "magnet", "download_link")):
+        return jsonify({"error": "Playback source fields must be text"}), 400
+    with STREAM_SETUP_LOCK:
+        try:
+            tid, selected = begin_stream(payload, prepare_only=True)
+            with LOCK:
+                handle = HANDLES.get(tid)
+            fs = handle.torrent_file().files()
+            files = [{"index": i, "name": Path(fs.file_path(i)).name,
+                      "path": fs.file_path(i), "size": fs.file_size(i)}
+                     for i in range(fs.num_files())
+                     if Path(fs.file_path(i)).suffix.lower() in VIDEO_EXTS]
+            return jsonify({"id": tid, "selected": selected, "files": files})
+        except StreamError as e:
+            return jsonify({"error": str(e)}), e.status
+
+
+@app.route("/api/playback/sessions", methods=["POST"])
+def create_native_playback():
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "Expected a JSON object"}), 400
+    if "path" in payload:
+        try:
+            path, files = _library_files(payload)
+        except StreamError as e:
+            return jsonify({"error": str(e)}), e.status
+        index = payload.get("file", max(files, key=lambda f: f["size"])["index"])
+        if isinstance(index, bool) or not isinstance(index, int) or not 0 <= index < len(files):
+            return jsonify({"error": "Invalid video file index"}), 400
+        file = files[index]
+        token = PLAYBACK_SESSIONS.create(LIBRARY_PREFIX + path, index)
+        return jsonify({"session": token, "id": LIBRARY_PREFIX + path, "file": index, "name": file["name"],
+                        "url": "/media/" + urllib.parse.quote(file["path"]),
+                        "heartbeat_interval": 20, "expires_after": PLAYBACK_SESSIONS.ttl,
+                        "ready": True, "head_progress": 100, "progress": 100.0, "done": True})
+    if any(k in payload and not isinstance(payload[k], str) for k in ("id", "magnet", "download_link")):
+        return jsonify({"error": "Playback source fields must be text"}), 400
+    with STREAM_SETUP_LOCK:
+        try:
+            tid, index = begin_stream(payload)
+            with LOCK:
+                handle = HANDLES.get(tid)
+            fs = handle.torrent_file().files()
+            name = Path(fs.file_path(index)).name
+            token = PLAYBACK_SESSIONS.create(tid, index)
+            return jsonify({"session": token, "id": tid, "file": index, "name": name,
+                            "url": f"/stream/{tid}/{index}/{urllib.parse.quote(name)}",
+                            "heartbeat_interval": 20, "expires_after": PLAYBACK_SESSIONS.ttl,
+                            **stream_status(tid, index)})
+        except StreamError as e:
+            return jsonify({"error": str(e)}), e.status
+
+
+@app.route("/api/playback/sessions/<token>", methods=["POST", "DELETE"])
+def native_playback_session(token):
+    with STREAM_SETUP_LOCK:
+        entry = PLAYBACK_SESSIONS.touch(token) if request.method == "POST" else PLAYBACK_SESSIONS.close(token)
+        if not entry:
+            return jsonify({"error": "Playback session expired. Start playback again."}), 410
+        tid = entry["torrent_id"]
+        if tid.startswith(LIBRARY_PREFIX):  # a file on disk: always ready, nothing to clean up
+            return jsonify({"ok": True} if request.method == "DELETE" else
+                           {"ready": True, "head_progress": 100, "progress": 100.0, "done": True})
+        if request.method == "DELETE":
+            if not PLAYBACK_SESSIONS.has_viewers(tid) and not STREAM_SOCKETS.get(tid):
+                if tid in STREAM_CACHE_IDS:
+                    drop_cached_stream(tid)
+                    save_registry()
+                else:
+                    with LOCK:
+                        handle = HANDLES.get(tid)
+                    if handle and handle.is_valid():
+                        handle.unset_flags(lt.torrent_flags.sequential_download)
+                        if tid not in PAUSED_IDS:
+                            handle.set_flags(lt.torrent_flags.auto_managed)
+            return jsonify({"ok": True})
+        status = stream_status(tid, entry["file"])
+        if status.get("gone"):
+            PLAYBACK_SESSIONS.close(token)
+            return jsonify({"error": "The stream was removed"}), 410
+        return jsonify(status)
 
 
 @app.route("/stream/<tid>/<int:index>/<path:name>")

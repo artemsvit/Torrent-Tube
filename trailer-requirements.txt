@@ -1,0 +1,3 @@
+# Python 3.10+; used in a separate tools environment so the server can retain
+# Debian's libtorrent bindings. Node.js 22+ is also required.
+yt-dlp[default]==2026.8.19

@@ -270,6 +270,16 @@ mpv), or the server has to remux to HLS first.
 This has no authentication, like the rest of the app. Keep it on your
 local network.
 
+## Apple TV app
+
+A native tvOS app now lives in [`appletv`](appletv/README.md). It has a saved
+server connection, a TV interface, and an embedded player. The updated server
+adds episode selection, native trailer streaming, and heartbeat-based playback sessions while keeping
+the web app’s external-player flow.
+
+To open the Xcode project, first run `python3 appletv/scripts/bootstrap.py`.
+See the Apple TV README for builds, server update requirements, and verification.
+
 ## Run it locally without Docker (macOS)
 
 ```bash

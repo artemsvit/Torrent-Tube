@@ -1,4 +1,6 @@
+FROM node:22-bookworm-slim AS trailer-js
 FROM debian:bookworm-slim
+COPY --from=trailer-js /usr/local/bin/node /usr/local/bin/node
 
 # python3-libtorrent is Debian's prebuilt binding for the same libtorrent
 # engine qBittorrent/Deluge use — installing it from apt (rather than pip)
@@ -13,12 +15,20 @@ FROM debian:bookworm-slim
 # over https) fails with CERTIFICATE_VERIFY_FAILED.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-       python3 python3-libtorrent python3-flask python3-waitress gosu curl ca-certificates \
+       python3 python3-venv python3-libtorrent python3-flask python3-waitress gosu curl ca-certificates libstdc++6 \
     && rm -rf /var/lib/apt/lists/*
+
+COPY trailer-requirements.txt /tmp/trailer-requirements.txt
+RUN python3 -m venv /opt/trailer-tools \
+    && /opt/trailer-tools/bin/pip install --no-cache-dir -r /tmp/trailer-requirements.txt
+ENV TORRENTTUBE_YTDLP=/opt/trailer-tools/bin/yt-dlp
 
 WORKDIR /app
 
 COPY app.py .
+COPY playback_sessions.py .
+COPY media_library.py .
+COPY trailer_streams.py .
 COPY templates/ templates/
 COPY static/ static/
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh

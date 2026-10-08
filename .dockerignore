@@ -4,3 +4,6 @@ __pycache__/
 .git/
 .DS_Store
 downloads/
+appletv/
+tests/
+.trailer-tools/
