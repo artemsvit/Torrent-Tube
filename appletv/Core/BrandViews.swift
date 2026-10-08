@@ -167,8 +167,8 @@ struct BrandBackground: View {
     }
 }
 
-/// While the app connects to the saved server at launch: the brand mark
-/// breathing on the welcome screen's glow, a ripple, and "Connecting…".
+/// While the app connects to the saved server at launch: the brand mark on
+/// the welcome screen's glow, waves around it, and "Connecting…".
 /// The connection screen appears only when connecting fails.
 struct SplashView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -195,7 +195,7 @@ struct SplashView: View {
                             .opacity(ripple ? 0 : 0.8)
                             .animation(reduceMotion ? nil : .easeOut(duration: 2.2).repeatForever(autoreverses: false).delay(Double(ring) * 1.1), value: ripple)
                     }
-                    BrandMark(size: mark).scaleEffect(breathe ? 1.04 : 0.98)
+                    BrandMark(size: mark)  // still; only the waves move
                 }
                 Text("Torrent Tube").font(.system(size: title, weight: .heavy)).foregroundStyle(.white)
                 HStack(spacing: 10) {

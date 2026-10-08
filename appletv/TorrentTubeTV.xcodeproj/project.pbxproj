@@ -226,7 +226,7 @@
 		049886025499167CAFC12234 /* TitleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TitleView.swift; sourceTree = "<group>"; };
 		0E8628FD9EF9860860E6B15A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		13FC790BD3F620DA0747F88A /* TrailerBrowser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrailerBrowser.swift; sourceTree = "<group>"; };
-		14831A815E2400B599EAB813 /* TorrentTubeMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TorrentTubeMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		14831A815E2400B599EAB813 /* TorrentTubeMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = TorrentTubeMac.app; path = "Torrent Tube.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		1723EC0449D7755442600C23 /* CoreVideo.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreVideo.framework; path = System/Library/Frameworks/CoreVideo.framework; sourceTree = SDKROOT; };
 		19FCD6E903115D42F79948D4 /* CFNetwork.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CFNetwork.framework; path = System/Library/Frameworks/CFNetwork.framework; sourceTree = SDKROOT; };
 		1F0D5CC0D58366F7D6697DCA /* MobileVLCKit.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = MobileVLCKit.xcframework; path = Vendor/MobileVLCKit.xcframework; sourceTree = "<group>"; };
@@ -747,12 +747,12 @@
 			targets = (
 				932652366F7A093ED160C7E6 /* TorrentTubeTV */,
 				6013FD2D5A99E447E52D481B /* TorrentTubeMobile */,
+				2949867129B45DB224ECF632 /* TorrentTubeMac */,
 				E212D0D6ECF7E10278D46111 /* TorrentTubeMobileTests */,
 				649FAA70A20BAB9BFC50ABFE /* TorrentTubeMobileUITests */,
 				BE85C4DEF43D8DB105E2EBD7 /* TorrentTubeTopShelf */,
 				D05ED5A0B0B3D8D46BCCDC8F /* TorrentTubeTVTests */,
 				B243E4A1CD11167579144220 /* TorrentTubeTVUITests */,
-				2949867129B45DB224ECF632 /* TorrentTubeMac */,
 			);
 		};
 /* End PBXProject section */
