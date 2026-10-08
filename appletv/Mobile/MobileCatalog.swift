@@ -36,6 +36,8 @@ struct HeroInfo<Actions: View>: View {
     let details: Details?
     var overview: String?
     var expanded = false
+    /// A long description: "Read more" right under it opens it in full.
+    var toggleMore: (() -> Void)? = nil
     @ViewBuilder let actions: () -> Actions
     @Environment(\.horizontalSizeClass) private var sizeClass
     var body: some View {
@@ -48,9 +50,16 @@ struct HeroInfo<Actions: View>: View {
                 .frame(maxWidth: 900, alignment: .leading)
             MobileFacts(item: item, details: details)
             if let overview, !overview.isEmpty {
-                Text(overview).font(HeroFont.overview).foregroundStyle(.white.opacity(0.75))
-                    .lineLimit(expanded ? nil : 3)
-                    .frame(maxWidth: 640, alignment: .leading)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(overview).font(HeroFont.overview).foregroundStyle(.white.opacity(0.75))
+                        .lineLimit(expanded ? nil : 3)
+                    if let toggleMore {
+                        Button(L(expanded ? "Show less" : "Read more"), action: toggleMore)
+                            .font(HeroFont.overview.weight(.semibold)).foregroundStyle(.white)
+                            .buttonStyle(.plain)
+                    }
+                }
+                .frame(maxWidth: 640, alignment: .leading)
             }
             HStack(spacing: 10) { actions() }.padding(.top, 6)
         }

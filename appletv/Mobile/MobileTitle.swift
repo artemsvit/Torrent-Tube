@@ -35,10 +35,8 @@ struct MobileTitle: View {
                 VStack(alignment: .leading, spacing: 26) {
                     hero(height: heroHeight)
                     VStack(alignment: .leading, spacing: 16) {
-                        if let tagline = details?.tagline, !tagline.isEmpty { Text(tagline).font(.headline).italic() }
-                        // The description is in the banner; this opens it in full.
-                        if let overview = details?.overview ?? value.overview, overview.count > 160 {
-                            Button(L(expanded ? "Show less" : "Read more")) { withAnimation { expanded.toggle() } }.font(HeroFont.button)
+                        if let tagline = details?.tagline, !tagline.isEmpty {
+                            Text(tagline).font(HeroFont.overview.weight(.semibold)).foregroundStyle(.white.opacity(0.85))
                         }
                     }.padding(.horizontal, edge).frame(maxWidth: 820, alignment: .leading)
                     if details?.mediaType == "tv", let seasons = details?.seasonList, !seasons.isEmpty { episodesSection(seasons) }
@@ -94,7 +92,8 @@ struct MobileTitle: View {
                 ], startPoint: .top, endPoint: .bottom)
             )
             HeroInfo(kind: mobileKind(value, details), title: details?.title ?? value.displayTitle, item: value, details: details,
-                     overview: details?.overview ?? value.overview, expanded: expanded) {
+                     overview: details?.overview ?? value.overview, expanded: expanded,
+                     toggleMore: (details?.overview ?? value.overview ?? "").count > 160 ? { withAnimation { expanded.toggle() } } : nil) {
                 Button { episode = nil; play(source: item.source) } label: {
                     Label(L("Play"), systemImage: "play.fill").font(HeroFont.button).frame(maxWidth: regular ? 220 : .infinity, minHeight: HeroFont.buttonHeight)
                 }
