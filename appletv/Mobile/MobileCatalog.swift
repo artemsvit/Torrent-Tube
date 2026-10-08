@@ -947,6 +947,7 @@ struct MobilePerson: View {
     @State private var credits: PersonCredits?
     @State private var error: String?
     @State private var retry = 0
+    @State private var scrolled = false
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
@@ -980,8 +981,14 @@ struct MobilePerson: View {
             }.padding(.vertical, 16)
         }
         .background(AppBackground())
-        .navigationTitle(route.name)
+        // No bar panel: the content blends into the bar as it scrolls, and the name shows in the bar once the big one is gone.
+        .softTopEdge()
+        #if !os(macOS)
+        .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
+        #endif
+        .navigationTitle(scrolled ? route.name : "")
         .navigationBarTitleDisplayMode(.inline)
+        .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y + $0.contentInsets.top > 70 } action: { _, new in scrolled = new }
         .task(id: retry) {
             error = nil
             do { credits = try await api.request("api/person", query: [.init(name: "id", value: String(route.id))]) }

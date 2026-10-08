@@ -136,6 +136,7 @@ struct TitleView: View {
         }
         // Edge to edge like Home: the hero's image runs under the tab bar
         // and to the sides; the rest keeps its own horizontal padding.
+        .tvScrollEdge()  // before ignoresSafeArea, so the fade spans the whole screen
         .ignoresSafeArea(edges: [.top, .horizontal])
         .background(AppBackground())
         // Menu/Back: straight to the tab's top level.

@@ -31,7 +31,7 @@ struct MainView: View {
     /// A tab's stack, with title pages pushed as values so it can be reset.
     private func stack<Root: View>(_ tab: MainTab, @ViewBuilder root: () -> Root) -> some View {
         NavigationStack(path: path(tab)) {
-            root().padding(.top, tab == .home ? 0 : 118).navigationDestination(for: MediaItem.self) { item in TitleView(item: item, api: api, config: config) }
+            root().tvTopFade(tab == .home ? 0 : 70).padding(.top, tab == .home ? 0 : 118).navigationDestination(for: MediaItem.self) { item in TitleView(item: item, api: api, config: config) }
                 .navigationDestination(for: PersonRoute.self) { PersonView(route: $0, api: api, config: config) }
         }
         .environment(\.backToTop) { paths[tab] = NavigationPath() }
@@ -45,7 +45,7 @@ struct MainView: View {
             case .cartoons: stack(.cartoons) { CategoryView(feed: "cartoons", title: "Cartoons", api: api, config: config) }
             case .library: stack(.library) { LibraryView(api: api, config: config) }
             case .search: stack(.search) { SearchView(api: api, config: config) }
-            case .settings: NavigationStack { SettingsView(store: store, api: api, config: config).padding(.top, 118) }.id(settingsReset)
+            case .settings: NavigationStack { SettingsView(store: store, api: api, config: config).tvTopFade(70).padding(.top, 118) }.id(settingsReset)
             }
         }
         // NavigationStack does not pass an outer safe-area inset to every root.
@@ -121,9 +121,9 @@ struct MainView: View {
 private struct TVNavigationGlass: ViewModifier {
     @ViewBuilder func body(content: Content) -> some View {
         if #available(tvOS 26.0, *) {
-            content.glassEffect(.clear, in: Capsule())
+            content.glassEffect(.clear.tint(.black.opacity(0.3)), in: Capsule())
         } else {
-            content.background(.ultraThinMaterial, in: Capsule())
+            content.background(.thinMaterial, in: Capsule())
                 .overlay(Capsule().strokeBorder(.white.opacity(0.14), lineWidth: 1))
         }
     }
@@ -313,8 +313,9 @@ struct HomeView: View {
         }
         // Edge to edge: the hero's image runs under the tab bar and to the
         // screen's sides; everything else keeps TVLayout.edge itself.
-        .ignoresSafeArea(edges: [.top, .horizontal])
         .scrollClipDisabled()
+        .tvScrollEdge()  // before ignoresSafeArea, so the fade spans the whole screen
+        .ignoresSafeArea(edges: [.top, .horizontal])
         .background(AppBackground())
         .defaultFocus($heroAction, .play, priority: .userInitiated)
         .onScrollGeometryChange(for: Bool.self) { geometry in
@@ -593,6 +594,30 @@ struct MediaShelf: View {
 
 /// A round photo with name and role - Cast & Crew. Focusable so the
 /// row can be browsed with the remote; selecting it does nothing.
+extension View {
+    /// Content fades out over its top `height` points instead of ending in a hard edge under the bar.
+    func tvTopFade(_ height: CGFloat) -> some View {
+        // The mask ignores the safe area too, or it would cut an edge-to-edge image back to the safe area.
+        mask(VStack(spacing: 0) {
+            LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom).frame(height: height)
+            Color.black
+        }.ignoresSafeArea())
+    }
+    /// For screens whose banner runs under the bar: the top edge fades only once the page has scrolled,
+    /// so the banner still reaches the top edge at rest.
+    func tvScrollEdge() -> some View { modifier(TVScrollEdge()) }
+}
+
+private struct TVScrollEdge: ViewModifier {
+    @State private var scrolled = false
+    func body(content: Content) -> some View {
+        content
+            .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y + $0.contentInsets.top > 40 } action: { _, new in scrolled = new }
+            .tvTopFade(scrolled ? 170 : 0)
+            .animation(.easeOut(duration: 0.25), value: scrolled)
+    }
+}
+
 struct PersonCard: View {
     let person: Details.Person
     @FocusState private var focused: Bool
@@ -1096,6 +1121,7 @@ struct PersonView: View {
     @State private var credits: PersonCredits?
     @State private var error: String?
     @State private var retry = 0
+    @State private var scrolled = false
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 35) {
@@ -1126,9 +1152,20 @@ struct PersonView: View {
                 } else {
                     LoadingState(text: L("Loading titles…"), minHeight: 500)
                 }
-            }.padding(.horizontal, TVLayout.edge).padding(.top, ScreenLayout.top).padding(.bottom, 70)
+            }.padding(.horizontal, TVLayout.edge).padding(.top, 118 + 40).padding(.bottom, 70)
         }
+        // Content melts into the bar; the name moves up beside it once the big one scrolls away.
+        .tvTopFade(150)
+        .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y + $0.contentInsets.top > 170 } action: { _, new in scrolled = new }
         .ignoresSafeArea(edges: .horizontal)
+        .overlay(alignment: .top) {
+            // Centred, just under the bar.
+            Text(route.name).font(.system(size: 34, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.6)
+                .shadow(color: .black.opacity(0.6), radius: 8)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.horizontal, TVLayout.edge).padding(.top, 162)
+                .opacity(scrolled ? 1 : 0).animation(.easeOut(duration: 0.2), value: scrolled)
+        }
         .task(id: retry) {
             error = nil
             do { credits = try await api.request("api/person", query: [.init(name: "id", value: String(route.id))]) }
