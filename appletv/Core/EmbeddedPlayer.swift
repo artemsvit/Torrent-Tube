@@ -2,6 +2,8 @@ import SwiftUI
 import Observation
 #if os(tvOS)
 import TVVLCKit
+#elseif os(macOS)
+import VLCKit
 #else
 import MobileVLCKit
 #endif
@@ -48,7 +50,7 @@ final class EmbeddedPlayer {
         if let audioURL { media.addOption(":input-slave=\(audioURL.absoluteString)") }
         player.media = media
     }
-    func attach(to view: UIView) {
+    func attach(to view: PlatformView) {
         player.drawable = view
         if !started {
             started = true
@@ -124,6 +126,19 @@ final class EmbeddedPlayer {
     }
 }
 
+#if os(macOS)
+struct VideoSurface: NSViewRepresentable {
+    let controller: EmbeddedPlayer
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        view.wantsLayer = true
+        view.layer?.backgroundColor = NSColor.black.cgColor
+        controller.attach(to: view)
+        return view
+    }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}
+#else
 struct VideoSurface: UIViewRepresentable {
     let controller: EmbeddedPlayer
     func makeUIView(context: Context) -> UIView {
@@ -135,4 +150,5 @@ struct VideoSurface: UIViewRepresentable {
     func updateUIView(_ uiView: UIView, context: Context) {}
     static func dismantleUIView(_ uiView: UIView, coordinator: ()) { }
 }
+#endif
 

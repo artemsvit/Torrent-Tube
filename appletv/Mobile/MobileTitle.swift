@@ -27,31 +27,35 @@ struct MobileTitle: View {
     private var saved: Bool { favorites.contains(value, server: api.baseURL) }
 
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.dynamicTypeSize) private var typeSize
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 26) {
-                hero
-                VStack(alignment: .leading, spacing: 16) {
-                    if let tagline = details?.tagline, !tagline.isEmpty { Text(tagline).font(.headline).italic() }
-                    if let overview = details?.overview ?? value.overview, !overview.isEmpty {
-                        Text(overview).foregroundStyle(.white.opacity(0.8)).lineLimit(expanded ? nil : 4)
-                            .onTapGesture { withAnimation { expanded.toggle() } }
-                        Button(L(expanded ? "Show less" : "Read more")) { withAnimation { expanded.toggle() } }.font(.subheadline.weight(.semibold))
+        GeometryReader { screen in
+            let heroHeight = HeroLayout.bannerHeight(screenHeight: screen.size.height, sizeClass: sizeClass)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 26) {
+                    hero(height: heroHeight)
+                    VStack(alignment: .leading, spacing: 16) {
+                        if let tagline = details?.tagline, !tagline.isEmpty { Text(tagline).font(.headline).italic() }
+                        // The description is in the banner; this opens it in full.
+                        if let overview = details?.overview ?? value.overview, overview.count > 160 {
+                            Button(L(expanded ? "Show less" : "Read more")) { withAnimation { expanded.toggle() } }.font(HeroFont.button)
+                        }
+                    }.padding(.horizontal, edge).frame(maxWidth: 820, alignment: .leading)
+                    if details?.mediaType == "tv", let seasons = details?.seasonList, !seasons.isEmpty { episodesSection(seasons) }
+                    if let people = details?.people, !people.isEmpty { castSection(people) }
+                    information(width: screen.size.width)
+                    if let recommendations = details?.recommendations, !recommendations.isEmpty {
+                        MobileShelf(title: L("More Like This"), items: recommendations.map { rec in
+                            var media = MediaItem(title: rec.title, magnet: nil, downloadLink: nil, sizeLabel: nil, seeders: nil, releases: nil)
+                            media.cleanTitle = rec.title; media.poster = rec.poster; media.tmdbId = rec.tmdbId; media.mediaType = rec.mediaType
+                            return media
+                        })
                     }
-                }.padding(.horizontal, edge).frame(maxWidth: 820, alignment: .leading)
-                if details?.mediaType == "tv", let seasons = details?.seasonList, !seasons.isEmpty { episodesSection(seasons) }
-                if let people = details?.people, !people.isEmpty { castSection(people) }
-                information
-                if let recommendations = details?.recommendations, !recommendations.isEmpty {
-                    MobileShelf(title: L("More Like This"), items: recommendations.map { rec in
-                        var media = MediaItem(title: rec.title, magnet: nil, downloadLink: nil, sizeLabel: nil, seeders: nil, releases: nil)
-                        media.cleanTitle = rec.title; media.poster = rec.poster; media.tmdbId = rec.tmdbId; media.mediaType = rec.mediaType
-                        return media
-                    })
-                }
-            }.padding(.bottom, 32)
+                }.padding(.bottom, 32)
+            }
         }
         .ignoresSafeArea(edges: .top)
+        .background(AppBackground())
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await catalog.enrich([item], api: api, config: config)
@@ -69,40 +73,46 @@ struct MobileTitle: View {
 
     /// The backdrop fills the top of the page and fades into it; the title,
     /// facts and buttons sit over its lower part.
-    private var hero: some View {
+    private func hero(height: CGFloat) -> some View {
         let regular = sizeClass == .regular
         return ZStack(alignment: .bottomLeading) {
-            MobileBackdrop(url: details?.backdrop ?? value.poster)
-            LinearGradient(stops: [.init(color: .black.opacity(0.5), location: 0), .init(color: .clear, location: 0.22),
-                                   .init(color: .clear, location: 0.4), .init(color: .black.opacity(0.85), location: 0.78),
-                                   .init(color: .black, location: 1)], startPoint: .top, endPoint: .bottom)
-            VStack(alignment: .leading, spacing: 10) {
-                if let kind = mobileKind(value, details) {
-                    Text(kind.uppercased()).font(.caption.bold()).tracking(2).foregroundStyle(.white.opacity(0.65))
+            ZStack {
+                MobileBackdrop(url: details?.backdrop ?? value.poster)
+                LinearGradient(stops: [.init(color: .black.opacity(0.55), location: 0), .init(color: .clear, location: 0.22),
+                                       .init(color: .black.opacity(0.75), location: 0.8),
+                                       .init(color: .black, location: 1.0)], startPoint: .top, endPoint: .bottom)
+                LinearGradient(stops: [.init(color: .black.opacity(0.7), location: 0),
+                                       .init(color: .clear, location: 0.6)], startPoint: .leading, endPoint: .trailing)
+            }
+            .mask(
+                LinearGradient(stops: [
+                    .init(color: .white, location: 0),
+                    .init(color: .white, location: 0.45),
+                    .init(color: .white.opacity(0.85), location: 0.65),
+                    .init(color: .white.opacity(0.35), location: 0.86),
+                    .init(color: .clear, location: 1.0)
+                ], startPoint: .top, endPoint: .bottom)
+            )
+            HeroInfo(kind: mobileKind(value, details), title: details?.title ?? value.displayTitle, item: value, details: details,
+                     overview: details?.overview ?? value.overview, expanded: expanded) {
+                Button { episode = nil; play(source: item.source) } label: {
+                    Label(L("Play"), systemImage: "play.fill").font(HeroFont.button).frame(maxWidth: regular ? 220 : .infinity, minHeight: HeroFont.buttonHeight)
                 }
-                Text(details?.title ?? value.displayTitle).font(.system(size: regular ? 46 : 32, weight: .heavy))
-                    .lineLimit(3).minimumScaleFactor(0.7)
-                MobileFacts(item: value, details: details)
-                HStack(spacing: 10) {
-                    Button { episode = nil; play(source: item.source) } label: {
-                        Label(L("Play"), systemImage: "play.fill").font(.headline).frame(maxWidth: regular ? 240 : .infinity, minHeight: 36)
-                    }
-                    .buttonStyle(.borderedProminent).tint(.white).foregroundStyle(.black)
-                    .accessibilityIdentifier("title-play")
-                    secondaryActions
-                }.padding(.top, 6)
+                .buttonStyle(.borderedProminent).tint(.white).foregroundStyle(.black)
+                .accessibilityIdentifier("title-play")
+                secondaryActions
                 if item.sourceOverride == nil || (item.releases?.count ?? 0) > 1 {  // a library title saved twice has versions too
                     Button { episode = nil; showVersions = true } label: {
-                        Label(L("Choose version"), systemImage: "list.bullet").font(.subheadline.weight(.semibold))
+                        Image(systemName: "list.bullet").font(HeroFont.button).frame(width: 30, height: HeroFont.buttonHeight)
                     }
-                    .tint(.white.opacity(0.85)).frame(minHeight: 36)
+                    .buttonStyle(.bordered).tint(.white)
+                    .help(L("Choose version")).accessibilityLabel(L("Choose version"))
                     .accessibilityIdentifier("choose-version")
                 }
             }
-            .padding(.horizontal, edge).padding(.bottom, 4)
-            .frame(maxWidth: 820, alignment: .leading)
+            .padding(.horizontal, edge).padding(.bottom, 12)
         }
-        .frame(height: regular ? 600 : 540).clipped()
+        .frame(height: height).clipped()
     }
 
     /// Seasons as a row of chips above the episodes, like the Apple TV app.
@@ -115,7 +125,7 @@ struct MobileTitle: View {
                             let current = selection.number == season
                             Button { withAnimation(.snappy) { season = selection.number } } label: {
                                 Text(selection.name.isEmpty ? L("Season %ld", selection.number) : selection.name)
-                                    .font(.subheadline.weight(current ? .semibold : .regular))
+                                    .font(.subheadline.weight(.semibold))
                                     .padding(.horizontal, 14).padding(.vertical, 8)
                                     .foregroundStyle(current ? .black : .white)
                                     .background(current ? Color.white : Color.white.opacity(0.12), in: Capsule())
@@ -210,40 +220,48 @@ struct MobileTitle: View {
                 do {
                     trailer = try await TrailerChoice.find(title: item.title, year: details?.year, known: details?.trailers ?? [], api: api)
                     if trailer == nil { error = L("No trailer was found for this title.") }
-                } catch { self.error = error.localizedDescription }
+                } catch is CancellationError {} catch { self.error = error.localizedDescription }
             }
         } label: {
             Group { if findingTrailer { ProgressView() } else { Image(systemName: "play.rectangle") } }
-                .font(.headline).frame(width: 30, height: 36)
+                .font(HeroFont.button).frame(width: 30, height: HeroFont.buttonHeight)
         }
         .disabled(findingTrailer).buttonStyle(.bordered).tint(.white)
         .accessibilityLabel(L(findingTrailer ? "Finding trailer…" : "Trailer")).accessibilityIdentifier("show-trailers")
         Button { favorites.toggle(value, details: details, server: api.baseURL) } label: {
-            Image(systemName: saved ? "heart.fill" : "heart").font(.headline).frame(width: 30, height: 36)
+            Image(systemName: saved ? "heart.fill" : "heart").font(HeroFont.button).frame(width: 30, height: HeroFont.buttonHeight)
                 .contentTransition(.symbolEffect(.replace))
         }
         .buttonStyle(.bordered).tint(.white)
         .accessibilityLabel(L(saved ? "Remove from Favorites" : "Add to Favorites"))
         .accessibilityIdentifier("favorite-toggle")
+        .sensoryFeedback(.success, trigger: saved)  // a light tap when saved or removed
     }
 
-    @ViewBuilder private var information: some View {
+    @ViewBuilder private func information(width: CGFloat) -> some View {
         if let details {
             let rows = infoRows(details)
             if !rows.isEmpty {
+                let count = typeSize.isAccessibilitySize ? 1 : (sizeClass == .regular
+                    ? min(rows.count, max(2, Int((width - edge * 2 - 40) / 190))) : 2)
                 VStack(alignment: .leading, spacing: 12) {
                     Text(L("Information")).font(.title3.bold())
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 16, alignment: .topLeading)], alignment: .leading, spacing: 14) {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 24, alignment: .topLeading), count: count), alignment: .leading, spacing: 24) {
                         ForEach(rows, id: \.0) { label, text in
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(label.uppercased()).font(.caption2.bold()).tracking(1).foregroundStyle(.secondary)
-                                Text(text).font(.subheadline)
-                            }
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(label.uppercased()).font(.caption.weight(.semibold)).tracking(0.8)
+                                    .foregroundStyle(.white.opacity(0.6)).fixedSize(horizontal: false, vertical: true)
+                                Text(text).font(.body).foregroundStyle(.white.opacity(0.95))
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }.frame(maxWidth: .infinity, alignment: .topLeading)
                         }
                     }
-                    .padding(14)
-                    .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                }.padding(.horizontal, edge).frame(maxWidth: 820, alignment: .leading)
+                    .padding(20)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("title-information")
+                }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, edge)
             }
         }
     }
@@ -256,33 +274,165 @@ struct MobileTitle: View {
         if let original = details.originalTitle, !original.isEmpty, original != details.title { rows.append((L("Original title"), original)) }
         return rows
     }
-    private var versionSheet: some View {
-        NavigationStack {
-            List {
-                Section {
-                    Text(value.displayTitle).font(.headline)
-                    if let episode { Text(L("Season %ld · Episode %ld", season, episode)).foregroundStyle(.secondary) }
-                }
-                if loadingVersions { ProgressView(L("Finding versions…")) }
-                if let versionError { MobileError(message: versionError) { Task { await loadVersions() } } }
-                ForEach(versions) { release in
-                    Button { selectVersion(release.source) } label: {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(release.title).foregroundStyle(.primary).fixedSize(horizontal: false, vertical: true)
-                            Text([release.sizeLabel, release.seeders.map { L("%ld seeders", $0) }].compactMap { $0 }.joined(separator: " · "))
-                                .font(.caption).foregroundStyle(.secondary)
-                        }.padding(.vertical, 6)
+    private func releaseTags(from title: String) -> [String] {
+        var tags: [String] = []
+        let lower = title.lowercased()
+        if lower.contains("2160p") || lower.contains("4k") { tags.append("4K") }
+        else if lower.contains("1080p") { tags.append("1080p") }
+        else if lower.contains("720p") { tags.append("720p") }
+
+        if lower.contains("dv") || lower.contains("dolby vision") { tags.append("DV") }
+        if lower.contains("hdr10+") { tags.append("HDR10+") }
+        else if lower.contains("hdr") { tags.append("HDR") }
+
+        if lower.contains("ukr") || lower.contains("укр") { tags.append("UKR") }
+        return tags
+    }
+
+    private func versionCard(_ release: Release) -> some View {
+        Button {
+            selectVersion(release.source)
+        } label: {
+            HStack(alignment: .top, spacing: 14) {
+                Image(systemName: "play.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(Color.torrentAccent)
+                    .padding(.top, 2)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(release.title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    let tags = releaseTags(from: release.title)
+                    if !tags.isEmpty {
+                        HStack(spacing: 6) {
+                            ForEach(tags, id: \.self) { tag in
+                                Text(tag)
+                                    .font(.system(size: 11, weight: .bold))
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 3)
+                                    .background(tag == "4K" ? Color.torrentAccent.opacity(0.35) : Color.white.opacity(0.12), in: Capsule())
+                                    .foregroundStyle(tag == "4K" ? Color.white : Color.white.opacity(0.9))
+                            }
+                        }
+                    }
+
+                    HStack(spacing: 14) {
+                        if let size = release.sizeLabel, !size.isEmpty {
+                            Label(size, systemImage: "internaldrive")
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.7))
+                        }
+                        if let seeders = release.seeders {
+                            Label(L("%ld seeders", seeders), systemImage: "person.2.fill")
+                                .font(.caption)
+                                .foregroundStyle(seeders > 0 ? Color.green.opacity(0.9) : .white.opacity(0.45))
+                        }
                     }
                 }
-                if versions.isEmpty, !loadingVersions, versionError == nil {
-                    if item.source.isPlayable {
-                        Button(L("Use this version")) { selectVersion(item.source) }
-                    } else { Text(L("No versions found. Try searching for this title.")) }
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.35))
+                    .padding(.top, 6)
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var versionSheet: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(value.displayTitle)
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                        if let episode {
+                            Text(L("Season %ld · Episode %ld", season, episode))
+                                .font(.subheadline)
+                                .foregroundStyle(.white.opacity(0.7))
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(14)
+                    .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
+                    )
+
+                    if loadingVersions {
+                        HStack {
+                            Spacer()
+                            ProgressView(L("Finding versions…"))
+                                .tint(.white)
+                                .padding(.vertical, 32)
+                            Spacer()
+                        }
+                    }
+
+                    if let versionError {
+                        MobileError(message: versionError) { Task { await loadVersions() } }
+                    }
+
+                    LazyVStack(spacing: 10) {
+                        ForEach(versions) { release in
+                            versionCard(release)
+                        }
+                    }
+
+                    if versions.isEmpty, !loadingVersions, versionError == nil {
+                        if item.source.isPlayable {
+                            Button {
+                                selectVersion(item.source)
+                            } label: {
+                                HStack {
+                                    Image(systemName: "play.fill")
+                                    Text(L("Use this version"))
+                                }
+                                .font(.headline)
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(Color.torrentAccent, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+                        } else {
+                            Text(L("No versions found. Try searching for this title."))
+                                .font(.subheadline)
+                                .foregroundStyle(.white.opacity(0.6))
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(.vertical, 32)
+                        }
+                    }
                 }
-            }.navigationTitle(L("Choose version")).navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L("Cancel")) { showVersions = false } } }
-                .task { await loadVersions() }
-        }.presentationDetents([.large])
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+            .background(AppBackground())
+            .navigationTitle(L("Choose version"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L("Cancel")) { showVersions = false }
+                        .tint(.white)
+                        .accessibilityIdentifier("cancel-version")
+                }
+            }
+            .task { await loadVersions() }
+        }
+        .presentationDetents([.large])
+        .presentationBackground { AppBackground() }
     }
     private func makeRequest(_ source: PlaybackSource) -> PlaybackRequest {
         PlaybackRequest(source: source, title: value.displayTitle, artwork: details?.backdrop ?? value.poster,

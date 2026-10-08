@@ -15,6 +15,7 @@ def main():
     parser.add_argument("--port", type=int, default=5069)
     parser.add_argument("--video", type=Path, help="Use an existing permitted MKV instead of generating a 100-second test video.")
     parser.add_argument("--live-trailers", action="store_true", help="Resolve a public official trailer instead of serving generated test footage.")
+    parser.add_argument("--episode-library", action="store_true", help="Test numbered episodes in multiple season folders.")
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="torrenttube-playback-smoke-") as temporary:
         os.environ["TORRENTTUBE_DOWNLOAD_DIR"] = temporary
@@ -55,6 +56,33 @@ def main():
             def fixture_trailer():
                 from flask import send_file
                 return send_file(root / "Episode 1.mkv", mimetype="video/x-matroska", conditional=True)
+        if args.episode_library:
+            show = Path(temporary) / "TV Shows" / "Numbered episode playback test"
+            for season in (1, 12):
+                folder = show / f"Season {season}"
+                folder.mkdir(parents=True)
+                for episode in (1, 2, 3):
+                    shutil.copyfile(video, folder / f"{episode:02d} Episode title.mkv")
+            original_config = app.app.view_functions["config"]
+            def episode_config():
+                response = original_config()
+                data = response.get_json()
+                data.update(tmdb_enabled=True, numbered_episode_fixture=True)
+                return app.jsonify(data)
+            app.app.view_functions["config"] = episode_config
+            app.app.view_functions["list_library"] = lambda: app.jsonify({"items": [{
+                "id": "TV Shows/Numbered episode playback test", "name": show.name, "kind": "tv",
+                "files": 6, "added": 0, "tmdb_id": 99999999, "media_type": "tv"}], "metadata_pending": 0})
+            app.app.view_functions["item_details"] = lambda: app.jsonify({
+                "title": show.name, "tmdb_id": 99999999, "media_type": "tv",
+                "season_list": [{"number": n, "name": f"Season {n}", "episodes": 3} for n in (1, 12)]})
+            app.app.view_functions["season_episodes"] = lambda: app.jsonify({
+                "episodes": [{"number": n, "name": f"Episode {n}"} for n in (1, 2, 3)]})
+            @app.app.route("/fixture-selected-episode")
+            def selected_episode():
+                with app.PLAYBACK_SESSIONS._lock:
+                    sessions = [dict(entry) for entry in app.PLAYBACK_SESSIONS._sessions.values()]
+                return app.jsonify({"sessions": sessions})
         print(f"Isolated playback server: http://127.0.0.1:{args.port}", flush=True)
         serve(app.app, host="127.0.0.1", port=args.port, threads=12)
 

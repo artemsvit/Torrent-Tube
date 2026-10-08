@@ -80,6 +80,24 @@ Leases expire after 90 seconds without a heartbeat. Existing web-player callback
 
 Use a LAN HTTP address or trusted HTTPS. API and media URLs preserve a reverse-proxy path prefix. This version does not support a browser-based proxy login or server accounts. Jackett and TMDB credentials remain on the server and are not fetched by the app.
 
+## Apple TV Home banner
+
+Home features up to four titles, mixing recent films, TV shows, and cartoons. The newest catalog matches take priority over each category's first result. Repeated title IDs are excluded. Previous/next buttons and page indicators let the viewer switch banners while keeping remote focus.
+
+The Trailer button plays the preview inside the hero using the existing VLC trailer stream API. Play still starts the main film or episode. Previews begin muted, with an explicit sound button and Stop preview action. The still artwork remains until video is ready and returns after the preview ends or fails.
+
+Autoplay Home trailers is enabled by default and can be turned off under Settings → Home. It waits five seconds while the banner's controls have focus. It is disabled automatically for Reduce Motion and VoiceOver. Leaving the banner, opening another screen, entering background, or starting the main film cancels preparation and stops the preview. Previews create no movie session and do not alter Continue Watching.
+
+## Apple TV Top Shelf
+
+The optional New titles shelf uses a native full-screen carousel with up to four landscape banners. It adds no section heading or metadata overlay. tvOS provides the Dock, page indicators, and More Info button. More Info opens the selected title directly.
+
+The app saves banner artwork in its shared app-group container. The extension only reads the snapshot and image URLs. Failed image requests can retain a cached banner; the brand image is the fallback when no banner is available.
+
+Servers advertising `capabilities.top_shelf_previews` provide a stable `GET /api/trailer/preview/<youtube-key>` URL. It resolves a single H.264/AAC MP4 and redirects with HTTP 307 to the existing Range-capable relay. Provider links renew before expiry. No trailer video files are saved. The app warms these URLs with HEAD requests. Unavailable previews keep the still-banner experience. Existing VLC trailer playback retains its separate video/audio support.
+
+Deploy the updated `app.py` and `trailer_streams.py` before enabling native Top Shelf previews on the NAS. Older servers continue to show the banners. tvOS owns the focus delay and trailer playback; the API does not expose an exact five-second timer.
+
 ## Native trailer support
 
 The existing server returns YouTube IDs through `/api/details` and `/api/trailer`. The app preserves that list and its language order. Selecting a trailer calls `POST /api/trailer/stream` with its `key`. The new server resolves a playable stream and returns URLs under `/trailer-stream/<token>/<resource>`.

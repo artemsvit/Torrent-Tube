@@ -6,7 +6,14 @@ import Observation
 
 @MainActor @Observable
 final class CatalogStore {
-    var rows: [String: [MediaItem]] = [:]
+    var rows: [String: [MediaItem]] = [:] {
+        didSet {
+            homeFeatured = HomeFeaturedSelection.pick(new: rows["new"] ?? [], movies: rows["movies"] ?? [],
+                                                      tv: rows["tv"] ?? [], cartoons: rows["cartoons"] ?? [])
+        }
+    }
+    /// Derived once when a feed changes, never during a five-second hero update.
+    private(set) var homeFeatured: [MediaItem] = []
     var loading: Set<String> = []
     var errors: [String: String] = [:]
     var metadata: [String: Metadata] = [:]
@@ -40,30 +47,85 @@ final class CatalogStore {
         return value
     }
     func loadFeed(_ feed: String, api: TorrentTubeAPI, config: ServerConfig, refresh: Bool = false) async {
-        guard config.searchEnabled, !loading.contains(feed), refresh || rows[feed] == nil else { return }
+        guard config.searchEnabled, !loading.contains(feed) else { return }
+        let cache = metadataCache(api.baseURL)
+
+        // Show cached feed snapshot immediately (instant UI on cold start & tab switch):
+        if rows[feed] == nil, let cached = cache.feed(for: feed) {
+            rows[feed] = cached
+            Task { await enrich(Array(cached.prefix(12)), api: api, config: config) }
+            if !refresh && cache.isFeedFresh(for: feed) {
+                #if os(tvOS)
+                if feed == "new" { await publishTopShelf(cached, api: api, config: config) }
+                #endif
+                return
+            }
+        } else if !refresh && rows[feed] != nil && cache.isFeedFresh(for: feed) {
+            #if os(tvOS)
+            if feed == "new", let items = rows[feed] { await publishTopShelf(items, api: api, config: config) }
+            #endif
+            return
+        }
+
         loading.insert(feed); errors[feed] = nil
         defer { loading.remove(feed) }
         do {
             let response: CatalogResponse = try await api.request("api/discover", query: [.init(name: "feed", value: feed)])
             try Task.checkCancellation()
             rows[feed] = response.results
+            cache.storeFeed(response.results, for: feed)
             await enrich(Array(response.results.prefix(12)), api: api, config: config)
             #if os(tvOS)
-            if feed == "new", !Task.isCancelled, TopShelfStore.defaults.string(forKey: "activeServer") == api.baseURL.absoluteString {
-                let titles = response.results.prefix(12).compactMap { item -> ShelfTitle? in
-                    let value = resolved(item)
-                    guard let poster = value.poster else { return nil }
-                    return ShelfTitle(id: ShelfTitle.identifier(api.baseURL.absoluteString + item.id), title: value.displayTitle,
-                                      rawTitle: item.title, poster: higherResolution(poster, backdrop: false),
-                                      magnet: item.magnet, downloadLink: item.downloadLink,
-                                      tmdbID: value.tmdbId, mediaType: value.mediaType)
-                }
-                TopShelfStore.save(ShelfSnapshot(server: api.baseURL.absoluteString, titles: titles))
-                TVTopShelfContentProvider.topShelfContentDidChange()
-            }
+            if feed == "new" { await publishTopShelf(response.results, api: api, config: config) }
             #endif
         } catch is CancellationError {} catch { errors[feed] = error.localizedDescription }
     }
+    #if os(tvOS)
+    private var publishingShelf: Set<URL> = []
+    private var shelfPreviewWarmup: Task<Void, Never>?
+    private func publishTopShelf(_ items: [MediaItem], api: TorrentTubeAPI, config: ServerConfig) async {
+        guard !publishingShelf.contains(api.baseURL), !Task.isCancelled, TopShelfStore.defaults.string(forKey: "activeServer") == api.baseURL.absoluteString else { return }
+        publishingShelf.insert(api.baseURL)
+        defer { publishingShelf.remove(api.baseURL) }
+        var titles: [ShelfTitle] = []
+        for item in items.prefix(30) {
+            if titles.count == 10 || Task.isCancelled { break }
+            let value = resolved(item)
+            guard let poster = value.poster else { continue }
+            await loadDetails(value, api: api, config: config)
+            guard let detail = details[item.title], let backdrop = detail.backdrop else { continue }
+            var title = ShelfTitle(id: ShelfTitle.identifier(api.baseURL.absoluteString + item.id), title: value.displayTitle,
+                                   rawTitle: item.title, poster: higherResolution(poster, backdrop: false),
+                                   magnet: item.magnet, downloadLink: item.downloadLink, tmdbID: value.tmdbId, mediaType: value.mediaType)
+            title.backdrop = higherResolution(backdrop, backdrop: true).replacingOccurrences(of: "/w780/", with: "/w1280/")
+            let series = (detail.mediaType ?? value.mediaType) == "tv"
+            title.kind = L(detail.kind == "Cartoon" ? (series ? "Animated Series" : "Cartoon") : (series ? "TV Show" : "Movie"))
+            title.year = detail.year
+            title.rating = value.rating
+            title.genres = detail.genres
+            title.overview = detail.overview ?? value.overview
+            if config.capabilities?.topShelfPreviews == true, let trailer = TrailerChoice.pick(detail.trailers ?? []) {
+                title.previewURL = try? api.mediaURL("api/trailer/preview/" + trailer.key).absoluteString
+            }
+            titles.append(title)
+        }
+        if !items.isEmpty && titles.isEmpty { return }  // retain the cached shelf if details are temporarily unavailable
+        let snapshot = await TopShelfArtwork.prepare(ShelfSnapshot(server: api.baseURL.absoluteString, titles: titles))
+        guard !Task.isCancelled, TopShelfStore.defaults.string(forKey: "activeServer") == snapshot.server else { return }
+        TopShelfStore.save(snapshot)
+        TVTopShelfContentProvider.topShelfContentDidChange()
+        shelfPreviewWarmup?.cancel()
+        shelfPreviewWarmup = Task(priority: .utility) {
+            for title in snapshot.titles {
+                guard !Task.isCancelled, TopShelfStore.defaults.string(forKey: "activeServer") == snapshot.server else { return }
+                guard let preview = title.previewURL, let url = URL(string: preview) else { continue }
+                var request = URLRequest(url: url, timeoutInterval: 75)
+                request.httpMethod = "HEAD"
+                _ = try? await URLSession.shared.data(for: request)
+            }
+        }
+    }
+    #endif
     private var caches: [URL: MetadataCache] = [:]
     /// What is saved on this device for a server (posters, titles, details).
     func metadataCache(_ server: URL) -> MetadataCache {
@@ -121,7 +183,7 @@ final class CatalogStore {
         syncTotal = missing.count
         for chunk in stride(from: 0, to: missing.count, by: 3).map({ Array(missing[$0..<min($0 + 3, missing.count)]) }) {
             await withTaskGroup(of: Void.self) { group in
-                for item in chunk { group.addTask { await self.loadDetails(item, api: api, config: config) } }
+                for item in chunk { group.addTask(priority: .utility) { await self.loadDetails(item, api: api, config: config) } }
             }
             syncDone += chunk.count
             if Task.isCancelled { return }
@@ -134,18 +196,27 @@ final class CatalogStore {
             if let backdrop = saved?.backdrop, let url = URL(string: higherResolution(backdrop, backdrop: true)) { urls.append(url) }
             for person in (saved?.people ?? []).prefix(12) { if let photo = person.photo, let url = URL(string: photo) { urls.append(url) } }
         }
-        let needed = urls.filter { URLCache.shared.cachedResponse(for: URLRequest(url: $0)) == nil }
+        // Disk-backed cache inspection and URL deduplication do not belong on the UI thread.
+        let candidates = urls
+        let needed = await Task.detached(priority: .utility) {
+            var seen: Set<URL> = []
+            return candidates.filter {
+                seen.insert($0).inserted && URLCache.shared.cachedResponse(for: URLRequest(url: $0)) == nil
+            }
+        }.value
+        if Task.isCancelled { return }
         syncTotal += needed.count
         for chunk in stride(from: 0, to: needed.count, by: 6).map({ Array(needed[$0..<min($0 + 6, needed.count)]) }) {
             await withTaskGroup(of: Void.self) { group in
                 for url in chunk {
-                    group.addTask { _ = try? await URLSession.shared.data(for: URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad)) }
+                    group.addTask(priority: .utility) { _ = try? await URLSession.shared.data(for: URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad)) }
                 }
             }
             syncDone += chunk.count
             if Task.isCancelled { return }
         }
         cache.storeLibrary(library)
+        await cache.flush()
     }
 
     /// Library titles are looked up only while "Posters and details" is on.

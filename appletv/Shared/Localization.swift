@@ -25,7 +25,9 @@ final class Localizer {
     }
     static let key = "appLanguage"
     private init() {
+        UserDefaults.standard.register(defaults: [Self.key: AppLanguage.uk.rawValue])
         #if os(tvOS)
+        TopShelfStore.defaults.register(defaults: [Self.key: AppLanguage.uk.rawValue])
         let saved = UserDefaults.standard.string(forKey: Self.key) ?? TopShelfStore.defaults.string(forKey: Self.key)
         #else
         let saved = UserDefaults.standard.string(forKey: Self.key)
@@ -59,6 +61,10 @@ private let ukrainian: [String: String] = [
     "Playback position": "Позиція відтворення",
     "Privacy": "Приватність",
     "Reconnect and resume": "Під’єднатися й продовжити",
+    "Scan Network": "Пошук у мережі",
+    "Scanning Network…": "Пошук сервера…",
+    "Scan network": "Пошук у мережі",
+    "Scanning network…": "Пошук сервера…",
     "Search unavailable": "Пошук недоступний",
     "Season": "Сезон",
     "Server": "Сервер",
@@ -79,7 +85,7 @@ private let ukrainian: [String: String] = [
     "Home": "Головна",
     "Movies": "Фільми",
     "TV Shows": "Серіали",
-    "Cartoons": "Мультфільми",
+    "Cartoons": "Мультики",
     "Search": "Пошук",
     "Favorites": "Обране",
     "Library": "Медіатека",
@@ -94,7 +100,6 @@ private let ukrainian: [String: String] = [
     "Synced %@ · %ld titles · data %@ · images %@": "Синхронізовано %@ · назв: %ld · дані %@ · зображення %@",
     "%ld files": "файлів: %ld",
     "Posters and details": "Постери та описи",
-    "Look up library titles on TMDB. Matches are saved on this device, so the Library opens without waiting.": "Шукати назви медіатеки в TMDB. Знайдене зберігається на цьому пристрої, тому медіатека відкривається одразу.",
     "Refresh library metadata": "Оновити дані медіатеки",
     "Forget the saved posters and details and look them up again.": "Забути збережені постери й описи та знайти їх знову.",
     "Saved on this device: %ld titles · %@": "Збережено на пристрої: назв — %ld · %@",
@@ -108,6 +113,8 @@ private let ukrainian: [String: String] = [
     "Settings": "Налаштування",
     "Documentaries": "Документальні",
     "Ukrainian": "Українське",
+    "New to Explore": "Нове для перегляду",
+    "Popular Now": "Популярне зараз",
     "New to explore": "Нове для перегляду",
     "Popular now": "Популярне зараз",
     "On your server": "На вашому сервері",
@@ -119,7 +126,7 @@ private let ukrainian: [String: String] = [
 
     // Home and title pages
     "Play": "Дивитися",
-    "Details": "Детальніше",
+    "Details": "Деталі",
     "Back": "Назад",
     "OK": "OK",
     "Cancel": "Скасувати",
@@ -236,15 +243,26 @@ private let ukrainian: [String: String] = [
     "Top Shelf": "Top Shelf",
     "New titles": "Нові фільми",
     "Brand artwork": "Логотип",
+    "Shown above the app on your Apple TV Home screen.": "Показується над застосунком на екрані Apple TV.",
     "Shown above the app when Torrent Tube is in the first row of your Apple TV Home screen.": "Показується над застосунком, коли Torrent Tube у першому ряду головного екрана Apple TV.",
     "New titles update when you open the app or refresh the catalog. If no artwork is available, the brand banner is shown.": "Нові фільми оновлюються, коли ви відкриваєте застосунок або оновлюєте каталог. Якщо зображень немає, показується логотип.",
     "New titles need a server with catalog search enabled. The brand banner is shown until then.": "Для нових фільмів на сервері має бути ввімкнений пошук у каталозі. До того часу показується логотип.",
     "Show": "Показувати",
     "Hide": "Приховати",
+    "Display your unfinished titles on Home.": "Недодивлені фільми на головній.",
     "Display your unfinished titles on Home. Saved positions are kept.": "Недодивлені фільми на головній. Збережені позиції залишаються.",
+    "Display your unfinished titles on Home. Title preview updates the banner as you move between titles.": "Недодивлені фільми на головній. Банер оновлюється під час перегляду.",
+    "Choose how far the player moves with each skip. Audio and subtitles can be changed while a title is playing.": "Наскільки плеєр перемотує за одне натискання. Аудіо та субтитри можна змінювати під час відтворення.",
+    "Look up library titles on TMDB. Matches are saved on this device, so the Library opens without waiting.": "Шукати назви медіатеки в TMDB. Знайдене зберігається на цьому пристрої, тому медіатека відкривається одразу.",
+    "Saved playback positions for this server will be removed from this device. Your server files stay untouched.": "Збережені позиції для цього сервера буде видалено з цього пристрою. Ваші файли на сервері залишаться без змін.",
     "Title preview while browsing": "Банер під час гортання",
+    "Update the Home banner as you browse titles.": "Банер на головній змінюється під час перегляду.",
     "Update the Home banner as you move between movie cards.": "Банер на головній змінюється, коли ви переходите між картками.",
+    "Look up library titles on TMDB and save them on this device.": "Шукати дані на TMDB і зберігати на цьому пристрої.",
+    "Save details and images for new titles on the server.": "Зберегти деталі та постери для нових фільмів на сервері.",
+    "Match all titles again on the server and update details.": "Перевірити всі фільми на сервері та оновити дані.",
     "Skip": "Перемотування",
+    "Skip Intro": "Пропустити заставку",
     "%ld seconds": "%ld секунд",
     "Choose how far the player moves with each skip.": "Наскільки плеєр перемотує за одне натискання.",
     "Audio and subtitles can be changed while a title is playing. Available tracks depend on the video file.": "Аудіо й субтитри можна змінити під час перегляду. Доступні доріжки залежать від відеофайлу.",
@@ -264,4 +282,17 @@ private let ukrainian: [String: String] = [
     "Saved playback positions for this server will be removed from this Apple TV. Your server files stay untouched.": "Збережені позиції для цього сервера буде видалено з цього Apple TV. Файли на сервері не зміняться.",
     "License file unavailable.": "Файл ліцензії недоступний.",
     "Playback uses VideoLAN’s VLCKit library. Source: %@": "Відтворення використовує бібліотеку VLCKit від VideoLAN. Код: %@",
+    "In your library": "У медіатеці",
+    "Torrents": "Торенти",
+    "No additional torrent titles.": "Інших фільмів у торентах немає.",
+    "Searching your library. Torrent search is disabled on this server.": "Пошук у медіатеці. Пошук торентів на сервері вимкнено.",
+    "Stop preview": "Зупинити трейлер",
+    "Mute preview": "Вимкнути звук трейлера",
+    "Unmute preview": "Увімкнути звук трейлера",
+    "Previous featured title": "Попередній банер",
+    "Next featured title": "Наступний банер",
+    "Featured title %ld of %ld": "Банер %ld із %ld",
+    "Autoplay Home trailers": "Автовідтворення трейлерів на головній",
+    "Play muted previews after five seconds in the Home banner.": "Відтворювати трейлери без звуку після п’яти секунд у банері на головній.",
+    "No trailer is available for this title.": "Трейлер недоступний.",
 ]

@@ -28,3 +28,54 @@ func higherResolution(_ url: String, backdrop: Bool) -> String {
     return url.replacingOccurrences(of: "/w200/", with: backdrop ? "/w1280/" : "/w500/")
         .replacingOccurrences(of: "/w342/", with: backdrop ? "/w1280/" : "/w500/")
 }
+
+/// Shared search composition. A local copy wins over the same catalog title.
+struct LibrarySearchResults {
+    let library: [MediaItem]
+    let torrents: [MediaItem]
+
+    init(query: String, library: [MediaItem], torrents: [MediaItem]) {
+        let words = Self.normalized(query).split(separator: " ")
+        var matches = library.filter { item in
+            let names = [item.title, item.displayTitle] + (item.releases ?? []).map(\.title)
+            let text = Self.normalized(names.joined(separator: " "))
+            return !words.isEmpty && words.allSatisfy { text.contains($0) }
+        }
+        var remaining: [MediaItem] = []
+        for torrent in torrents {
+            if let local = library.first(where: { Self.sameTitle($0, torrent) }) {
+                if !matches.contains(where: { $0.id == local.id }) { matches.append(local) }
+            } else { remaining.append(torrent) }
+        }
+        self.library = matches
+        self.torrents = remaining
+    }
+
+    static func sameTitle(_ lhs: MediaItem, _ rhs: MediaItem) -> Bool {
+        if lhs.source.isPlayable && lhs.source == rhs.source { return true }
+        if let a = lhs.tmdbId, let b = rhs.tmdbId {
+            // IDs can be shared by a movie and a TV series.
+            return a == b && lhs.mediaType != nil && lhs.mediaType == rhs.mediaType
+        }
+        if let a = lhs.mediaType, let b = rhs.mediaType, a != b { return false }
+        // Without a reliable ID, require a year on both sides. Do not hide remakes
+        // or guess that an unmatched title is the same film.
+        guard let year = Self.year(lhs.title), year == Self.year(rhs.title) else { return false }
+        let a = Set([lhs.title, lhs.displayTitle].map(Self.titleKey).filter { !$0.isEmpty })
+        let b = Set([rhs.title, rhs.displayTitle].map(Self.titleKey).filter { !$0.isEmpty })
+        return !a.isDisjoint(with: b)
+    }
+
+    private static func normalized(_ text: String) -> String {
+        text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+            .components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }.joined(separator: " ")
+    }
+    private static func year(_ title: String) -> String? {
+        guard let range = title.range(of: #"\b(?:19|20)\d{2}\b"#, options: .regularExpression) else { return nil }
+        return String(title[range])
+    }
+    private static func titleKey(_ title: String) -> String {
+        let text = title.replacingOccurrences(of: #"\b(?:19|20)\d{2}\b.*$"#, with: "", options: .regularExpression)
+        return normalized(text)
+    }
+}

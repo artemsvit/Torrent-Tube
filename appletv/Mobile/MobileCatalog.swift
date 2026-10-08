@@ -4,6 +4,57 @@ enum MobileStyle {
     static let gold = Color(red: 1.0, green: 0.78, blue: 0.2)
 }
 
+/// Text in the banner. iOS text styles are much smaller on the Mac, so the
+/// Mac gets its own, larger sizes; iPhone and iPad keep the system styles.
+enum HeroFont {
+    #if os(macOS)
+    static let kind = Font.system(size: 13, weight: .bold)
+    static let facts = Font.system(size: 15)
+    static let overview = Font.system(size: 16)
+    static let button = Font.system(size: 15, weight: .semibold)
+    static let buttonHeight: CGFloat = 40
+    static func title(regular: Bool) -> Font { .system(size: 60, weight: .heavy) }
+    #else
+    static let kind = Font.caption.bold()
+    static let facts = Font.subheadline
+    static let overview = Font.subheadline
+    static let button = Font.headline
+    static let buttonHeight: CGFloat = 36
+    static func title(regular: Bool) -> Font { .system(size: regular ? 48 : 34, weight: .heavy) }
+    #endif
+}
+
+/// The text in the banner - kind, name, facts, description, then the
+/// buttons - in the same order and place on Home and on a title page, so
+/// opening a title never moves it.
+struct HeroInfo<Actions: View>: View {
+    let kind: String?
+    let title: String
+    let item: MediaItem
+    let details: Details?
+    var overview: String?
+    var expanded = false
+    @ViewBuilder let actions: () -> Actions
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let kind {
+                Text(kind.uppercased()).font(HeroFont.kind).tracking(2).foregroundStyle(.white.opacity(0.65))
+            }
+            Text(title).font(HeroFont.title(regular: sizeClass == .regular))
+                .lineLimit(2).minimumScaleFactor(0.7)
+                .frame(maxWidth: 900, alignment: .leading)
+            MobileFacts(item: item, details: details)
+            if let overview, !overview.isEmpty {
+                Text(overview).font(HeroFont.overview).foregroundStyle(.white.opacity(0.75))
+                    .lineLimit(expanded ? nil : 3)
+                    .frame(maxWidth: 640, alignment: .leading)
+            }
+            HStack(spacing: 10) { actions() }.padding(.top, 6)
+        }
+    }
+}
+
 /// One side margin for a whole screen: 16 on iPhone, 32 on iPad - hero text,
 /// shelf titles and the first poster all start on it.
 private struct MobileEdgeKey: EnvironmentKey { static let defaultValue: CGFloat = 16 }
@@ -32,11 +83,13 @@ struct MobileArtwork: View {
     var body: some View {
         Color(white: 0.12).aspectRatio(ratio, contentMode: .fit)
             .overlay {
-                AsyncImage(url: url.map { higherResolution($0, backdrop: ratio > 1) }.flatMap(URL.init(string:))) { image in
-                    if fit { image.resizable().scaledToFit() }
-                    else { image.resizable().scaledToFill() }
-                } placeholder: {
-                    Image(systemName: "film").font(.largeTitle).foregroundStyle(.secondary)
+                AsyncImage(url: url.map { higherResolution($0, backdrop: ratio > 1) }.flatMap(URL.init(string:)),
+                           transaction: Transaction(animation: .easeOut(duration: 0.25))) { phase in
+                    if let image = phase.image {  // fades in instead of popping in
+                        Group { if fit { image.resizable().scaledToFit() } else { image.resizable().scaledToFill() } }.transition(.opacity)
+                    } else {
+                        Image(systemName: "film").font(.largeTitle).foregroundStyle(.secondary)
+                    }
                 }
             }
             .clipped()
@@ -47,17 +100,10 @@ struct MobileArtwork: View {
 /// An image filling its frame from the top - the hero backdrops.
 struct MobileBackdrop: View {
     let url: String?
+    var nextURL: String? = nil
     var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                Color(white: 0.08)
-                if let url, let address = URL(string: higherResolution(url, backdrop: true)) {
-                    AsyncImage(url: address) { image in image.resizable().scaledToFill() } placeholder: { Color.clear }
-                        .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
-                        .clipped()
-                }
-            }
-        }.accessibilityHidden(true)
+        HeroBackdrop(url: url.flatMap { URL(string: higherResolution($0, backdrop: true)) },
+                     nextURL: nextURL.flatMap { URL(string: higherResolution($0, backdrop: true)) }, alignment: .top)
     }
 }
 
@@ -82,7 +128,7 @@ struct MobileFacts: View {
             }
             Text(facts.joined(separator: " · ")).lineLimit(1)
         }
-        .font(.subheadline).foregroundStyle(.white.opacity(0.85))
+        .font(HeroFont.facts).foregroundStyle(.white.opacity(0.85))
     }
     private var facts: [String] {
         var list: [String] = []
@@ -95,6 +141,7 @@ struct MobileFacts: View {
 
 struct MobileCard: View {
     let item: MediaItem
+    var onFocus: (MediaItem) -> Void = { _ in }
     @Environment(CatalogStore.self) private var catalog
     @Environment(FavoritesStore.self) private var favorites
     @Environment(MobileContext.self) private var context
@@ -115,7 +162,8 @@ struct MobileCard: View {
                     .foregroundStyle(.primary).multilineTextAlignment(.leading)
             }.contentShape(Rectangle())
         }
-        .buttonStyle(.plain).accessibilityLabel(value.displayTitle)
+        .buttonStyle(PressableStyle()).accessibilityLabel(value.displayTitle)
+        .onHover { hovering in if hovering { onFocus(value) } }
         .contextMenu {
             let saved = favorites.contains(value, server: context.api.baseURL)
             Button {
@@ -129,6 +177,16 @@ struct MobileCard: View {
             }
         }
         .task(id: item.id) { await catalog.enrich([item], api: context.api, config: context.config) }
+    }
+}
+
+/// A light dip while a poster is pressed - the touch answer to tvOS focus.
+struct PressableStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.96 : 1)
+            .opacity(configuration.isPressed ? 0.85 : 1)
+            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
     }
 }
 
@@ -157,14 +215,15 @@ struct MobileShelf: View {
     @Environment(\.mobileEdge) private var edge
     let title: String
     let items: [MediaItem]
+    var onFocus: (MediaItem) -> Void = { _ in }
     @Environment(\.horizontalSizeClass) private var sizeClass
     @ScaledMetric(relativeTo: .body) private var cardWidth: CGFloat = 128
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title).font(.title3.bold()).padding(.horizontal, edge)
+            Text(title).font(sizeClass == .regular ? .title2.bold() : .title3.bold()).padding(.horizontal, edge)
             ScrollView(.horizontal) {
                 LazyHStack(alignment: .top, spacing: 14) {
-                    ForEach(items) { MobileCard(item: $0).frame(width: min(cardWidth * (sizeClass == .regular ? 1.3 : 1), 240)) }
+                    ForEach(items) { MobileCard(item: $0, onFocus: onFocus).frame(width: min(cardWidth * (sizeClass == .regular ? 1.3 : 1), 240)) }
                 }.padding(.horizontal, edge)
             }.scrollIndicators(.hidden)
         }
@@ -182,7 +241,7 @@ struct MobileChips: View {
                 ForEach(options, id: \.0) { key, label in
                     let current = selected == key
                     Button { withAnimation(.snappy) { selected = key } } label: {
-                        Text(L(label)).font(.subheadline.weight(current ? .semibold : .regular))
+                        Text(L(label)).font(.subheadline.weight(.semibold))
                             .padding(.horizontal, 14).padding(.vertical, 8)
                             .foregroundStyle(current ? .black : .white)
                             .background(current ? Color.white : Color.white.opacity(0.12), in: Capsule())
@@ -222,89 +281,159 @@ struct MobileHome: View {
     @Environment(FavoritesStore.self) private var favorites
     @Environment(\.horizontalSizeClass) private var sizeClass
     @AppStorage("showContinueWatching") private var showContinue = true
+    @AppStorage("previewFocusedTitle") private var previewTitle = true
+    @State private var previewed: MediaItem?
     @State private var playback: PlaybackRequest?
     @State private var serverNotice = false
-    private let feeds = [("new", "New to explore"), ("popular", "Popular now"), ("movies", "Movies"), ("tv", "TV Shows"), ("cartoons", "Cartoons"), ("ukrainian", "Ukrainian")]
-    private var featured: MediaItem? { (catalog.rows["new"]?.first ?? catalog.library.first.map(libraryItem)).map(catalog.resolved) }
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var featuredIndex = 0
+    @State private var heroVisible = true
+    @GestureState private var draggingHero = false
+    private let feeds = [("new", "New to Explore"), ("popular", "Popular Now"), ("movies", "Movies"), ("tv", "TV Shows"), ("cartoons", "Cartoons"), ("ukrainian", "Ukrainian")]
+    private var featuredItems: [MediaItem] {
+        catalog.homeFeatured.isEmpty ? catalog.library.prefix(HomeFeaturedSelection.limit).map(libraryItem) : catalog.homeFeatured
+    }
+    private var featured: MediaItem? {
+        ((previewTitle ? previewed : nil) ?? (featuredItems.isEmpty ? nil : featuredItems[min(featuredIndex, featuredItems.count - 1)])).map(catalog.resolved)
+    }
+    private var rotationCycle: String? {
+        guard featuredItems.count > 1, heroVisible, scenePhase == .active, playback == nil,
+              !serverNotice, !draggingHero, !previewTitle || previewed == nil else { return nil }
+        return "\(featuredIndex):" + featuredItems.map(\.id).joined(separator: "|")
+    }
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 28) {
-                if let featured { hero(featured) }
-                else if catalog.loading.contains("new") || catalog.libraryLoading { MobileLoading(text: L("Finding something to watch…")).padding(.top, 120) }
-                if showContinue { continueWatching }
-                ForEach(feeds, id: \.0) { feed, title in
-                    if let items = catalog.rows[feed], !items.isEmpty {
-                        MobileShelf(title: L(title), items: Array(items.prefix(24)))
-                    } else if let error = catalog.errors[feed] {
-                        MobileError(message: "\(L(title)): \(error)") { Task { await catalog.loadFeed(feed, api: api, config: config, refresh: true) } }
+        GeometryReader { screen in
+            let heroHeight = HeroLayout.bannerHeight(screenHeight: screen.size.height, sizeClass: sizeClass)
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 28) {
+                    if let featured { hero(featured, height: heroHeight) }
+                    else if catalog.loading.contains("new") || catalog.libraryLoading { MobileLoading(text: L("Finding something to watch…")).padding(.top, 120) }
+                    if showContinue { continueWatching }
+                    ForEach(feeds, id: \.0) { feed, title in
+                        if let items = catalog.rows[feed], !items.isEmpty {
+                            MobileShelf(title: L(title), items: Array(items.prefix(24))) { if previewTitle { previewed = $0 } }
+                        } else if let error = catalog.errors[feed] {
+                            MobileError(message: "\(L(title)): \(error)") { Task { await catalog.loadFeed(feed, api: api, config: config, refresh: true) } }
+                        }
                     }
-                }
-                if !catalog.library.isEmpty {
-                    MobileShelf(title: L("New on your server"), items: catalog.library.prefix(24).map(libraryItem))
-                }
-                if let error = catalog.libraryError { MobileError(message: error) { Task { await catalog.loadLibrary(api: api) } } }
-                if !config.searchEnabled, catalog.library.isEmpty, !catalog.libraryLoading, catalog.libraryError == nil {
-                    ContentUnavailableView(L("Your library is empty"), systemImage: "film", description: Text(L("Titles on your server will appear here.")))
-                        .frame(maxWidth: .infinity)
-                }
-            }.padding(.bottom, 24)
+                    if !catalog.library.isEmpty {
+                        MobileShelf(title: L("New on your server"), items: catalog.library.prefix(24).map(libraryItem)) { if previewTitle { previewed = $0 } }
+                    }
+                    if let error = catalog.libraryError { MobileError(message: error) { Task { await catalog.loadLibrary(api: api) } } }
+                    if !config.searchEnabled, catalog.library.isEmpty, !catalog.libraryLoading, catalog.libraryError == nil {
+                        ContentUnavailableView(L("Your library is empty"), systemImage: "film", description: Text(L("Titles on your server will appear here.")))
+                            .frame(maxWidth: .infinity)
+                    }
+                }.padding(.bottom, 24)
+            }
+            .onScrollGeometryChange(for: Bool.self) { geometry in
+                geometry.contentOffset.y + geometry.contentInsets.top < heroHeight / 2
+            } action: { _, visible in heroVisible = visible }
         }
         // The hero runs under the status bar, like the Apple TV app.
         .ignoresSafeArea(edges: .top)
+        .toolbar {
+            if sizeClass == .compact, featuredItems.count > 1 {
+                ToolbarItem(placement: .principal) { carouselDots }
+            }
+        }
         .refreshable { await load(refresh: true) }
         .task { await load(refresh: false) }
         .task(id: featured?.id) { if let featured { await catalog.loadDetails(featured, api: api, config: config) } }
+        .task(id: rotationCycle) {
+            guard rotationCycle != nil else { return }
+            do { try await Task.sleep(for: .seconds(5)) } catch { return }
+            guard !Task.isCancelled else { return }
+            nextFeatured()
+        }
         .fullScreenCover(item: $playback) { MobilePlayback(request: $0, api: api) }
         .alert(L("Streaming unavailable"), isPresented: $serverNotice) { Button(L("OK"), role: .cancel) {} } message: {
             Text(L("Update Torrent Tube on your server to stream on this device."))
         }
     }
-    private func hero(_ item: MediaItem) -> some View {
+    private var nextHeroArtwork: String? {
+        guard featuredItems.count > 1, !(previewTitle && previewed != nil) else { return nil }
+        let next = catalog.resolved(featuredItems[(min(featuredIndex, featuredItems.count - 1) + 1) % featuredItems.count])
+        return catalog.details[next.title]?.backdrop ?? next.poster
+    }
+
+    private func hero(_ item: MediaItem, height: CGFloat) -> some View {
         let details = catalog.details[item.title]
-        let height: CGFloat = sizeClass == .regular ? 620 : 560
         return ZStack(alignment: .bottomLeading) {
-            MobileBackdrop(url: details?.backdrop ?? item.poster)
-            LinearGradient(stops: [.init(color: .black.opacity(0.55), location: 0), .init(color: .clear, location: 0.25),
-                                   .init(color: .clear, location: 0.45), .init(color: .black.opacity(0.85), location: 0.8),
-                                   .init(color: .black, location: 1)], startPoint: .top, endPoint: .bottom)
-            VStack(alignment: .leading, spacing: 10) {
-                if let kind = mobileKind(item, details) {
-                    Text(kind.uppercased()).font(.caption.bold()).tracking(2).foregroundStyle(.white.opacity(0.65))
-                }
-                Text(details?.title ?? item.displayTitle).font(.system(size: sizeClass == .regular ? 48 : 34, weight: .heavy))
-                    .lineLimit(2).minimumScaleFactor(0.7)
-                MobileFacts(item: item, details: details)
-                if let overview = details?.overview ?? item.overview, !overview.isEmpty {
-                    Text(overview).font(.subheadline).foregroundStyle(.white.opacity(0.75)).lineLimit(3)
-                        .frame(maxWidth: 560, alignment: .leading)
-                }
-                HStack(spacing: 10) {
-                    Button {
-                        if config.supportsPlayback {
-                            playback = PlaybackRequest(source: item.source, title: item.displayTitle,
-                                                       artwork: details?.backdrop ?? item.poster, tmdbID: details?.tmdbId ?? item.tmdbId)
-                        } else { serverNotice = true }
-                    } label: {
-                        Label(L("Play"), systemImage: "play.fill").font(.headline).frame(maxWidth: 220, minHeight: 34)
-                    }
-                    .buttonStyle(.borderedProminent).tint(.white).foregroundStyle(.black)
-                    .accessibilityIdentifier("hero-play")
-                    NavigationLink(value: item) {
-                        Label(L("Details"), systemImage: "info.circle").font(.headline).frame(minHeight: 34)
-                    }
-                    .buttonStyle(.bordered).tint(.white)
-                    .accessibilityIdentifier("featured-details")
-                }.padding(.top, 6)
+            ZStack {
+                MobileBackdrop(url: details?.backdrop ?? item.poster, nextURL: nextHeroArtwork)
+                LinearGradient(stops: [.init(color: .black.opacity(0.6), location: 0), .init(color: .clear, location: 0.22),
+                                       .init(color: .black.opacity(0.75), location: 0.8),
+                                       .init(color: .black, location: 1.0)], startPoint: .top, endPoint: .bottom)
+                LinearGradient(stops: [.init(color: .black.opacity(0.7), location: 0),
+                                       .init(color: .clear, location: 0.6)], startPoint: .leading, endPoint: .trailing)
             }
-            .padding(.horizontal, edge).padding(.bottom, 8)
+            .mask(
+                LinearGradient(stops: [
+                    .init(color: .white, location: 0),
+                    .init(color: .white, location: 0.45),
+                    .init(color: .white.opacity(0.85), location: 0.65),
+                    .init(color: .white.opacity(0.35), location: 0.86),
+                    .init(color: .clear, location: 1.0)
+                ], startPoint: .top, endPoint: .bottom)
+            )
+            HeroInfo(kind: mobileKind(item, details), title: details?.title ?? item.displayTitle, item: item, details: details,
+                     overview: details?.overview ?? item.overview) {
+                Button {
+                    if config.supportsPlayback {
+                        playback = PlaybackRequest(source: item.source, title: item.displayTitle,
+                                                   artwork: details?.backdrop ?? item.poster, tmdbID: details?.tmdbId ?? item.tmdbId)
+                    } else { serverNotice = true }
+                } label: {
+                    Label(L("Play"), systemImage: "play.fill").font(HeroFont.button)
+                        .frame(maxWidth: sizeClass == .regular ? 220 : .infinity, minHeight: HeroFont.buttonHeight)
+                }
+                .buttonStyle(.borderedProminent).tint(.white).foregroundStyle(.black)
+                .accessibilityIdentifier("hero-play")
+                NavigationLink(value: item) {
+                    Label(L("Details"), systemImage: "info.circle").font(HeroFont.button)
+                        .padding(.horizontal, sizeClass == .regular ? 16 : 0)
+                        .frame(minWidth: sizeClass == .regular ? 140 : nil, maxWidth: sizeClass == .regular ? nil : .infinity, minHeight: HeroFont.buttonHeight)
+                }
+                .buttonStyle(.bordered).tint(.white)
+                .accessibilityIdentifier("featured-details")
+                if sizeClass == .regular, featuredItems.count > 1 {
+                    Spacer(minLength: 16)
+                    carouselDots
+                }
+            }
+            .padding(.horizontal, edge).padding(.bottom, 12)
         }
         .frame(height: height).clipped()
+        .contentShape(Rectangle())
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 24)
+                .updating($draggingHero) { value, dragging, _ in
+                    dragging = abs(value.translation.width) > abs(value.translation.height)
+                }
+                .onEnded { value in
+                    let x = value.translation.width, y = value.translation.height
+                    guard abs(x) > 40, abs(x) > abs(y) * 1.5 else { return }
+                    changeFeatured(x < 0 ? 1 : -1)
+                }
+        )
+    }
+    private var carouselDots: some View {
+        MobileHeroPageDots(count: featuredItems.count, current: featuredIndex, next: nextFeatured)
+    }
+    private func nextFeatured() {
+        changeFeatured(1)
+    }
+    private func changeFeatured(_ step: Int) {
+        guard featuredItems.count > 1 else { return }
+        previewed = nil
+        featuredIndex = (min(featuredIndex, featuredItems.count - 1) + step + featuredItems.count) % featuredItems.count
     }
     @ViewBuilder private var continueWatching: some View {
         let entries = history.entries.filter { $0.server == api.baseURL.absoluteString }
         if !entries.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
-                Text(L("Continue Watching")).font(.title3.bold()).padding(.horizontal, edge)
+                Text(L("Continue Watching")).font(sizeClass == .regular ? .title2.bold() : .title3.bold()).padding(.horizontal, edge)
                 ScrollView(.horizontal) {
                     LazyHStack(alignment: .top, spacing: 14) {
                         ForEach(entries) { entry in
@@ -336,6 +465,28 @@ struct MobileHome: View {
         await withTaskGroup(of: Void.self) { group in
             for (feed, _) in feeds.dropFirst() { group.addTask { await catalog.loadFeed(feed, api: api, config: config, refresh: refresh) } }
         }
+    }
+}
+
+private struct MobileHeroPageDots: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let count: Int
+    let current: Int
+    let next: () -> Void
+    var body: some View {
+        Button(action: next) {
+            HStack(spacing: 7) {
+                ForEach(0..<count, id: \.self) { index in
+                    Capsule().fill(.white.opacity(index == current ? 1 : 0.35))
+                        .frame(width: index == current ? 16 : 5, height: 5)
+                }
+            }.padding(.horizontal, 10).frame(height: 44)
+        }
+        .buttonStyle(.plain)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: current)
+        .accessibilityLabel(L("Featured title %ld of %ld", current + 1, count))
+        .accessibilityHint(L("Next featured title"))
+        .accessibilityIdentifier("hero-next")
     }
 }
 
@@ -433,26 +584,91 @@ struct MobileLibrary: View {
 }
 
 struct MobileSearch: View {
+    /// On the Mac, Search is a page of the current tab (same window, the top
+    /// row's Back); on iPhone and iPad it is its own full-screen stack.
+    @ViewBuilder private func searchStack<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        #if os(macOS)
+        content()
+        #else
+        NavigationStack(path: $searchPath) { content() }
+        #endif
+    }
     @Environment(\.mobileEdge) private var edge
+    @Environment(\.dismiss) private var dismiss
     let api: TorrentTubeAPI
     let config: ServerConfig
+    /// The Mac's always-visible field in the top row: when given, this screen
+    /// shows only the results and hides its own field and close button.
+    var sharedQuery: Binding<String>? = nil
     @Environment(CatalogStore.self) private var catalog
     @AppStorage("recentSearches") private var recent = ""
-    @State private var query = ""
+    @State private var ownQuery = ""
+    private var query: String {
+        get { sharedQuery?.wrappedValue ?? ownQuery }
+        nonmutating set { if let sharedQuery { sharedQuery.wrappedValue = newValue } else { ownQuery = newValue } }
+    }
+    @FocusState private var isFieldFocused: Bool
     @State private var items: [MediaItem] = []
     @State private var searched = ""
     @State private var loading = false
     @State private var error: String?
     @State private var retry = 0
+    @State private var searchPath = NavigationPath()
     private var term: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var recentTerms: [String] { recent.split(separator: "\n").map(String.init) }
+    private var results: LibrarySearchResults {
+        LibrarySearchResults(query: term, library: catalog.library.map { catalog.resolved(libraryItem($0)) },
+                             torrents: searched == term ? items.map { catalog.resolved($0) } : [])
+    }
     var body: some View {
-        ScrollView {
+        searchStack {
+            VStack(spacing: 0) {
+                if sharedQuery == nil {
+                    HStack(spacing: 12) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundStyle(.secondary)
+                            TextField(L("Search"), text: sharedQuery ?? $ownQuery)
+                                .textFieldStyle(.plain)  // no extra macOS frame inside our own field
+                                .focused($isFieldFocused)
+                                .submitLabel(.search)
+                                .autocorrectionDisabled()
+                                .textInputAutocapitalization(.never)
+                                .accessibilityIdentifier("search-input")
+                                .onSubmit { remember() }
+                            if !query.isEmpty {
+                                Button { query = "" } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundStyle(.secondary)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(Color.white.opacity(0.12), in: Capsule())
+
+                        Button {
+                            isFieldFocused = false
+                            dismiss()
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundStyle(.white)
+                                .frame(width: 36, height: 36)
+                                .background(Color.white.opacity(0.15), in: Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("close-search")
+                    }
+                    .padding(.horizontal, edge)
+                    .padding(.top, 10)
+                    .padding(.bottom, 12)
+                }
+
+                ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                if !config.searchEnabled {
-                    ContentUnavailableView(L("Search unavailable"), systemImage: "magnifyingglass", description: Text(L("Enable search on your server to discover more titles.")))
-                        .frame(maxWidth: .infinity)
-                } else if term.count < 2 {
+                if term.count < 2 {
                     if !recentTerms.isEmpty {
                         VStack(alignment: .leading, spacing: 10) {
                             HStack {
@@ -477,25 +693,58 @@ struct MobileSearch: View {
                         Text(L("Popular now")).font(.title3.bold()).padding(.horizontal, edge)
                         MobileGrid(items: Array(popular.prefix(24)))
                     }
-                } else if let error {
-                    MobileError(message: error) { retry += 1 }
-                } else if loading && searched != term {
-                    MobileLoading(text: L("Searching…"))
-                } else if items.isEmpty {
-                    ContentUnavailableView(L("No results for “%@”", term), systemImage: "magnifyingglass",
-                                           description: Text(L("Check the spelling or try a new search.")))
-                        .frame(maxWidth: .infinity)
                 } else {
-                    Text(L("Results for “%@”", searched)).font(.title3.bold()).padding(.horizontal, edge)
-                    MobileGrid(items: items)
+                    if !results.library.isEmpty {
+                        Label(L("In your library"), systemImage: "folder").font(.title3.bold()).padding(.horizontal, edge)
+                        MobileGrid(items: results.library)
+                    }
+                    if let libraryError = catalog.libraryError {
+                        MobileError(message: libraryError) { Task { await catalog.loadLibrary(api: api) } }
+                    }
+                    if config.searchEnabled {
+                        Label(L("Torrents"), systemImage: "network").font(.title3.bold()).padding(.horizontal, edge)
+                        if let error {
+                            MobileError(message: error) { retry += 1 }
+                        } else if loading || searched != term {
+                            MobileLoading(text: L("Searching…"))
+                        } else if !results.torrents.isEmpty {
+                            MobileGrid(items: results.torrents)
+                        } else if !results.library.isEmpty {
+                            Text(L("No additional torrent titles.")).foregroundStyle(.secondary).padding(.horizontal, edge)
+                        }
+                    }
+                    if !loading && !catalog.libraryLoading && error == nil && catalog.libraryError == nil &&
+                        results.library.isEmpty && results.torrents.isEmpty && (!config.searchEnabled || searched == term) {
+                        ContentUnavailableView(L("No results for “%@”", term), systemImage: "magnifyingglass",
+                                               description: Text(L("Check the spelling or try a new search.")))
+                    }
+                    if !config.searchEnabled {
+                        Text(L("Searching your library. Torrent search is disabled on this server."))
+                            .font(.footnote).foregroundStyle(.secondary).padding(.horizontal, edge)
+                    }
                 }
-            }.padding(.vertical, 8)
+            }
+            .padding(.vertical, 8)
         }
-        .searchable(text: $query, prompt: Text(L("Search")))
-        .onSubmit(of: .search) { remember() }
+        .scrollDismissesKeyboard(.immediately)
+        }
+        .background(AppBackground())
+        .hidesNavigationBar()
+        .navigationDestination(for: MediaItem.self) { item in
+            MobileTitle(item: item, api: api, config: config)
+        }
+    }
+    .onAppear {
+            isFieldFocused = true
+        }
+        .task {
+            try? await Task.sleep(for: .milliseconds(120))
+            isFieldFocused = true
+        }
+        .task { await catalog.loadLibrary(api: api) }
         .task { await catalog.loadFeed("popular", api: api, config: config) }
         .task(id: "\(term)|\(retry)") {
-            guard config.searchEnabled, term.count >= 2 else { items = []; error = nil; searched = ""; return }
+            guard config.searchEnabled, term.count >= 2 else { items = []; error = nil; searched = ""; loading = false; return }
             loading = true; error = nil
             do {
                 try await Task.sleep(for: .milliseconds(400))  // typing pause

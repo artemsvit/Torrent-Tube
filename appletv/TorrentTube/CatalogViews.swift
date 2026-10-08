@@ -56,11 +56,11 @@ struct MainView: View {
                             Image(systemName: "face.smiling.fill").renderingMode(.template).symbolRenderingMode(.monochrome)
                         }
                     }.tag(MainTab.cartoons)
+            }
                 stack(.library) { LibraryView(api: api, config: config) }
                     .tabItem { Image(systemName: "folder").environment(\.symbolVariants, .none).accessibilityLabel(L("Library")) }.tag(MainTab.library)
                 stack(.search) { SearchView(api: api, config: config) }
                     .tabItem { Image(systemName: "magnifyingglass").accessibilityLabel(L("Search")) }.tag(MainTab.search)
-            }
             // Settings pushes a plain view (Licenses), so it resets by being rebuilt.
             NavigationStack { SettingsView(store: store, api: api, config: config) }.id(settingsReset)
                 .tabItem { Image(systemName: "gearshape").accessibilityLabel(L("Settings")) }.tag(MainTab.settings)
@@ -69,7 +69,7 @@ struct MainView: View {
             if old == .settings { settingsReset += 1 } else { paths[old] = NavigationPath() }
         }
         .environment(catalog)
-        .background(Color.black)
+        .background(AppBackground())
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 Task { await catalog.loadFeed("new", api: api, config: config, refresh: true) }
@@ -90,6 +90,7 @@ struct MainView: View {
                     .toolbar { ToolbarItem(placement: .topBarLeading) { Button(L("Back")) { shelfTitle = nil } } }
                     .navigationDestination(for: MediaItem.self) { item in TitleView(item: item, api: api, config: config) }
             }
+            .environment(catalog)
             .environment(\.backToTop) { shelfTitle = nil }
             .onExitCommand { shelfTitle = nil }
         }
@@ -99,7 +100,7 @@ struct MainView: View {
 /// One left edge for the whole Home: hero text, shelf titles and cards.
 enum TVLayout {
     static let edge: CGFloat = 90
-    static let heroHeight: CGFloat = 900
+    static let heroHeight: CGFloat = 920
 }
 
 struct UpdateServerNotice: View {
@@ -116,24 +117,82 @@ struct HomeView: View {
     let config: ServerConfig
     @Environment(CatalogStore.self) private var catalog
     @Environment(ResumeHistory.self) private var history
-    @FocusState private var heroFocused: Bool
+    @Environment(\.scenePhase) private var scenePhase
+    private enum HeroAction: Hashable { case play, details, trailer, mute, pages }
+    @FocusState private var heroAction: HeroAction?
+    @State private var featuredIndex = 0
+    @State private var heroVisible = true
+    @State private var preview = HomeTrailerPreview()
     @State private var showServerNotice = false
     @State private var highlighted: MediaItem?
     @State private var playback: PlaybackRequest?
-    private let shelves = [("new", "New to explore"), ("popular", "Popular now"), ("movies", "Movies"), ("tv", "TV Shows"), ("cartoons", "Cartoons"), ("ukrainian", "Ukrainian")]
+    private let shelves = [("new", "New to Explore"), ("popular", "Popular Now"), ("movies", "Movies"), ("tv", "TV Shows"), ("cartoons", "Cartoons"), ("ukrainian", "Ukrainian")]
     private var recent: [ResumeEntry] { history.entries.filter { $0.server == api.baseURL.absoluteString } }
-    private var active: MediaItem? { (previewFocusedTitle ? highlighted : nil) ?? catalog.rows["new"]?.first ?? catalog.library.first.map(libraryItem) }
+    private var featured: [MediaItem] {
+        let selected = catalog.homeFeatured
+        return selected.isEmpty ? Array(catalog.library.prefix(HomeFeaturedSelection.limit).map(libraryItem)) : selected
+    }
+    private var active: MediaItem? {
+        (previewFocusedTitle ? highlighted : nil) ?? (featured.isEmpty ? nil : featured[min(featuredIndex, featured.count - 1)])
+    }
+    private var previewAllowed: Bool { heroVisible && heroAction != nil && scenePhase == .active && playback == nil }
+    private struct RotationCycle: Equatable {
+        let index: Int
+        let titles: [String]
+    }
+    private var rotationCycle: RotationCycle? {
+        guard featured.count > 1, heroVisible, scenePhase == .active, playback == nil,
+              !showServerNotice, highlighted == nil, !preview.loading, preview.controller == nil else { return nil }
+        return RotationCycle(index: featuredIndex, titles: featured.map(\.id))
+    }
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 54) {
                 if let active {
-                    CinemaHero(item: catalog.resolved(active), details: catalog.details[active.title], height: TVLayout.heroHeight, bottomInset: 200) {
+                    CinemaHero(item: catalog.resolved(active), details: catalog.details[active.title], height: 1080, bottomInset: 165, preview: preview.controller, nextArtwork: nextHeroArtwork) {
+                        // Actions stay on the left; page indicators align with the right screen margin.
                         HStack(spacing: 28) {
-                            Button { if config.supportsPlayback { playback = playRequest(active) } else { showServerNotice = true } } label: { Label(L("Play"), systemImage: "play.fill") }
-                                .buttonStyle(.borderedProminent).tint(.white).foregroundStyle(.black).accessibilityIdentifier("hero-play").focused($heroFocused)
+                            Button {
+                                preview.stop()
+                                if config.supportsPlayback { playback = playRequest(active) } else { showServerNotice = true }
+                            } label: { Label(L("Play"), systemImage: "play.fill") }
+                                .buttonStyle(.borderedProminent).tint(.white).foregroundStyle(.black)
+                                .accessibilityIdentifier("hero-play").focused($heroAction, equals: .play)
                             NavigationLink(value: active) { Label(L("Details"), systemImage: "info.circle") }
-                                .buttonStyle(.bordered).tint(.white)
+                                .buttonStyle(.bordered).tint(.white).focused($heroAction, equals: .details)
+                            Button {
+                                if preview.controller != nil || preview.loading {
+                                    preview.stop()
+                                } else {
+                                    preview.start(item: catalog.resolved(active), details: catalog.details[active.title], api: api)
+                                }
+                            } label: {
+                                Label(L(preview.controller != nil || preview.loading ? "Stop preview" : "Trailer"),
+                                      systemImage: preview.controller != nil || preview.loading ? "stop.fill" : "play.rectangle")
+                            }.buttonStyle(.bordered).tint(.white).accessibilityIdentifier("hero-trailer").focused($heroAction, equals: .trailer)
+                            if preview.controller != nil {
+                                Button { preview.toggleMute() } label: {
+                                    Image(systemName: preview.muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                                }.buttonStyle(.bordered).buttonBorderShape(.circle).tint(.white)
+                                    .accessibilityLabel(L(preview.muted ? "Unmute preview" : "Mute preview"))
+                                    .accessibilityIdentifier("hero-preview-mute").focused($heroAction, equals: .mute)
+                            }
+                            Group {
+                                if preview.loading {
+                                    Label(L("Preparing trailer…"), systemImage: "hourglass")
+                                } else if let error = preview.error {
+                                    Text(error).lineLimit(2)
+                                }
+                            }
+                            .font(.system(size: 22)).foregroundStyle(.secondary).frame(maxWidth: 340, alignment: .leading)
+                            Spacer(minLength: 32)
+                            if featured.count > 1 {
+                                HeroPageDots(count: featured.count, current: highlighted == nil ? featuredIndex : nil) { changeFeatured(1) }
+                                    .focused($heroAction, equals: .pages)
+                            }
                         }
+                        .frame(maxWidth: .infinity)
+                        .padding(.trailing, TVLayout.edge)
                     }
                 } else if catalog.loading.contains("new") || catalog.libraryLoading {
                     LoadingState(text: L("Finding something to watch…"), minHeight: 600)
@@ -172,7 +231,7 @@ struct HomeView: View {
                             }.padding(.horizontal, TVLayout.edge).padding(.vertical, 18)
                         }.scrollIndicators(.hidden).focusSection()
                     }
-                    .padding(.top, active == nil ? 0 : -150)  // up into the hero's fade
+                    .padding(.top, active == nil ? 0 : -130)  // up into the hero's fade
                 }
                 if config.searchEnabled {
                     ForEach(Array(shelves.enumerated()), id: \.element.0) { index, shelf in
@@ -180,7 +239,7 @@ struct HomeView: View {
                         if let items = catalog.rows[feed], !items.isEmpty {
                             MediaShelf(title: L(label), items: Array(items.prefix(24)), api: api, config: config) { if previewFocusedTitle { highlighted = $0 } }
                                 // The first shelf rises into the hero's fade, unless Continue Watching already did.
-                                .padding(.top, index == 0 && active != nil && !(showContinueWatching && !recent.isEmpty) ? -150 : 0)
+                                .padding(.top, index == 0 && active != nil && !(showContinueWatching && !recent.isEmpty) ? -130 : 0)
                         } else if let error = catalog.errors[feed] {
                             ErrorPanel(message: "\(L(label)): \(error)") { Task { await catalog.loadFeed(feed, api: api, config: config, refresh: true) } }.padding(.horizontal, TVLayout.edge)
                         }
@@ -202,8 +261,15 @@ struct HomeView: View {
         // screen's sides; everything else keeps TVLayout.edge itself.
         .ignoresSafeArea(edges: [.top, .horizontal])
         .scrollClipDisabled()
-        .background(Color.black)
-        .defaultFocus($heroFocused, true, priority: .userInitiated)
+        .background(AppBackground())
+        .defaultFocus($heroAction, .play, priority: .userInitiated)
+        .onScrollGeometryChange(for: Bool.self) { geometry in
+            geometry.contentOffset.y + geometry.contentInsets.top < 260
+        } action: { _, visible in heroVisible = visible }
+        .onChange(of: active?.id) { _, _ in preview.stop() }
+        .onChange(of: previewAllowed) { _, allowed in if !allowed { preview.stop() } }
+        .onChange(of: heroAction) { _, action in if action != nil { highlighted = nil } }
+        .onDisappear { preview.stop() }
         .fullScreenCover(item: $playback) { request in PlaybackLauncher(request: request, api: api) }
         .alert(L("Streaming unavailable"), isPresented: $showServerNotice) { Button(L("OK"), role: .cancel) {} } message: { Text(L("Update Torrent Tube on your server to stream on this Apple TV.")) }
         .task {
@@ -221,6 +287,23 @@ struct HomeView: View {
             do { try await Task.sleep(for: .milliseconds(300)) } catch { return }
             await catalog.loadDetails(active, api: api, config: config)
         }
+        .task(id: rotationCycle) {
+            guard rotationCycle != nil else { return }
+            do { try await Task.sleep(for: .seconds(5)) } catch { return }
+            guard !Task.isCancelled else { return }
+            changeFeatured(1)
+        }
+    }
+    private var nextHeroArtwork: String? {
+        guard featured.count > 1, highlighted == nil else { return nil }
+        let next = catalog.resolved(featured[(min(featuredIndex, featured.count - 1) + 1) % featured.count])
+        return catalog.details[next.title]?.backdrop ?? next.poster
+    }
+
+    private func changeFeatured(_ step: Int) {
+        guard !featured.isEmpty else { return }
+        preview.stop(); highlighted = nil
+        featuredIndex = (min(featuredIndex, featured.count - 1) + step + featured.count) % featured.count
     }
     private func playRequest(_ item: MediaItem) -> PlaybackRequest {
         let resolved = catalog.resolved(item)
@@ -228,6 +311,41 @@ struct HomeView: View {
     }
 }
 
+
+/// Home's featured titles as dots beside the buttons. Focus them and press
+/// (or swipe right) for the next title; the wide dot is the current one.
+struct HeroPageDots: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let count: Int
+    let current: Int?
+    let next: () -> Void
+    var body: some View {
+        Button(action: next) {
+            HStack(spacing: 12) {
+                ForEach(0..<count, id: \.self) { index in
+                    Capsule().fill(.white.opacity(index == current ? 1 : 0.35))
+                        .frame(width: index == current ? 26 : 9, height: 9)
+                }
+            }
+            .padding(.horizontal, 22).frame(height: 66)
+        }
+        .buttonStyle(DotsStyle())
+        .onMoveCommand { if $0 == .right { next() } }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: current)
+        .accessibilityLabel(L("Featured title %ld of %ld", (current ?? 0) + 1, count))
+        .accessibilityHint(L("Next featured title"))
+        .accessibilityIdentifier("hero-next")
+    }
+    /// No lift or glow: a faint pill shows focus, so the dots never jump.
+    private struct DotsStyle: ButtonStyle {
+        @Environment(\.isFocused) private var focused
+        func makeBody(configuration: Configuration) -> some View {
+            configuration.label
+                .background(.white.opacity(focused ? 0.18 : 0), in: Capsule())
+                .opacity(configuration.isPressed ? 0.7 : 1)
+        }
+    }
+}
 
 /// The big image at the top: the backdrop fills the whole width and runs
 /// under the tab bar, with dark scrims for the text on the left, the tab
@@ -241,6 +359,8 @@ struct CinemaHero<Actions: View>: View {
     var bottomInset: CGFloat = 70
     /// The Title page shows the full description under the hero instead.
     var showsOverview = true
+    var preview: EmbeddedPlayer? = nil
+    var nextArtwork: String? = nil
     @ViewBuilder let actions: () -> Actions
     private var kind: String? {
         let type = details?.mediaType ?? item.mediaType
@@ -260,23 +380,41 @@ struct CinemaHero<Actions: View>: View {
     }
     var body: some View {
         ZStack(alignment: .bottomLeading) {
-            ArtworkView(url: details?.backdrop ?? item.poster, background: true, fill: true)
-            LinearGradient(stops: [.init(color: .black.opacity(0.9), location: 0), .init(color: .black.opacity(0.55), location: 0.35),
-                                   .init(color: .clear, location: 0.68)], startPoint: .leading, endPoint: .trailing)
-            LinearGradient(stops: [.init(color: .clear, location: 0.4), .init(color: .black.opacity(0.7), location: 0.78),
-                                   .init(color: .black, location: 1)], startPoint: .top, endPoint: .bottom)
-            LinearGradient(colors: [.black.opacity(0.6), .clear], startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.2))
+            ZStack {
+                HeroBackdrop(url: (details?.backdrop ?? item.poster).flatMap { URL(string: higherResolution($0, backdrop: true)) },
+                             nextURL: nextArtwork.flatMap { URL(string: higherResolution($0, backdrop: true)) })
+                if let preview {
+                    VideoSurface(controller: preview)
+                        .opacity(preview.playing && !preview.buffering ? 1 : 0)
+                        .allowsHitTesting(false).accessibilityHidden(true)
+                }
+                LinearGradient(stops: [.init(color: .black.opacity(0.85), location: 0), .init(color: .black.opacity(0.55), location: 0.35),
+                                       .init(color: .clear, location: 0.72)], startPoint: .leading, endPoint: .trailing)
+                LinearGradient(colors: [.black.opacity(0.65), .clear], startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.28))
+                LinearGradient(stops: [.init(color: .clear, location: 0.35), .init(color: .black.opacity(0.7), location: 0.8),
+                                       .init(color: .black, location: 1.0)], startPoint: .top, endPoint: .bottom)
+            }
+            .mask(
+                LinearGradient(stops: [
+                    .init(color: .white, location: 0),
+                    .init(color: .white, location: 0.45),
+                    .init(color: .white.opacity(0.85), location: 0.65),
+                    .init(color: .white.opacity(0.35), location: 0.86),
+                    .init(color: .clear, location: 1.0)
+                ], startPoint: .top, endPoint: .bottom)
+            )
             VStack(alignment: .leading, spacing: 18) {
                 if let kind {
                     Text(kind.uppercased()).font(.system(size: 20, weight: .bold)).tracking(3).foregroundStyle(.white.opacity(0.65))
                 }
                 Text(details?.title ?? item.displayTitle).font(.system(size: 80, weight: .heavy)).lineLimit(2)
+                    .accessibilityIdentifier("hero-title")
                     .minimumScaleFactor(0.7).shadow(color: .black.opacity(0.5), radius: 12, y: 4)
                     .frame(maxWidth: 1000, alignment: .leading)
                 HStack(spacing: 14) {
                     if let rating = item.rating, rating > 0 {
                         // A golden star, like a rating; the number stays white.
-                        Label { Text(String(format: "%.1f", rating)) } icon: {
+                        Label { Text(String(format: "%.1f", rating)).accessibilityIdentifier("hero-rating") } icon: {
                             Image(systemName: "star.fill").foregroundStyle(Color(red: 1.0, green: 0.78, blue: 0.2))
                         }
                             .labelStyle(.titleAndIcon).font(.system(size: 21, weight: .bold))
@@ -312,12 +450,16 @@ struct ArtworkView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                Color(white: 0.07)
+                if !background {
+                    Color(white: 0.07)
+                }
                 if let url, let address = URL(string: higherResolution(url, backdrop: background)) {
-                    AsyncImage(url: address) { image in
-                        image.resizable().aspectRatio(contentMode: background && !fill ? .fit : .fill)
-                    } placeholder: { Color.clear }
-                        .frame(width: geometry.size.width, height: geometry.size.height, alignment: background && !fill ? .trailing : .top)
+                    AsyncImage(url: address, transaction: Transaction(animation: .easeOut(duration: 0.25))) { phase in
+                        if let image = phase.image {  // fades in instead of popping in
+                            image.resizable().aspectRatio(contentMode: background && !fill ? .fit : .fill).transition(.opacity)
+                        } else { Color.clear }
+                    }
+                        .frame(width: geometry.size.width, height: geometry.size.height, alignment: background && !fill ? .trailing : .center)
                         .clipped()
                 } else if !background {
                     Image(systemName: "film").font(.system(size: 45)).foregroundStyle(.white.opacity(0.35)).accessibilityHidden(true)
@@ -419,7 +561,7 @@ struct InfoGrid: View {
 struct ShelfHeader: View {
     let text: String
     var body: some View {
-        Text(text).font(.system(size: 32, weight: .bold)).foregroundStyle(.white.opacity(0.92))
+        Text(text).font(.system(size: 34, weight: .bold)).foregroundStyle(.white.opacity(0.95))
             .padding(.horizontal, TVLayout.edge)
     }
 }
@@ -475,16 +617,10 @@ struct CategoryView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 35) {
                 Text(L(["docs": "Documentaries", "cartoons": "Cartoons", "ukrainian": "Ukrainian"][activeFeed] ?? title)).font(.system(size: 50, weight: .bold))
-                // Chips (Movies only) and Refresh share one row, so the remote moves between them.
-                HStack {
-                    if feed == "movies" {
-                        ChipRow(options: [("movies", "All"), ("docs", "Documentaries"), ("ukrainian", "Ukrainian")], selected: activeFeed) { selected = $0 }
-                    }
-                    Spacer()
-                    Button { Task { await catalog.loadFeed(activeFeed, api: api, config: config, refresh: true) } } label: {
-                        Label(L("Refresh"), systemImage: "arrow.clockwise")
-                    }.buttonStyle(.bordered).tint(.white).accessibilityLabel(L("Refresh titles"))
-                }.focusSection()
+                // Movies has sub-categories; the catalog refreshes itself when the app opens.
+                if feed == "movies" {
+                    ChipRow(options: [("movies", "All"), ("docs", "Documentaries"), ("ukrainian", "Ukrainian")], selected: activeFeed) { selected = $0 }
+                }
                 if catalog.loading.contains(activeFeed) && catalog.rows[activeFeed] == nil { LoadingState(text: L("Loading titles…"), minHeight: 700) }
                 if let error = catalog.errors[activeFeed] { ErrorPanel(message: error) { Task { await catalog.loadFeed(activeFeed, api: api, config: config, refresh: true) } } }
                 if catalog.rows[activeFeed]?.isEmpty == true && !catalog.loading.contains(activeFeed) && catalog.errors[activeFeed] == nil {
@@ -493,7 +629,7 @@ struct CategoryView: View {
                 }
                 FilmGrid(items: catalog.rows[activeFeed] ?? [], api: api, config: config)
             }.padding(.horizontal, 70).padding(.top, ScreenLayout.top).padding(.bottom, 70)
-        }.background(.black).task(id: activeFeed) { await catalog.loadFeed(activeFeed, api: api, config: config) }
+        }.background(AppBackground()).task(id: activeFeed) { await catalog.loadFeed(activeFeed, api: api, config: config) }
     }
 }
 
@@ -511,11 +647,35 @@ struct ChipRow: View {
         HStack(spacing: 20) {
             ForEach(options, id: \.0) { key, label in
                 let current = selected == key
-                Button { select(key) } label: { Text(L(label)).fontWeight(current ? .bold : .medium) }
-                    .buttonStyle(.bordered).tint(current ? .torrentAccent : .white)
+                Button { select(key) } label: { Text(L(label)) }
+                    .buttonStyle(ChipStyle(selected: current))
                     .accessibilityAddTraits(current ? .isSelected : [])
             }
         }.focusSection()
+    }
+}
+
+/// A chip that never moves: no focus lift, one font weight in every state.
+/// Focus turns it white; the chosen one is filled with the accent.
+struct ChipStyle: ButtonStyle {
+    let selected: Bool
+    func makeBody(configuration: Configuration) -> some View {
+        Chip(label: configuration.label, selected: selected, pressed: configuration.isPressed)
+    }
+    private struct Chip<Label: View>: View {
+        let label: Label
+        let selected: Bool
+        let pressed: Bool
+        @Environment(\.isFocused) private var focused
+        var body: some View {
+            label
+                .font(.system(size: 29, weight: .semibold))
+                .padding(.horizontal, 32).frame(height: 66)
+                .foregroundStyle(focused ? .black : .white)
+                .background(focused ? Color.white.opacity(pressed ? 0.8 : 1) : (selected ? Color.torrentAccent : Color.white.opacity(0.12)),
+                            in: Capsule())
+                .animation(.easeOut(duration: 0.15), value: focused)
+        }
     }
 }
 
@@ -550,6 +710,14 @@ struct SearchView: View {
     @FocusState private var focusedKey: String?
     private var recent: [String] { recentRaw.split(separator: "\n").map(String.init) }
     private var term: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var results: LibrarySearchResults {
+        LibrarySearchResults(query: term, library: catalog.library.map { catalog.resolved(libraryItem($0)) },
+                             torrents: searched == term ? items.map { catalog.resolved($0) } : [])
+    }
+    private var noResults: Bool {
+        term.count >= 2 && !loading && !catalog.libraryLoading && error == nil && catalog.libraryError == nil &&
+        results.library.isEmpty && results.torrents.isEmpty && (!config.searchEnabled || searched == term)
+    }
     var body: some View {
         HStack(alignment: .top, spacing: 60) {
             VStack(alignment: .leading, spacing: 28) {
@@ -582,28 +750,56 @@ struct SearchView: View {
                             LoadingState(text: L("Loading titles…"), minHeight: 600)
                         }
                     } else {
-                        HStack(spacing: 20) {
-                            Text(searched.isEmpty ? L("Searching…") : L("Results for “%@”", searched)).font(.system(size: 32, weight: .bold))
-                            if loading && !searched.isEmpty { ProgressView() }
+                        if !results.library.isEmpty {
+                            Label(L("In your library"), systemImage: "folder").font(.system(size: 32, weight: .bold))
+                            FilmGrid(items: results.library, api: api, config: config) { _ in if keyboardVisited { remember(term) } else { cardFocused() } }
                         }
-                        if let error {
-                            ErrorPanel(message: error) { Task { await search(term) } }
-                        } else if searched.isEmpty {
-                            LoadingState(text: L("Searching…"), minHeight: 600)
-                        } else if !loading && items.isEmpty {
-                            ContentUnavailableView(L("No results for “%@”", searched), systemImage: "magnifyingglass", description: Text(L("Check the spelling or try a new search."))).padding(.top, 40)
+                        if let libraryError = catalog.libraryError {
+                            ErrorPanel(message: libraryError) { Task { await catalog.loadLibrary(api: api) } }
                         }
-                        // Moving into the results counts as having found something - only
-                        // then does the term join Recent searches (not every half-typed word).
-                        FilmGrid(items: items, api: api, config: config) { _ in if keyboardVisited { remember(searched) } else { cardFocused() } }
+                        if config.searchEnabled && !noResults {
+                            Label(L("Torrents"), systemImage: "network").font(.system(size: 32, weight: .bold))
+                            if let error {
+                                ErrorPanel(message: error) { Task { await search(term) } }
+                            } else if loading || searched != term {
+                                LoadingState(text: L("Searching…"), minHeight: 180)
+                            } else if !results.torrents.isEmpty {
+                                FilmGrid(items: results.torrents, api: api, config: config) { _ in if keyboardVisited { remember(searched) } else { cardFocused() } }
+                            } else if !results.library.isEmpty {
+                                Text(L("No additional torrent titles.")).foregroundStyle(.secondary)
+                            }
+                        }
+                        if noResults {
+                            VStack(spacing: 24) {
+                                Image(systemName: "magnifyingglass")
+                                    .font(.system(size: 64, weight: .light)).foregroundStyle(.secondary)
+                                    .accessibilityHidden(true)
+                                Text(L("No results for “%@”", term))
+                                    .font(.system(size: 32, weight: .semibold))
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .accessibilityIdentifier("search-empty")
+                                Text(L("Check the spelling or try a new search."))
+                                    .font(.system(size: 24)).foregroundStyle(.secondary)
+                            }
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 32)
+                            .frame(maxWidth: .infinity, minHeight: 520)
+                        }
+                        if !config.searchEnabled {
+                            Text(L("Searching your library. Torrent search is disabled on this server.")).foregroundStyle(.secondary)
+                        }
                     }
-                }.padding(.bottom, 60)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.bottom, 60)
             }
+            .frame(maxWidth: .infinity)
             .scrollClipDisabled()
             .focusSection()
         }
         .padding(.horizontal, TVLayout.edge).padding(.top, ScreenLayout.top)
-        .background(.black)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(AppBackground())
         .defaultFocus($focusedKey, layout.letters.first.map(String.init), priority: .userInitiated)
         // A hardware keyboard types and deletes wherever the focus is.
         .onKeyPress(phases: .down) { press in
@@ -614,11 +810,13 @@ struct SearchView: View {
             return .handled
         }
         .task(id: term) {
-            guard term.count >= 2 else { items = []; searched = ""; error = nil; return }
+            guard term.count >= 2 else { items = []; searched = ""; error = nil; loading = false; return }
             searched = ""
+            guard config.searchEnabled else { items = []; loading = false; error = nil; return }
             do { try await Task.sleep(for: .milliseconds(450)) } catch { return }  // typing pause
             await search(term)
         }
+        .task { await catalog.loadLibrary(api: api) }
         .task { await catalog.loadFeed("popular", api: api, config: config) }
         .onChange(of: focusedKey) { _, key in if key != nil { keyboardVisited = true } }
         .onDisappear { keyboardVisited = false }
@@ -652,6 +850,7 @@ struct SearchView: View {
         do {
             let result: CatalogResponse = try await api.request("api/search", query: [.init(name: "q", value: text)])
             try Task.checkCancellation()
+            guard text == term else { return }
             items = result.results
             searched = text
             await catalog.enrich(Array(items.prefix(12)), api: api, config: config)
@@ -787,10 +986,13 @@ struct TVSelectionRowStyle: ButtonStyle {
             content
                 .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 28).padding(.vertical, 22)
+                .padding(.horizontal, 34).padding(.vertical, 24)
                 .foregroundStyle(focused ? .black : .white)
-                .background(focused ? Color.white.opacity(pressed ? 0.8 : 1) : Color.white.opacity(0.06),
-                            in: RoundedRectangle(cornerRadius: 14))
+                .background(focused ? Color.white.opacity(pressed ? 0.8 : 1) : Color.white.opacity(0.08),
+                            in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .scaleEffect(focused ? 1.015 : 1.0)
+                .shadow(color: focused ? Color.black.opacity(0.35) : Color.clear, radius: 14, y: 6)
+                .animation(.easeOut(duration: 0.15), value: focused)
         }
     }
 }

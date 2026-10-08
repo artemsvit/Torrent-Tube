@@ -10,14 +10,15 @@ struct ServerConfig: Decodable {
     struct Capabilities: Decodable {
         let fileSelection: Bool?
         let playbackSessions: Bool?
+        var topShelfPreviews: Bool? = nil
     }
     var supportsPlayback: Bool { capabilities?.playbackSessions == true && capabilities?.fileSelection == true }
 }
 
 struct Feed: Decodable, Identifiable { let id: String; let label: String }
 struct FeedResponse: Decodable { let feeds: [Feed] }
-struct CatalogResponse: Decodable { let results: [MediaItem] }
-struct MediaItem: Decodable, Identifiable, Hashable {
+struct CatalogResponse: Codable { let results: [MediaItem] }
+struct MediaItem: Codable, Identifiable, Hashable, Sendable {
     let title: String
     var cleanTitle: String?
     var poster: String?
@@ -35,7 +36,7 @@ struct MediaItem: Decodable, Identifiable, Hashable {
     var displayTitle: String { cleanTitle ?? title }
     var source: PlaybackSource { sourceOverride ?? PlaybackSource(magnet: magnet, downloadLink: downloadLink) }
 }
-struct Release: Decodable, Identifiable, Hashable {
+struct Release: Codable, Identifiable, Hashable, Sendable {
     let title: String
     let magnet: String?
     let downloadLink: String?
@@ -46,7 +47,7 @@ struct Release: Decodable, Identifiable, Hashable {
     var id: String { path ?? downloadLink ?? magnet ?? title }
     var source: PlaybackSource { path.map { PlaybackSource(path: $0) } ?? PlaybackSource(magnet: magnet, downloadLink: downloadLink) }
 }
-struct Metadata: Codable {
+struct Metadata: Codable, Sendable {
     let poster: String?
     let rating: Double?
     let overview: String?
@@ -54,7 +55,7 @@ struct Metadata: Codable {
     let tmdbId: Int?
     let mediaType: String?
 }
-struct Details: Codable {
+struct Details: Codable, Sendable {
     let title: String?
     let overview: String?
     let backdrop: String?
@@ -75,24 +76,24 @@ struct Details: Codable {
     let facts: [Fact]?
     let people: [Person]?
     let recommendations: [Recommendation]?
-    struct Fact: Codable, Hashable { let label: String; let names: [String] }
+    struct Fact: Codable, Hashable, Sendable { let label: String; let names: [String] }
     /// A lead (director, creator) or a cast member; role is the job or character.
-    struct Person: Codable, Hashable { let name: String; let role: String?; let photo: String? }
-    struct Recommendation: Codable, Hashable {
+    struct Person: Codable, Hashable, Sendable { let name: String; let role: String?; let photo: String? }
+    struct Recommendation: Codable, Hashable, Sendable {
         let tmdbId: Int?
         let mediaType: String?
         let title: String
         let year: String?
         let poster: String?
     }
-    struct Season: Codable, Identifiable {
+    struct Season: Codable, Identifiable, Sendable {
         let number: Int
         let name: String
         let episodes: Int?
         var id: Int { number }
     }
 }
-struct Trailer: Codable, Identifiable, Hashable {
+struct Trailer: Codable, Identifiable, Hashable, Sendable {
     let key: String
     let name: String
     let lang: String?
@@ -123,14 +124,14 @@ struct TorrentListEntry: Decodable {
 /// One title already on the server: a film file or a show's folder in the
 /// category folders (or, on older servers, a finished torrent).
 /// One copy of a Library title: the same film in two folders, or a show split over two.
-struct LibraryVersion: Codable, Hashable {
+struct LibraryVersion: Codable, Hashable, Sendable {
     let id: String
     let name: String
     var files: Int = 1
     var size: Int64 = 0
     var category: String = ""
 }
-struct LibraryTitle: Codable, Identifiable, Hashable {
+struct LibraryTitle: Codable, Identifiable, Hashable, Sendable {
     let id: String
     let name: String
     /// The name cleaned of release tags ("Yogi Bear"), shown until - or
@@ -202,7 +203,7 @@ struct Episode: Decodable, Identifiable {
 }
 struct EpisodeResponse: Decodable { let episodes: [Episode] }
 
-struct PlaybackSource: Codable, Hashable {
+struct PlaybackSource: Codable, Hashable, Sendable {
     var id: String? = nil
     /// A file or folder already in the server's library - played from disk.
     var path: String? = nil
@@ -216,8 +217,13 @@ struct VideoFile: Decodable, Identifiable {
     let index: Int
     let name: String
     let size: Int64
+    var path: String? = nil
     var id: Int { index }
+    var episodeIdentity: EpisodeIdentity? { EpisodeIdentity.parse(name: name, path: path) }
 }
+/// Skip intro: where a library episode's opening is ("pending" while the
+/// server compares its sound with the next episode).
+struct IntroResponse: Decodable { let status: String; let start: Double?; let end: Double? }
 struct PreparedPlayback: Decodable { let id: String; let selected: Int; let files: [VideoFile] }
 struct PlaybackSession: Decodable {
     let session: String
@@ -296,7 +302,10 @@ struct TorrentTubeAPI: Sendable {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.0"
         request.setValue(platform, forHTTPHeaderField: "X-TorrentTube-Client")
         request.setValue("TorrentTube-\(platform)/\(version)", forHTTPHeaderField: "User-Agent")
-        let (data, response) = try await session.data(for: request)
+        let data: Data, response: URLResponse
+        do { (data, response) = try await session.data(for: request) }
+        // A stopped request (season switched, page closed) is not an error to show.
+        catch let error as URLError where error.code == .cancelled { throw CancellationError() }
         guard let http = response as? HTTPURLResponse else { throw APIError(message: L("No response from the server.")) }
         if http.statusCode == 401 || http.statusCode == 403 {
             throw APIError(message: L("This server requires authentication. This version supports direct LAN connections."))

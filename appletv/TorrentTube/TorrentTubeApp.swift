@@ -19,7 +19,13 @@ struct TorrentTubeApp: App {
         // (tvOS keeps it in Caches, which the system may clear when space runs low).
         URLCache.shared = URLCache(memoryCapacity: 64 << 20, diskCapacity: 512 << 20)
         let appearance = UITabBar.appearance().standardAppearance.copy()
+        // One font in every state: tvOS makes the focused or selected tab bolder,
+        // which widens it and nudges the whole centred bar sideways.
+        let font = UIFont.systemFont(ofSize: 29, weight: .semibold)
         for items in [appearance.stackedLayoutAppearance, appearance.inlineLayoutAppearance, appearance.compactInlineLayoutAppearance] {
+            for state in [items.normal, items.selected, items.focused, items.disabled] {
+                state.titleTextAttributes[.font] = font
+            }
             items.focused.iconColor = .black
             items.focused.titleTextAttributes[.foregroundColor] = UIColor.black
         }
@@ -58,8 +64,9 @@ struct TorrentTubeApp: App {
 struct ConnectionView: View {
     @Bindable var store: AppStore
     @FocusState private var field: Field?
-    private enum Field { case address, connect }
-    private var canConnect: Bool { !store.connecting && !store.address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    @State private var scanning = false
+    private enum Field { case address, scan, connect }
+    private var canConnect: Bool { !store.connecting && !scanning && !store.address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     var body: some View {
         ZStack {
             BrandBackground()
@@ -88,20 +95,35 @@ struct ConnectionView: View {
                             .font(.system(size: 24)).foregroundStyle(.orange)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    Button { Task { await store.connect() } } label: {
-                        HStack(spacing: 16) {
-                            if store.connecting { ProgressView().tint(.black) }
-                            Text(store.connecting ? L("Connecting…") : L("Connect")).font(.system(size: 30, weight: .semibold))
-                            if !store.connecting { Image(systemName: "arrow.right").font(.system(size: 26, weight: .semibold)) }
+                    HStack(spacing: 20) {
+                        Button { Task { await scanNetwork() } } label: {
+                            HStack(spacing: 16) {
+                                if scanning { ProgressView().tint(.white) }
+                                Text(scanning ? L("Scanning Network…") : L("Scan Network")).font(.system(size: 30, weight: .semibold))
+                                if !scanning { Image(systemName: "antenna.radiowaves.left.and.right").font(.system(size: 26, weight: .semibold)) }
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 64)
                         }
-                        .frame(maxWidth: .infinity, minHeight: 64)
+                        .buttonStyle(.bordered).tint(.white.opacity(0.18)).foregroundStyle(.white)
+                        .focused($field, equals: .scan)
+                        .disabled(scanning || store.connecting)
+                        .accessibilityIdentifier("scan-network")
+
+                        Button { Task { await store.connect() } } label: {
+                            HStack(spacing: 16) {
+                                if store.connecting { ProgressView().tint(.black) }
+                                Text(store.connecting ? L("Connecting…") : L("Connect")).font(.system(size: 30, weight: .semibold))
+                                if !store.connecting { Image(systemName: "arrow.right").font(.system(size: 26, weight: .semibold)) }
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 64)
+                        }
+                        .buttonStyle(.borderedProminent).tint(.white).foregroundStyle(.black)
+                        .focused($field, equals: .connect)
+                        .disabled(!canConnect)
+                        .opacity(canConnect || store.connecting ? 1 : 0.45)
+                        .accessibilityIdentifier("connect")
                     }
-                    .buttonStyle(.borderedProminent).tint(.white).foregroundStyle(.black)
-                    .focused($field, equals: .connect)
-                    .disabled(!canConnect)
-                    .opacity(canConnect || store.connecting ? 1 : 0.45)
-                    .accessibilityIdentifier("connect")
-                    .padding(.top, 10)
+                    .padding(.top, 6)
                 }
                 .padding(44)
                 .frame(width: 900)
@@ -114,5 +136,14 @@ struct ConnectionView: View {
             .padding(60)
         }
         .defaultFocus($field, .address)
+    }
+
+    private func scanNetwork() async {
+        scanning = true
+        defer { scanning = false }
+        if let found = await NetworkScanner.shared.scan(existingAddress: store.address) {
+            store.address = found
+            field = .connect
+        }
     }
 }

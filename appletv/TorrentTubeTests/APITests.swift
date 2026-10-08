@@ -48,6 +48,17 @@ final class APITests: XCTestCase {
 }
 
 final class EpisodeIdentityTests: XCTestCase {
+    func testNumberedEpisodesUseTheirOwnFolderSeason() {
+        for folder in ["Season 12", "S12", "Сезон 12", "12 сезон", "The Big Bang Theory - Season 12"] {
+            XCTAssertEqual(EpisodeIdentity.parse(name: "03 Episode title (HD).m4v", path: "TV Shows/Show/\(folder)/03 Episode title (HD).m4v"), EpisodeIdentity(season: 12, episode: 3))
+        }
+        XCTAssertEqual(EpisodeIdentity.parse(name: "E03 Title.mkv", path: #"Show\Season 2\E03 Title.mkv"#), EpisodeIdentity(season: 2, episode: 3))
+        XCTAssertEqual(EpisodeIdentity.parse(name: "Show.S02E03.mkv", path: "Show/Season 1/Show.S02E03.mkv"), EpisodeIdentity(season: 2, episode: 3))
+        for name in ["03-04 Combined.m4v", "E03-E04 Combined.mkv", "1080p Episode.mkv", "Unknown.mkv"] {
+            XCTAssertNil(EpisodeIdentity.parse(name: name, path: "Show/Season 12/\(name)"))
+        }
+        XCTAssertNil(EpisodeIdentity.parse(name: "03 Title.m4v", path: "Show/03 Title.m4v"))
+    }
     func testMapsKnownEpisodeNamesAndRejectsAmbiguousFiles() {
         XCTAssertEqual(EpisodeIdentity.parse("Show.S02E03.1080p.mkv"), EpisodeIdentity(season: 2, episode: 3))
         XCTAssertEqual(EpisodeIdentity.parse("Show 1x04.mp4"), EpisodeIdentity(season: 1, episode: 4))

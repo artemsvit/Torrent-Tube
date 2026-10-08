@@ -31,15 +31,9 @@ struct LibraryView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 35) {
                 Text(L("Library")).font(.system(size: 50, weight: .bold))
-                // Chips and Refresh share one row, so the remote moves between them.
-                HStack {
-                    ChipRow(options: LibrarySections.chips(catalog.library, favorites: favorites.entries(server: api.baseURL).count),
-                            selected: active) { section = $0 }
-                    Spacer()
-                    Button { Task { await catalog.loadLibrary(api: api) } } label: {
-                        Label(L("Refresh"), systemImage: "arrow.clockwise")
-                    }.buttonStyle(.bordered).tint(.white)
-                }.focusSection()
+                // The Library syncs itself (new titles only); Settings has "Sync now".
+                ChipRow(options: LibrarySections.chips(catalog.library, favorites: favorites.entries(server: api.baseURL).count),
+                        selected: active) { section = $0 }
                 if active == "favorites" {
                     favoritesSection
                 } else {
@@ -57,7 +51,7 @@ struct LibraryView: View {
                 }
             }.padding(.horizontal, 70).padding(.top, ScreenLayout.top).padding(.bottom, 70)
         }
-        .background(.black)
+        .background(AppBackground())
         .task {
             await catalog.loadLibrary(api: api)
             // The server is still matching titles: show them as they come in.

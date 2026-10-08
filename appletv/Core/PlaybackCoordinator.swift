@@ -18,11 +18,15 @@ final class PlaybackCoordinator {
     var streamStatus: StreamStatus?
     var suspended = false
     var completed = false
+    /// The opening of this episode, when the server found one: the player
+    /// offers "Skip intro" while it plays.
+    var intro: ClosedRange<Double>?
     private var selectedSource: PlaybackSource?
     private var closed = false
     private var operation = UUID()
     @ObservationIgnored private var heartbeat: Task<Void, Never>?
     @ObservationIgnored private var progress: Task<Void, Never>?
+    @ObservationIgnored private var introLookup: Task<Void, Never>?
 
     init(request: PlaybackRequest, api: TorrentTubeAPI) {
         self.request = request
@@ -31,11 +35,27 @@ final class PlaybackCoordinator {
 
     static func selectedFile(request: PlaybackRequest, prepared: PreparedPlayback) -> Int? {
         if let season = request.season, let episode = request.episode {
-            let matches = prepared.files.filter { EpisodeIdentity.parse($0.name) == EpisodeIdentity(season: season, episode: episode) }
+            let matches = prepared.files.filter { file in
+                let path = file.path ?? request.source.path.map { $0 + "/" + file.name }
+                return EpisodeIdentity.parse(name: file.name, path: path) == EpisodeIdentity(season: season, episode: episode)
+            }
             return matches.count == 1 ? matches.first?.index : nil
         }
         if let file = request.source.file, prepared.files.contains(where: { $0.index == file }) { return file }
         return prepared.files.count == 1 ? prepared.files.first?.index : nil
+    }
+
+    /// The file to play after `current`: the next episode by season and
+    /// number when the names say so, else the next file in the list.
+    static func nextFile(after current: Int, in files: [VideoFile]) -> Int? {
+        guard files.count > 1 else { return nil }
+        let episodes = files.compactMap { file in file.episodeIdentity.map { (file.index, $0) } }
+        if episodes.count > 1, let playing = episodes.first(where: { $0.0 == current })?.1 {
+            return episodes.filter { ($0.1.season, $0.1.episode) > (playing.season, playing.episode) }
+                .min { ($0.1.season, $0.1.episode) < ($1.1.season, $1.1.episode) }?.0
+        }
+        guard let position = files.firstIndex(where: { $0.index == current }), position + 1 < files.count else { return nil }
+        return files[position + 1].index
     }
 
     func prepare() async {
@@ -62,14 +82,16 @@ final class PlaybackCoordinator {
 
     func loadEpisodeMetadata() async {
         guard let id = request.tmdbID, let prepared else { return }
-        for season in Set(prepared.files.compactMap { EpisodeIdentity.parse($0.name)?.season }) {
+        for season in Set(prepared.files.compactMap { $0.episodeIdentity?.season }) {
             if let response: EpisodeResponse = try? await api.request("api/episodes", query: [.init(name: "id", value: String(id)), .init(name: "season", value: String(season))]), !Task.isCancelled {
                 episodeMetadata[season] = response.episodes
             }
         }
     }
 
-    func start(file: Int) async {
+    /// `continuing`: the next episode after one ended - play at once (from
+    /// its saved place, if any) instead of asking.
+    func start(file: Int, continuing: Bool = false) async {
         guard !closed, !suspended else { return }
         let current = UUID(); operation = current
         loading = true; error = nil
@@ -85,11 +107,31 @@ final class PlaybackCoordinator {
             session = result
             selectedSource = source
             beginHeartbeat(result)
+            loadIntro(file: file, source: source)
             if let prior = history?.entry(server: api.baseURL, torrentID: result.id, file: result.file) {
-                resumeEntry = prior
+                if continuing { openPlayer(at: prior.seconds) } else { resumeEntry = prior }
             } else { openPlayer(at: 0) }
         } catch is CancellationError {} catch {
             if current == operation { self.error = error.localizedDescription }
+        }
+    }
+
+    /// Library episodes only: the server needs the whole file on disk.
+    private func loadIntro(file: Int, source: PlaybackSource) {
+        introLookup?.cancel(); intro = nil
+        guard source.path != nil, let path = prepared?.files.first(where: { $0.index == file })?.path else { return }
+        introLookup = Task { [weak self, api] in
+            // The first look at a season takes a little while; ask again until it is done.
+            for _ in 0..<15 {
+                guard let response: IntroResponse = try? await api.request("api/intro", query: [.init(name: "path", value: path)]),
+                      !Task.isCancelled else { return }
+                if response.status == "ready", let start = response.start, let end = response.end, end > start {
+                    self?.intro = start...end
+                    return
+                }
+                guard response.status == "pending" else { return }
+                do { try await Task.sleep(for: .seconds(8)) } catch { return }
+            }
         }
     }
 
@@ -105,7 +147,18 @@ final class PlaybackCoordinator {
                     guard let self else { return }
                     player.refresh(); ticks += 1
                     if ticks % 10 == 0 { self.savePosition() }
-                    if player.ended { self.savePosition(completed: true); self.completed = true; self.release(); return }
+                    if player.ended {
+                        self.savePosition(completed: true)
+                        let finished = self.session?.file
+                        self.release()
+                        if let finished, let files = self.prepared?.files, let next = Self.nextFile(after: finished, in: files) {
+                            // A new task: this one was cancelled by release().
+                            Task { await self.start(file: next, continuing: true) }
+                        } else {
+                            self.completed = true
+                        }
+                        return
+                    }
                     do { try await Task.sleep(for: .seconds(1)) } catch { return }
                 }
             }
@@ -160,6 +213,7 @@ final class PlaybackCoordinator {
     }
 
     private func release() {
+        introLookup?.cancel(); introLookup = nil; intro = nil
         heartbeat?.cancel(); heartbeat = nil
         progress?.cancel(); progress = nil
         controller?.stop(); controller = nil

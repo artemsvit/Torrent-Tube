@@ -54,7 +54,7 @@ struct TitleView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 38) {
-                CinemaHero(item: value, details: details, height: 760, showsOverview: false) {
+                CinemaHero(item: value, details: details, height: 960, showsOverview: false) {
                     HStack(spacing: 28) {
                         Button { play() } label: { Label(L("Play"), systemImage: "play.fill") }
                             .buttonStyle(.borderedProminent).tint(.white).foregroundStyle(.black).accessibilityIdentifier("title-play")
@@ -86,9 +86,8 @@ struct TitleView: View {
                                         let current = selection.number == season
                                         Button { season = selection.number } label: {
                                             Text(selection.name.isEmpty ? L("Season %ld", selection.number) : selection.name)
-                                                .fontWeight(current ? .bold : .medium)
                                         }
-                                        .buttonStyle(.bordered).tint(current ? .torrentAccent : .white)
+                                        .buttonStyle(ChipStyle(selected: current))
                                         .accessibilityAddTraits(current ? .isSelected : [])
                                         .accessibilityIdentifier("season-\(selection.number)")
                                     }
@@ -147,7 +146,7 @@ struct TitleView: View {
         // Edge to edge like Home: the hero's image runs under the tab bar
         // and to the sides; the rest keeps its own horizontal padding.
         .ignoresSafeArea(edges: [.top, .horizontal])
-        .background(.black)
+        .background(AppBackground())
         // Menu/Back: straight to the tab's top level.
         .onExitCommand { backToTop() }
         .alert(L("Streaming unavailable"), isPresented: $showServerNotice) {

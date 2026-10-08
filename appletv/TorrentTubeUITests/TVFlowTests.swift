@@ -5,12 +5,34 @@ final class TVFlowTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-appLanguage", "en", "-serverAddress", ""]
         app.launch()
-        XCTAssertTrue(app.staticTexts["Connect to your server"].waitForExistence(timeout: 15))
-        XCTAssertTrue(app.textFields["server-address"].exists)
+        XCTAssertTrue(app.textFields["server-address"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["scan-network"].exists)
+        XCTAssertTrue(app.buttons["connect"].exists)
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = "Connection screen"
         screenshot.lifetime = .keepAlways
         add(screenshot)
+    }
+
+    func testNetworkScanOnAppleTV() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-appLanguage", "en", "-serverAddress", ""]
+        app.launch()
+        let scan = app.buttons["scan-network"]
+        XCTAssertTrue(scan.waitForExistence(timeout: 15))
+        for _ in 0..<3 {
+            if scan.hasFocus { break }
+            XCUIRemote.shared.press(.down)
+        }
+        XCTAssertTrue(scan.hasFocus)
+        XCUIRemote.shared.press(.select)
+        // If server is found, focus shifts to connect button and text field is pre-populated
+        let connect = app.buttons["connect"]
+        XCTAssertTrue(connect.waitForExistence(timeout: 10))
+        let populated = app.textFields["server-address"].value as? String ?? ""
+        if !populated.isEmpty {
+            XCTAssertTrue(connect.hasFocus)
+        }
     }
 
     func testLocalServerAndEmbeddedPlayback() throws {
@@ -148,8 +170,7 @@ final class TVFlowTests: XCTestCase {
         app.launch()
         let details = app.buttons["Details"]
         XCTAssertTrue(details.waitForExistence(timeout: 50))
-        let loaded = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS %@", "TMDB"), object: app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "TMDB")).firstMatch)
-        wait(for: [loaded], timeout: 35)
+        XCTAssertTrue(app.staticTexts["hero-rating"].waitForExistence(timeout: 35))
         let homeShot = XCTAttachment(screenshot: app.screenshot())
         homeShot.name = "Real server cinematic Home"
         homeShot.lifetime = .keepAlways
@@ -303,6 +324,111 @@ final class TVFlowTests: XCTestCase {
         XCTAssertTrue(versions.waitForExistence(timeout: 10))
     }
 
+    func testHomeInlineTrailerControls() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-appLanguage", "en", "-serverAddress", "http://127.0.0.1:5069", "-autoplayHomeTrailers", "NO"]
+        app.launch()
+        let play = app.buttons["hero-play"]
+        XCTAssertTrue(play.waitForExistence(timeout: 30))
+        let trailer = app.buttons["hero-trailer"]
+        for _ in 0..<4 where !play.hasFocus { XCUIRemote.shared.press(.down) }
+        XCTAssertTrue(play.hasFocus, app.debugDescription)
+        for _ in 0..<4 where !trailer.hasFocus { XCUIRemote.shared.press(.right) }
+        XCTAssertTrue(trailer.hasFocus)
+        XCUIRemote.shared.press(.select)
+        let mute = app.buttons["hero-preview-mute"]
+        XCTAssertTrue(mute.waitForExistence(timeout: 20))
+        XCTAssertEqual(mute.label, "Unmute preview")
+        let running = expectation(description: "Inline clip renders")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { running.fulfill() }
+        wait(for: [running], timeout: 6)
+        add(keep(app, "Home Inline Trailer"))
+        XCUIRemote.shared.press(.right)
+        XCTAssertTrue(mute.hasFocus)
+        XCUIRemote.shared.press(.select)
+        XCTAssertEqual(mute.label, "Mute preview")
+        XCUIRemote.shared.press(.left)
+        XCTAssertTrue(trailer.hasFocus)
+        XCUIRemote.shared.press(.select)
+        XCTAssertFalse(mute.exists)
+        XCTAssertEqual(trailer.label, "Trailer")
+    }
+
+    func testHomeFeaturedCarouselAdvancesEveryFiveSeconds() throws {
+        guard let address = ProcessInfo.processInfo.environment["TORRENTTUBE_REFERENCE_SERVER"], address.hasPrefix("http") else { throw XCTSkip("A catalog server with ten titles is needed.") }
+        let app = XCUIApplication()
+        app.launchArguments = ["-appLanguage", "en", "-serverAddress", address]
+        app.launch()
+        let next = app.buttons["hero-next"]
+        XCTAssertTrue(next.waitForExistence(timeout: 40))
+        let tenItems = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label ENDSWITH %@", "of 10"), object: next)
+        wait(for: [tenItems], timeout: 40)
+        let play = app.buttons["hero-play"]
+        for _ in 0..<4 where !play.hasFocus { XCUIRemote.shared.press(.down) }
+        XCTAssertTrue(play.hasFocus)
+        XCTAssertGreaterThan(next.frame.minX, app.buttons["hero-trailer"].frame.maxX + 200)
+        XCTAssertGreaterThan(next.frame.maxX, app.frame.maxX - 160)
+        add(keep(app, "Home Ten Titles Right Aligned"))
+        let first = next.label
+        wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "label != %@", first), object: next)], timeout: 7)
+        let second = next.label
+        let started = Date()
+        wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "label != %@", second), object: next)], timeout: 7)
+        XCTAssertGreaterThan(Date().timeIntervalSince(started), 3.5)
+        XCTAssertLessThan(Date().timeIntervalSince(started), 7)
+        XCTAssertTrue(play.hasFocus, "Automatic rotation keeps focus on the same action")
+        add(keep(app, "Home Automatic Carousel Rotation"))
+    }
+
+    func testHomeFeaturedCarouselWithRemote() throws {
+        guard let address = ProcessInfo.processInfo.environment["TORRENTTUBE_REFERENCE_SERVER"], address.hasPrefix("http") else { throw XCTSkip("A real catalog server is needed.") }
+        let app = XCUIApplication()
+        app.launchArguments = ["-appLanguage", "uk", "-serverAddress", address, "-autoplayHomeTrailers", "NO"]
+        app.launch()
+        XCTAssertTrue(app.buttons["hero-next"].waitForExistence(timeout: 40))
+        let play = app.buttons["hero-play"]
+        for _ in 0..<4 where !play.hasFocus { XCUIRemote.shared.press(.down) }
+        XCTAssertTrue(play.hasFocus)
+        add(keep(app, "Home Featured Carousel First"))
+        let firstTitle = app.staticTexts["hero-title"].label
+        let next = app.buttons["hero-next"]
+        for _ in 0..<4 where !next.hasFocus { XCUIRemote.shared.press(.right) }
+        XCTAssertTrue(next.hasFocus, app.debugDescription)
+        XCUIRemote.shared.press(.select)
+        let updated = expectation(description: "Second featured title")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { updated.fulfill() }
+        wait(for: [updated], timeout: 5)
+        add(keep(app, "Home Featured Carousel Second"))
+        XCTAssertNotEqual(app.staticTexts["hero-title"].label, firstTitle)
+        XCTAssertTrue(next.hasFocus, "Changing the banner keeps remote focus")
+    }
+
+    func testBannerTopShelfPresentation() throws {
+        guard let address = ProcessInfo.processInfo.environment["TORRENTTUBE_REFERENCE_SERVER"], address.hasPrefix("http") else { throw XCTSkip("A real catalog server is needed.") }
+        let app = XCUIApplication()
+        app.launchArguments = ["-appLanguage", "uk", "-serverAddress", address]
+        app.launch()
+        guard app.buttons["hero-play"].waitForExistence(timeout: 40) else { XCTFail("Home did not load"); return }
+        XCUIRemote.shared.press(.home)
+        let home = XCUIApplication(bundleIdentifier: "com.apple.PineBoard")
+        XCTAssertTrue(home.wait(for: .runningForeground, timeout: 10))
+        // PineBoard can restore either the Dock or its full-screen carousel.
+        XCUIRemote.shared.press(.menu)
+        let settled = expectation(description: "Top Shelf loads")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8) { settled.fulfill() }
+        wait(for: [settled], timeout: 10)
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        shot.name = "Banner Top Shelf Home"; shot.lifetime = .keepAlways; add(shot)
+        XCUIRemote.shared.press(.up)
+        let full = expectation(description: "Full screen carousel")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { full.fulfill() }
+        wait(for: [full], timeout: 5)
+        let expanded = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        expanded.name = "Banner Top Shelf Full Screen"; expanded.lifetime = .keepAlways; add(expanded)
+        XCUIRemote.shared.press(.select)
+        XCTAssertTrue(app.buttons["title-play"].waitForExistence(timeout: 25), "More Info opens the selected title")
+    }
+
     func testSettingsAndNewTopShelf() throws {
         let address = try XCTUnwrap(ProcessInfo.processInfo.environment["TORRENTTUBE_REFERENCE_SERVER"])
         let app = XCUIApplication()
@@ -381,6 +507,23 @@ final class TVFlowTests: XCTestCase {
         XCTAssertFalse(app.buttons["title-play"].exists, "Home is back at its top level")
     }
 
+    func testSearchEmptyLayoutStaysWide() throws {
+        guard let address = ProcessInfo.processInfo.environment["TORRENTTUBE_REFERENCE_SERVER"], address.hasPrefix("http") else { throw XCTSkip("Search needs a real catalog server.") }
+        let app = XCUIApplication()
+        app.launchArguments = ["-appLanguage", "en", "-serverAddress", address]
+        app.launch()
+        openSearch(app)
+        let keyboardX = app.buttons["key-language"].frame.minX
+        typeOnKeyboard(app, "zzzzzz")
+        let empty = app.staticTexts["search-empty"]
+        XCTAssertTrue(empty.waitForExistence(timeout: 45))
+        XCTAssertEqual(app.buttons["key-language"].frame.minX, keyboardX, accuracy: 2, "Empty results must not move the keyboard")
+        XCTAssertGreaterThan(empty.frame.minX, app.staticTexts["search-query"].frame.maxX)
+        XCTAssertFalse(app.staticTexts["Torrents"].exists)
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Search Empty Layout"; shot.lifetime = .keepAlways; add(shot)
+    }
+
     /// Search shows results while typing - no Search button to press.
     func testSearchShowsResultsWhileTyping() throws {
         guard let address = ProcessInfo.processInfo.environment["TORRENTTUBE_REFERENCE_SERVER"], address.hasPrefix("http") else { throw XCTSkip("Search needs a real catalog server.") }
@@ -428,9 +571,8 @@ final class TVFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["hero-play"].waitForExistence(timeout: 30))
         openTab(app, "Movies")
         add(keep(app, "Movies"))
-        XCUIRemote.shared.press(.right)   // from the tab bar's Movies into the grid
-        XCUIRemote.shared.press(.down)
-        XCUIRemote.shared.press(.down)
+        XCUIRemote.shared.press(.down)   // from the tab bar to the chips
+        XCUIRemote.shared.press(.down)   // to the first poster
         XCUIRemote.shared.press(.select)
         let heart = app.buttons["favorite-toggle"]
         XCTAssertTrue(heart.waitForExistence(timeout: 15))

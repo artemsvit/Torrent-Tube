@@ -14,29 +14,129 @@ struct PlaybackLauncher: View {
     var body: some View {
         Group {
             if let controller = model.controller {
-                PlayerView(controller: controller, title: request.title, streamStatus: model.streamStatus) { close() }
+                PlayerView(controller: controller, title: request.title, streamStatus: model.streamStatus, intro: model.intro) { close() }
 
             } else {
                 ZStack(alignment: .leading) {
-                    ArtworkView(url: request.artwork, background: true)
-                    LinearGradient(colors: [.black.opacity(0.95), .black.opacity(0.6), .black.opacity(0.3)], startPoint: .leading, endPoint: .trailing)
+                    ArtworkView(url: request.artwork, background: true, fill: true)
+                        .ignoresSafeArea()
+                    LinearGradient(
+                        stops: [
+                            .init(color: .black.opacity(0.94), location: 0),
+                            .init(color: .black.opacity(0.8), location: 0.45),
+                            .init(color: .black.opacity(0.4), location: 0.75),
+                            .init(color: .black.opacity(0.85), location: 1.0)
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .ignoresSafeArea()
+                    LinearGradient(
+                        stops: [
+                            .init(color: .black.opacity(0.6), location: 0),
+                            .init(color: .clear, location: 0.35),
+                            .init(color: .black.opacity(0.7), location: 1.0)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .ignoresSafeArea()
+
                     ScrollView {
                         VStack(alignment: .leading, spacing: 32) {
-                            Text(request.title).font(.system(size: 56, weight: .bold)).lineLimit(2)
+                            Text(request.title)
+                                .font(.system(size: 64, weight: .heavy))
+                                .lineLimit(2)
+                                .shadow(color: .black.opacity(0.6), radius: 14, y: 4)
+
                             if let error = model.error {
-                                ErrorPanel(message: error) { Task { await model.prepare() } }
-                            } else if let resumeEntry = model.resumeEntry {
-                                Text(L("Continue from %@?", resumeEntry.displayPosition)).font(.system(size: 30)).foregroundStyle(.white.opacity(0.8))
-                                HStack(spacing: 28) {
-                                    Button(L("Resume")) { model.openPlayer(at: resumeEntry.seconds) }
-                                    Button(L("Start from beginning")) { model.openPlayer(at: 0) }
+                                VStack(alignment: .leading, spacing: 24) {
+                                    HStack(spacing: 16) {
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .font(.system(size: 28, weight: .bold))
+                                            .foregroundStyle(Color(red: 1.0, green: 0.6, blue: 0.2))
+                                        Text(error)
+                                            .font(.system(size: 30, weight: .medium))
+                                            .foregroundStyle(.white)
+                                    }
+                                    .padding(.horizontal, 24)
+                                    .padding(.vertical, 16)
+                                    .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 16))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 16)
+                                            .strokeBorder(.white.opacity(0.15), lineWidth: 1)
+                                    )
+
+                                    HStack(spacing: 24) {
+                                        Button {
+                                            Task { await model.prepare() }
+                                        } label: {
+                                            Label(L("Try again"), systemImage: "arrow.clockwise")
+                                        }
+                                        .buttonStyle(.borderedProminent)
+                                        .tint(.white)
+                                        .foregroundStyle(.black)
+
+                                        Button(action: close) {
+                                            Label(L("Back"), systemImage: "arrow.backward")
+                                        }
+                                        .buttonStyle(.bordered)
+                                        .tint(.white.opacity(0.25))
+                                        .foregroundStyle(.white)
+                                    }
                                 }
+                                .padding(.top, 8)
+                                .focusSection()
+                            } else if let resumeEntry = model.resumeEntry {
+                                VStack(alignment: .leading, spacing: 28) {
+                                    HStack(spacing: 14) {
+                                        Image(systemName: "clock.arrow.circlepath")
+                                            .font(.system(size: 26, weight: .semibold))
+                                            .foregroundStyle(.white.opacity(0.9))
+                                        Text(L("Continue from %@?", resumeEntry.displayPosition))
+                                            .font(.system(size: 30, weight: .semibold))
+                                            .foregroundStyle(.white.opacity(0.9))
+                                    }
+                                    .padding(.horizontal, 20)
+                                    .padding(.vertical, 10)
+                                    .background(.white.opacity(0.14), in: Capsule())
+
+                                    HStack(spacing: 24) {
+                                        Button {
+                                            model.openPlayer(at: resumeEntry.seconds)
+                                        } label: {
+                                            Label(L("Resume"), systemImage: "play.fill")
+                                        }
+                                        .buttonStyle(.borderedProminent)
+                                        .tint(.white)
+                                        .foregroundStyle(.black)
+
+                                        Button {
+                                            model.openPlayer(at: 0)
+                                        } label: {
+                                            Label(L("Start from beginning"), systemImage: "arrow.counterclockwise")
+                                        }
+                                        .buttonStyle(.bordered)
+                                        .tint(.white.opacity(0.25))
+                                        .foregroundStyle(.white)
+
+                                        Button(action: close) {
+                                            Label(L("Back"), systemImage: "arrow.backward")
+                                        }
+                                        .buttonStyle(.bordered)
+                                        .tint(.white.opacity(0.25))
+                                        .foregroundStyle(.white)
+                                    }
+                                }
+                                .padding(.top, 8)
+                                .focusSection()
                             } else if let prepared = model.prepared, !model.loading {
-                                Text(request.episode.map { L("Choose a file for episode %ld", $0) } ?? L("Choose an episode")).font(.system(size: 30, weight: .semibold))
+                                Text(request.episode.map { L("Choose a file for episode %ld", $0) } ?? L("Choose an episode"))
+                                    .font(.system(size: 32, weight: .semibold))
                                 ScrollView(.horizontal) {
                                     LazyHStack(alignment: .top, spacing: 32) {
                                         ForEach(prepared.files) { file in
-                                            let identity = EpisodeIdentity.parse(file.name)
+                                            let identity = file.episodeIdentity
                                             let episode = identity.flatMap { identity in model.episodeMetadata[identity.season]?.first { $0.number == identity.episode } }
                                             Button { Task { await model.start(file: file.index) } } label: {
                                                 VStack(alignment: .leading, spacing: 16) {
@@ -48,14 +148,40 @@ struct PlaybackLauncher: View {
                                         }
                                     }.padding(.vertical, 18).padding(.horizontal, 12)
                                 }.focusSection()
+
+                                Button(action: close) {
+                                    Label(L("Back"), systemImage: "arrow.backward")
+                                }
+                                .buttonStyle(.bordered)
+                                .tint(.white.opacity(0.25))
+                                .foregroundStyle(.white)
+                                .padding(.top, 8)
                             }
-                            Button(L("Back")) { close() }
-                        }.padding(80)
+                        }
+                        .padding(.horizontal, 90)
+                        .padding(.vertical, 80)
                     }
+
                     if model.loading {
-                        ProgressView(L("Preparing your stream…")).frame(maxWidth: .infinity, maxHeight: .infinity)
+                        ZStack {
+                            Color.black.opacity(0.55).ignoresSafeArea()
+                            VStack(spacing: 24) {
+                                ProgressView()
+                                    .progressViewStyle(.circular)
+                                    .tint(.white)
+                                    .scaleEffect(1.4)
+                                Text(L("Preparing your stream…"))
+                                    .font(.system(size: 28, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.9))
+                            }
+                            .padding(40)
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24))
+                        }
+                        .ignoresSafeArea()
                     }
-                }.background(.black)
+                }
+                .background(.black)
+                .ignoresSafeArea()
             }
         }
         .task { model.history = history; await model.prepare() }
@@ -73,13 +199,19 @@ struct PlayerView: View {
     let controller: EmbeddedPlayer
     let title: String
     let streamStatus: StreamStatus?
+    var intro: ClosedRange<Double>? = nil
     let close: () -> Void
     @State private var showControls = true
     @State private var activity = Date()
     @State private var trackMenu: TrackMenu?
     @FocusState private var focusedTrack: Int?
     @FocusState private var focusedControl: Control?
-    private enum Control { case close, backward, play, forward, audio, subtitles, surface }
+    private enum Control { case close, backward, play, forward, audio, subtitles, surface, skipIntro }
+    /// Until a second before the intro ends.
+    private var inIntro: Bool {
+        guard let intro, controller.failure == nil else { return false }
+        return controller.seconds >= intro.lowerBound && controller.seconds < intro.upperBound - 1
+    }
     private enum TrackMenu: String, Identifiable { case audio, subtitles; var id: String { rawValue } }
     var body: some View {
         ZStack {
@@ -94,12 +226,8 @@ struct PlayerView: View {
             }
             if controller.buffering && !controller.playing && controller.failure == nil {
                 VStack(spacing: 20) {
-                    ProgressView()
+                    ProgressView().tint(.white)
                     Text(L("Buffering…")).font(.headline)
-                    if let streamStatus, !streamStatus.ready {
-                        Text(L("%ld%% ready", Int(streamStatus.headProgress ?? 0)))
-                            .foregroundStyle(.secondary)
-                    }
                 }.padding(35).background(.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 20))
             }
             if let failure = controller.failure {
@@ -145,6 +273,25 @@ struct PlayerView: View {
                 }.buttonStyle(PlayerControlStyle())
             }
         }
+        .overlay(alignment: .bottomTrailing) {
+            if inIntro && trackMenu == nil {
+                Button {
+                    if let intro { controller.seek(to: intro.upperBound) }
+                    if !showControls { focusedControl = .surface }
+                } label: {
+                    Label(L("Skip Intro"), systemImage: "forward.end.fill").font(.system(size: 28, weight: .semibold))
+                }
+                .buttonStyle(SkipIntroStyle()).focused($focusedControl, equals: .skipIntro)
+                .accessibilityIdentifier("skip-intro")
+                .padding(.trailing, 90).padding(.bottom, showControls ? 250 : 90)
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.25), value: inIntro)
+        .onChange(of: inIntro) { _, now in
+            if now && !showControls { focusedControl = .skipIntro }
+            else if !now && focusedControl == .skipIntro { focusedControl = showControls ? .play : .surface }
+        }
         .disabled(trackMenu != nil)
         .ignoresSafeArea()
         .defaultFocus($focusedControl, .play)
@@ -161,7 +308,7 @@ struct PlayerView: View {
             do { try await Task.sleep(for: .seconds(7)) } catch { return }
             if trackMenu == nil && controller.playing && controller.failure == nil {
                 showControls = false
-                focusedControl = .surface
+                focusedControl = inIntro ? .skipIntro : .surface
             }
         }
         .overlay {
@@ -226,6 +373,23 @@ struct PlayerView: View {
         if !showControls { focusedControl = .play }
         showControls = true
         activity = Date()
+    }
+}
+
+/// "Skip intro": a dark pill that turns white with focus, with no lift.
+struct SkipIntroStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View { Pill(configuration: configuration) }
+    private struct Pill: View {
+        let configuration: ButtonStyleConfiguration
+        @Environment(\.isFocused) private var focused
+        var body: some View {
+            configuration.label
+                .foregroundStyle(focused ? .black : .white)
+                .padding(.horizontal, 34).frame(height: 76)
+                .background(focused ? AnyShapeStyle(.white) : AnyShapeStyle(.black.opacity(0.6)), in: Capsule())
+                .overlay(Capsule().strokeBorder(.white.opacity(focused ? 0 : 0.45), lineWidth: 2))
+                .opacity(configuration.isPressed ? 0.75 : 1)
+        }
     }
 }
 
