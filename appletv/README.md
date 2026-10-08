@@ -1,6 +1,6 @@
-# Torrent Tube for iPhone, iPad, and Apple TV
+# Torrent Tube for Apple TV, iPhone, iPad, and Mac
 
-Native SwiftUI apps for iOS/iPadOS 18 and tvOS 18 or later. Both targets share catalog, connection, favorites, history, localization, and playback-session code in `Core/`. The touch UI lives in `Mobile/`; the TV UI remains in `TorrentTube/`. Only the TV targets compile the Top Shelf extension. Playback uses pinned VideoLAN MobileVLCKit / TVVLCKit 3.7.2.
+Native SwiftUI apps for tvOS 18, iOS/iPadOS 18 and macOS 15 or later. All targets share catalog, connection, library, favorites, history, localization, and playback-session code in `Core/`. The touch UI lives in `Mobile/` and also builds the Mac app (`TorrentTubeMac`, with Mac versions of the few iOS-only parts in `Mobile/MacSupport.swift` and its own player in `Mobile/MacPlayer.swift`); the TV UI remains in `TorrentTube/`. Only the TV targets compile the Top Shelf extension. Playback uses pinned VideoLAN TVVLCKit / MobileVLCKit / VLCKit (macOS) 3.7.2.
 
 ## Included
 
@@ -9,7 +9,10 @@ This is a streaming player. It has no download action, queue management, or down
 - Cinematic Home with real backdrops, title facts, and Play/Details actions.
 - Horizontal shelves for New, Popular, Movies, TV Shows, Cartoons, and Ukrainian.
 - Continue Watching with artwork, playback progress, and saved positions.
-- Navigation: Home, Movies, TV Shows, Cartoons, Search, and Settings. Cartoons follows TV Shows; Library is removed.
+- Navigation: Home, Movies, TV Shows, Cartoons, Library, Search, and Settings.
+- Library: what is already on the server, matched on TMDB by the server and saved on the device (details, posters, cast), one card per title with its versions.
+- Playback plays on into the next episode and the next season (also across season folders); Skip intro for library episodes; Play on a series starts its first episode, and an episode click plays from the release chosen before.
+- Top Shelf (Apple TV): ten new titles with kind, name, year and rating, and a trailer preview.
 - Full title pages, Choose version, seasons, and episode artwork where metadata is available.
 - Embedded MKV playback, Siri Remote play/pause, ten-second seeking, audio, subtitles, and Back.
 - Trailer selection from the existing server metadata and fallback search, with playback inside Torrent Tube.
@@ -31,6 +34,16 @@ The bootstrap downloads the official binary and checks its pinned SHA-256. The l
 Select **TorrentTubeTV**, choose an Apple TV simulator or device, and run. For a physical device, select your development team in Signing & Capabilities.
 
 The app uses `com.artsvit.torrenttube.tv`. Version is `0.1.0`, build `1`.
+
+## Mac
+
+```sh
+python3 appletv/scripts/bootstrap.py --platform mac
+xcodegen generate --spec appletv/project.yml
+open appletv/TorrentTubeTV.xcodeproj
+```
+
+Select **TorrentTubeMac** and **My Mac**. The window has no title bar: Settings, Back, the tabs and the search field are in the app's own top row (⌘, ⌘[ ⌘F). The player fills the window (Space, ← →, F for full screen, Esc to close).
 
 ## iPhone and iPad
 

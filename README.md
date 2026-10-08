@@ -16,6 +16,9 @@ behind qBittorrent and Deluge), served by Flask + waitress.
   Jackett (bundled) and TMDB power this, and both are configured from the
   app's own Settings screen (see below)
 - Pick which folder a download goes to (e.g. Cartoon / Movies / TV Shows)
+- **My library**: everything already in those folders, matched on TMDB and
+  sorted into Movies, TV Shows and Cartoons - the same library the Apple TV,
+  iPhone, iPad and Mac apps show (see below)
 - Play a film without downloading it: **Play in Infuse / VLC** streams it to
   the app and clears it afterwards (see below)
 - Live progress, download/upload speed, peer count and ETA
@@ -150,6 +153,33 @@ into the image or docker-compose.yml), so they survive a container restart
 or redeploy. Without a Jackett URL + API key set, the Search tab stays
 hidden and the app behaves exactly like the paste-only version.
 
+## My library
+
+The **Downloads** page shows your library on the left (about three quarters
+of the width) and **Downloads** and **Buffering** in a column on the right;
+on a narrow screen they stack, Downloads first.
+
+- **What it lists**: every video in the category folders (`Movies`,
+  `TV Shows`, `Cartoon`), one card per title. Copies of the same film are
+  merged into one card with **versions**; a series folder is one card with
+  its episodes.
+- **Metadata**: the server looks each title up on TMDB once (in the
+  background, a few at a time) and keeps the match in
+  `.torrenttube/library-metadata.json` next to your downloads - poster,
+  rating, description, and whether it is a movie, TV show or cartoon. The
+  page shows "Matching N new titles…" while that runs. The apps use the same
+  matches.
+- **Opening a title** shows its details (description, trailer, cast) and its
+  files - one Play for a film, every episode in order for a series. Play
+  opens the file in Infuse or VLC straight from disk: no torrent, nothing
+  downloaded.
+- **Search** lists matches in your library first ("In your library"), then
+  the tracker's results ("Torrents"), as the apps do.
+- **Settings → Library** shows how many titles there are and how many are
+  matched, hides or shows the library on the Downloads page, **Refresh list**
+  (look through the folders again) and **Rescan metadata** (forget every
+  match and look all titles up again).
+
 ## Play in Infuse / VLC
 
 A title's details popup has a **Play in Infuse** (or **Play in VLC**)
@@ -183,7 +213,7 @@ while it downloads, and nothing is kept afterwards:
 4. Opening the same title again uses the same link, so the server simply
    starts it again, and Infuse remembers where you stopped.
 
-While a stream exists it shows in its own **Buffering** block under Downloads ("Waiting for the
+While a stream exists it shows in its own **Buffering** block under Downloads (in the right-hand column) ("Waiting for the
 player", "Open in the player", then "Player closed · stopped, deleting"), with ✕ to delete it now and a save
 button to keep it as a download in your default folder. Download on the
 same release does the same.
@@ -261,6 +291,12 @@ away and seek.
 | `GET /played/<token>` | The player's `x-success`/`x-error` callback: stops the stream (a cached one is deleted with its files) and redirects to the app. |
 | `GET /play/<token>/<name>` | The video for a play token, with Range support. Waits for the token, the torrent and its file list on the first request; starts the torrent again if its stream was deleted. |
 | `POST /api/stream/<id>/keep` | Body `{"category": ...}`. Moves a cached stream to that folder and makes it a normal download. |
+| `GET /api/library` | The library: `{items, metadata_pending}`. Each item has `id` (its path), `title`, `display_title`, `year`, `kind` (`movie`, `tv`, `cartoon`), `poster`, `rating`, `overview`, `tmdb_id`, `media_type`, `files`, `size` and `versions`. `?refresh=1` looks through the folders again. |
+| `DELETE /api/library/metadata` | Forgets every TMDB match; the next `GET /api/library` looks them up again. |
+| `POST /api/playback/prepare` | Body `{"path": <library path>}` (or a torrent source). Returns the title's video files in play order, each with its `path`. |
+| `GET /media/<path>` | A library file, straight from disk, with Range support. |
+| `GET /api/intro?path=<file>` | Skip intro: `{status: "ready", start, end}` once the opening is found by comparing the episode's sound with the next one (`pending` while that runs, `none` when there is no intro). |
+| `GET /api/trailer/preview/<key>` | A trailer as one stream the system player can play (Apple TV Top Shelf). |
 | `DELETE /api/stream/<id>` | Stops a stream. A cached one is deleted with its data now (`deleted: true`); a download being streamed goes back to downloading normally. |
 
 AVPlayer (Apple's native player) can't open MKV, which is what most
@@ -270,10 +306,12 @@ mpv), or the server has to remux to HLS first.
 This has no authentication, like the rest of the app. Keep it on your
 local network.
 
-## Apple TV app
+## Apple TV, iPhone, iPad and Mac apps
 
-A native tvOS app now lives in [`appletv`](appletv/README.md). It has a saved
-server connection, a TV interface, and an embedded player. The updated server
+Native apps live in [`appletv`](appletv/README.md): Apple TV (with Top Shelf),
+iPhone and iPad, and a Mac app. They share the library above, a saved
+server connection, and an embedded VLC player with Skip intro and playing on
+into the next episode and season. The updated server
 adds episode selection, native trailer streaming, and heartbeat-based playback sessions while keeping
 the web app’s external-player flow.
 

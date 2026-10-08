@@ -370,6 +370,52 @@
     width: 100%;
     padding: 16px 28px 28px;
   }
+  /* My library on the left (about three quarters), Downloads and Buffering
+     in a column on the right. One column when there is no library, in
+     Discover, and on narrow screens (Downloads first there). */
+  .layout.has-library {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(320px, 1fr);
+    gap: 20px;
+    align-items: start;
+  }
+  .side-column { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+  body.discover-active .layout.has-library { display: block; }
+  body.discover-active .library-panel { display: none; }
+  @media (max-width: 1000px) {
+    .layout.has-library { display: flex; flex-direction: column; }
+    .layout.has-library .side-column { order: -1; }
+  }
+  .library-panel .panel-header { flex-wrap: wrap; gap: 10px; }
+  .library-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+  .library-chip {
+    border: 1px solid var(--border); background: var(--surface); color: var(--text);
+    border-radius: var(--radius-pill); padding: 6px 13px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .library-chip.is-active { background: var(--text); color: var(--bg-base); border-color: transparent; }
+  .library-note { font-size: 12.5px; color: var(--text-secondary); margin: 0 0 12px; }
+  .library-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(138px, 1fr)); gap: 20px 14px; }
+  .lib-card { display: block; text-align: left; background: none; border: 0; padding: 0; color: inherit; font: inherit; cursor: pointer; min-width: 0; }
+  .lib-poster {
+    position: relative; aspect-ratio: 2 / 3; border-radius: var(--radius-md); overflow: hidden;
+    background: var(--surface-hover); border: 1px solid var(--border); transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .lib-poster img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .lib-poster .lib-fallback { position: absolute; inset: 0; display: grid; place-items: center; color: var(--text-tertiary); padding: 10px; text-align: center; font-size: 12px; }
+  .lib-card:hover .lib-poster, .lib-card:focus-visible .lib-poster { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
+  .lib-badge { position: absolute; left: 7px; top: 7px; font-size: 11px; font-weight: 700; padding: 3px 7px; border-radius: var(--radius-pill); background: rgba(0,0,0,.62); color: #fff; }
+  .lib-title { font-size: 13.5px; font-weight: 600; margin-top: 8px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .lib-sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+  .search-section-head { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-secondary); padding: 12px 16px 4px; }
+  .dt-files { display: flex; flex-direction: column; gap: 6px; }
+  .dt-file { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--radius-md); background: var(--surface); border: 1px solid var(--border); }
+  .dt-file-name { flex: 1; min-width: 0; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dt-file-size { font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
+  .library-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin: 6px 0 14px; }
+  .library-stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; }
+  .library-stat b { display: block; font-size: 20px; }
+  .library-stat span { font-size: 12px; color: var(--text-secondary); }
+  .settings-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
   @media (max-width: 640px) {
     .layout { padding: 16px 16px 16px; }
     header, .searchbar { padding-left: 16px; padding-right: 16px; }
@@ -1921,7 +1967,20 @@
   </div>
 </div>
 
-<div class="layout">
+<div class="layout" id="layout">
+  <!-- What is already in the download folders, matched on TMDB by the server -
+       the same library, tabs and metadata as the Apple apps. -->
+  <section class="panel library-panel" id="libraryPanel" hidden>
+    <div class="panel-header">
+      <div class="section-label">My library</div>
+      <span class="count-badge" id="libraryCount">0</span>
+      <div class="library-chips" id="libraryChips"></div>
+    </div>
+    <p class="library-note" id="libraryNote" hidden></p>
+    <div class="library-grid" id="libraryGrid"></div>
+  </section>
+
+  <div class="side-column">
   <section class="panel" id="downloadsTab">
     <div class="panel-header" id="downloadsHeader">
       <div class="section-label">Downloads</div>
@@ -1953,6 +2012,7 @@
     <p class="streams-note">Temporary files for the player. Each is deleted when you close the player.</p>
     <div id="streamsList"></div>
   </section>
+  </div>
 </div>
 
 <div class="drop-zone" id="dropZone"><div class="drop-zone-inner">Drop .torrent file to add it</div></div>
@@ -1982,6 +2042,7 @@
     <div class="settings-tabs" id="settingsTabs">
       <button type="button" class="settings-tab is-active" data-tab="general"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>General</button>
       <button type="button" class="settings-tab" data-tab="server"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>Server</button>
+      <button type="button" class="settings-tab" data-tab="library"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>Library</button>
       <button type="button" class="settings-tab" data-tab="players"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M10 8.5v7l6-3.5-6-3.5z" fill="currentColor"/></svg>Players</button>
     </div>
 
@@ -2100,6 +2161,26 @@
         <div class="settings-row">
           <div class="settings-row-label">TMDB language<button type="button" class="info-tip" data-tip="Language for titles and descriptions from TMDB">i</button></div>
           <select class="inline-category-select settings-select" id="settingsTmdbLanguage"></select>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-tab-panel" data-panel="library" hidden>
+      <div class="settings-section">
+        <div class="section-label">My library</div>
+        <p class="streams-note">Everything in your download folders. The server matches each title on TMDB once and keeps the posters and details - the same library the Apple TV, iPhone, iPad and Mac apps show.</p>
+        <div class="library-stats" id="libraryStats"></div>
+        <div class="settings-row">
+          <div class="settings-row-label">Show on the Downloads page<button type="button" class="info-tip" data-tip="The library takes the left of the Downloads page; Downloads and Buffering move to the right">i</button></div>
+          <label class="switch">
+            <input type="checkbox" id="settingsShowLibrary" checked>
+            <span class="switch-track"></span>
+            <span class="switch-thumb"></span>
+          </label>
+        </div>
+        <div class="settings-actions">
+          <button type="button" class="btn-secondary" id="libraryRefreshBtn" title="Look through the folders again for new or removed titles">Refresh list</button>
+          <button type="button" class="btn-secondary" id="libraryRescanBtn" title="Forget every match and look all titles up on TMDB again">Rescan metadata</button>
         </div>
       </div>
     </div>
@@ -3232,9 +3313,20 @@ function formatSeedPeers(seeders, peers) {
 let searchRequestId = 0;
 let lastSearchResults = [];
 
+let lastSearchQuery = "";
 async function runSearch(query) {
   const requestId = ++searchRequestId;
-  searchDropdown.innerHTML = `<div class="empty-state" style="padding:24px;">Searching...</div>`;
+  lastSearchQuery = query;
+  if (!libraryLoaded) await loadLibrary();
+  // The library answers at once; torrents follow below it.
+  const inLibrary = librarySearch(query);
+  searchDropdown.innerHTML = "";
+  if (inLibrary.length) {
+    searchDropdown.appendChild(sectionHead("In your library"));
+    inLibrary.forEach(item => searchDropdown.appendChild(buildLibraryResult(item)));
+    searchDropdown.appendChild(sectionHead("Torrents"));
+  }
+  searchDropdown.insertAdjacentHTML("beforeend", `<div class="empty-state search-pending" style="padding:24px;">Searching...</div>`);
   searchDropdown.classList.add("is-open");
   goBtn.disabled = true;
   try {
@@ -3243,7 +3335,9 @@ async function runSearch(query) {
     if (requestId !== searchRequestId) return; // a newer search superseded this one
     goBtn.disabled = false;
     if (data.error) {
-      searchDropdown.innerHTML = `<div class="empty-state" style="padding:24px;">${escapeHtml(data.error)}</div>`;
+      const pending = searchDropdown.querySelector(".search-pending");
+      if (pending) pending.textContent = data.error;
+      else searchDropdown.innerHTML = `<div class="empty-state" style="padding:24px;">${escapeHtml(data.error)}</div>`;
       return;
     }
     lastSearchResults = data.results || [];
@@ -3322,7 +3416,14 @@ function renderResultCards(container, results, emptyMessage) {
 
 function renderSearchResults(results) {
   searchDropdown.classList.add("is-open");
-  renderResultCards(searchDropdown, results, "No results found.");
+  const inLibrary = librarySearch(lastSearchQuery);
+  if (!inLibrary.length) { renderResultCards(searchDropdown, results, "No results found."); return; }
+  searchDropdown.innerHTML = "";
+  searchDropdown.appendChild(sectionHead("In your library"));
+  inLibrary.forEach(item => searchDropdown.appendChild(buildLibraryResult(item)));
+  searchDropdown.appendChild(sectionHead("Torrents"));
+  if (results.length) appendResultCards(searchDropdown, results, results, "No results found.");
+  else searchDropdown.insertAdjacentHTML("beforeend", `<div class="empty-state" style="padding:16px 24px;">No torrents found.</div>`);
 }
 
 // Adds a search/Discover result to Downloads; shared by the card's own
@@ -3489,6 +3590,12 @@ playerModal.addEventListener("click", (e) => {
   const opt = e.target.closest("[data-player]");
   if (!opt) return;
   const id = opt.dataset.player;
+  if (id === "copy" && detailsState && detailsState.library) {
+    const file = libraryFileList()[0];
+    if (file) copyText(libraryMediaUrl(file), "Link copied - open it in any player");
+    closePlayerPicker();
+    return;
+  }
   if (id === "copy") {
     const s = detailsState, link = s && (s.torrent || primaryRelease()) ? playLink(s.torrent ? null : primaryRelease(), s.torrent) : null;
     if (link) {
@@ -3993,7 +4100,9 @@ function openDetails(item, torrent = null, { push = false } = {}) {
     trailers: [], trailerSource: null, activeTrailer: null, playing: false, findingTrailer: false, noTrailer: false,
     releases: item.releases || null, showAllReleases: false, added: new Set(),
     category: null,
+    library: item.library || null, libraryFiles: null,
   };
+  if (item.library) loadLibraryFiles(requestId);
   renderDetailsHero();
   renderDetailsBody();
   detailsModal.classList.add("is-open");
@@ -4063,6 +4172,7 @@ function releaseMatches(r, d) {
 }
 
 async function loadReleases(query, requestId) {
+  if (detailsState && detailsState.library) return;  // its own files instead
   // A grouped search card already carries every version of its title -
   // show those straight away, then add whatever the title search finds.
   const own = detailsState.item.releases || [];
@@ -4303,7 +4413,7 @@ function renderDetailsBody() {
   // from the banner's centre button; a title without a banner gets a
   // button here instead. ---
   const actions = [];
-  const playable = s.torrent || primaryRelease();
+  const playable = s.library ? libraryFileList()[0] : (s.torrent || primaryRelease());
   const playerId = currentPlayer();
   actions.push(`<div class="play-split">
     <button type="button" class="btn-primary btn-pill play-main" data-act="play"${!playable ? " disabled" : ""}>${playerLogo(playerId)}${PLAYERS[playerId].canOpen ? "Play in" : "Copy link for"} ${escapeHtml(PLAYERS[playerId].name)}</button>
@@ -4317,7 +4427,10 @@ function renderDetailsBody() {
       actions.push(`<button type="button" class="btn-secondary" data-act="trailer"${s.findingTrailer ? " disabled" : ""}>${PLAY_ICON}${s.findingTrailer ? "Finding trailer…" : "Trailer"}</button>`);
     }
   }
-  if (s.torrent) {
+  if (s.library) {
+    const where = (s.library.versions || []).length > 1 ? `${s.library.versions.length} versions` : s.library.category;
+    actions.push(`<span class="dt-status-pill">In your library${where ? ` · ${escapeHtml(where)}` : ""}</span>`);
+  } else if (s.torrent) {
     const t = s.torrent;
     const done = t.state === "finished" || t.state === "seeding";
     actions.push(`<span class="dt-status-pill">${done ? "Downloaded" : `Downloading · ${t.progress}%`}${t.category ? ` · ${escapeHtml(t.category)}` : ""}</span>`);
@@ -4406,6 +4519,19 @@ function renderDetailsBody() {
     ${Array.isArray(s.releases) && s.releases.length > RELEASES_SHOWN
       ? `<button type="button" class="dt-link-btn" data-act="toggle-releases">${s.showAllReleases ? "Show fewer" : "Show all"}</button>` : ""}</div>` : "";
 
+  // --- a library title's own files (its versions' videos, episodes in order) ---
+  if (s.library) {
+    const files = libraryFileList();
+    const list = !s.libraryFiles ? `<div class="dt-status">Reading the folder…</div>`
+      : `<div class="dt-files">${files.map((f, i) => `<div class="dt-file">
+          <div class="dt-file-name" title="${escapeHtml(f.path)}">${escapeHtml(f.name)}</div>
+          <div class="dt-file-size">${formatBytes(f.size)}</div>
+          <button type="button" class="action-btn" data-act="play-file" data-index="${i}" title="Play in ${escapeHtml(PLAYERS[playerId].name)}">${ICONS.play}</button>
+        </div>`).join("")}</div>`;
+    releases = list;
+  }
+  const filesHead = s.library ? `<div class="dt-section-head"><div class="section-label">${libraryFileList().length > 1 ? `Files · ${libraryFileList().length}` : "File"}</div></div>` : "";
+
   // --- more like this ---
   const recs = (d.recommendations || []).map((r, i) => `
     <button type="button" class="dt-rec" data-act="rec" data-index="${i}" title="${escapeHtml(r.title)}">
@@ -4422,7 +4548,7 @@ function renderDetailsBody() {
     </div>
     ${people ? `<div class="dt-section"><div class="dt-section-head"><div class="section-label">Cast &amp; crew</div></div><div class="dt-row">${people}</div></div>` : ""}
     ${seasons ? `<div class="dt-section"><div class="dt-section-head"><div class="section-label">Seasons</div></div><div class="dt-seasons">${seasons}</div></div>` : ""}
-    ${releasesHead || releases ? `<div class="dt-section">${releasesHead}${releases}</div>` : ""}
+    ${s.library ? `<div class="dt-section">${filesHead}${releases}</div>` : releasesHead || releases ? `<div class="dt-section">${releasesHead}${releases}</div>` : ""}
     ${recs ? `<div class="dt-section"><div class="dt-section-head"><div class="section-label">More like this</div></div><div class="dt-row">${recs}</div></div>` : ""}
   `;
 
@@ -4466,7 +4592,8 @@ detailsBody.addEventListener("click", (e) => {
       else findYoutubeTrailers();
       break;
     case "download-best": { const best = primaryRelease(); if (best) downloadRelease(best); break; }
-    case "play": playRelease(s.torrent ? null : primaryRelease()); break;
+    case "play": if (s.library) playLibraryFile(libraryFileList()[0]); else playRelease(s.torrent ? null : primaryRelease()); break;
+    case "play-file": playLibraryFile(libraryFileList()[Number(el.dataset.index)]); break;
     case "play-release": playRelease((s.showAllReleases ? s.releases : s.releases.slice(0, RELEASES_SHOWN))[Number(el.dataset.index)]); break;
     case "pick-player": openPlayerPicker(); break;
     case "download-release": downloadRelease((s.showAllReleases ? s.releases : s.releases.slice(0, RELEASES_SHOWN))[Number(el.dataset.index)]); break;
@@ -4502,6 +4629,190 @@ syncTopBarHeight();
 window.addEventListener("resize", syncTopBarHeight);
 if (window.ResizeObserver) new ResizeObserver(syncTopBarHeight).observe(topBarEl);
 
+// ---------- My library ----------
+// What is already in the download folders, as the server lists it in
+// /api/library: one card per title (copies merged as versions), matched on
+// TMDB, sorted into Movies, TV Shows and Cartoons - the same as the apps.
+const libraryPanel = document.getElementById("libraryPanel");
+const libraryChips = document.getElementById("libraryChips");
+const libraryGrid = document.getElementById("libraryGrid");
+const libraryNote = document.getElementById("libraryNote");
+const libraryCount = document.getElementById("libraryCount");
+const layoutEl = document.getElementById("layout");
+const LIBRARY_KINDS = [["movie", "Movies"], ["tv", "TV Shows"], ["cartoon", "Cartoons"]];
+let libraryItems = [], libraryPending = 0, librarySection = null, libraryTimer = null, libraryLoaded = false;
+
+function libraryShown() {
+  try { return localStorage.getItem("showLibrary") !== "0"; } catch (e) { return true; }
+}
+
+async function loadLibrary(refresh = false) {
+  clearTimeout(libraryTimer);
+  try {
+    const d = await fetch(`/api/library${refresh ? "?refresh=1" : ""}`).then(r => r.json());
+    libraryItems = d.items || [];
+    libraryPending = d.metadata_pending || 0;
+    libraryLoaded = true;
+  } catch (e) { return; }
+  renderLibrary();
+  renderLibraryStats();
+  // The server matches new titles in the background; look again until done.
+  if (libraryPending > 0) libraryTimer = setTimeout(() => loadLibrary(), 5000);
+}
+
+function libraryTitle(item) { return item.display_title || item.title || item.name; }
+
+function renderLibrary() {
+  const show = libraryItems.length > 0 && libraryShown();
+  libraryPanel.hidden = !show;
+  layoutEl.classList.toggle("has-library", show);
+  if (!show) return;
+  const counts = Object.fromEntries(LIBRARY_KINDS.map(([k]) => [k, libraryItems.filter(i => i.kind === k).length]));
+  if (!librarySection || !counts[librarySection]) librarySection = (LIBRARY_KINDS.find(([k]) => counts[k]) || ["movie"])[0];
+  libraryCount.textContent = libraryItems.length;
+  libraryChips.innerHTML = LIBRARY_KINDS.filter(([k]) => counts[k]).map(([k, label]) =>
+    `<button type="button" class="library-chip${k === librarySection ? " is-active" : ""}" data-kind="${k}">${label} · ${counts[k]}</button>`).join("");
+  libraryNote.hidden = !libraryPending;
+  libraryNote.textContent = libraryPending ? `Matching ${libraryPending} new title${libraryPending === 1 ? "" : "s"} on TMDB…` : "";
+  libraryGrid.innerHTML = "";
+  libraryItems.filter(i => i.kind === librarySection).forEach(item => libraryGrid.appendChild(buildLibraryCard(item)));
+}
+
+function buildLibraryCard(item) {
+  const card = document.createElement("button");
+  card.type = "button";
+  card.className = "lib-card";
+  const versions = (item.versions || []).length;
+  const badge = versions > 1 ? `${versions} versions` : item.files > 1 ? `${item.files} files` : "";
+  const sub = [item.year, item.rating > 0 ? `★ ${item.rating.toFixed(1)}` : ""].filter(Boolean).join(" · ");
+  card.innerHTML = `<div class="lib-poster">${item.poster
+      ? `<img src="${escapeHtml(item.poster.replace("/w200/", "/w342/"))}" alt="" loading="lazy">`
+      : `<div class="lib-fallback">${escapeHtml(libraryTitle(item))}</div>`}${badge ? `<span class="lib-badge">${badge}</span>` : ""}</div>
+    <div class="lib-title">${escapeHtml(libraryTitle(item))}</div>${sub ? `<div class="lib-sub">${escapeHtml(sub)}</div>` : ""}`;
+  card.addEventListener("click", () => openLibraryTitle(item));
+  return card;
+}
+
+libraryChips.addEventListener("click", e => {
+  const chip = e.target.closest(".library-chip");
+  if (chip) { librarySection = chip.dataset.kind; renderLibrary(); }
+});
+
+// The details popup, with the title's files to play instead of releases.
+function openLibraryTitle(item) {
+  closeSearchDropdownIfOpen();
+  openDetails({
+    title: libraryTitle(item), clean_title: libraryTitle(item), poster: item.poster, rating: item.rating,
+    overview: item.overview, tmdb_id: item.tmdb_id, media_type: item.media_type, library: item,
+  });
+}
+
+function closeSearchDropdownIfOpen() {
+  if (typeof searchDropdown !== "undefined") searchDropdown.classList.remove("is-open");
+}
+
+// Every file of every version, in play order (episodes in order).
+async function loadLibraryFiles(requestId) {
+  const s = detailsState, item = s.item.library;
+  const paths = (item.versions && item.versions.length ? item.versions.map(v => v.id) : [item.id]);
+  const groups = [];
+  for (const path of paths) {
+    try {
+      const d = await fetch("/api/playback/prepare", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path }) }).then(r => r.json());
+      if (d.files) groups.push({ path, files: d.files });
+    } catch (e) {}
+  }
+  if (requestId !== detailsRequestId) return;
+  s.libraryFiles = groups;
+  renderDetailsBody();
+}
+
+function libraryFileList() {
+  return (detailsState && detailsState.libraryFiles || []).flatMap(g => g.files);
+}
+
+function libraryMediaUrl(file) {
+  return `${location.origin}/media/${file.path.split("/").map(encodeURIComponent).join("/")}`;
+}
+
+// Straight from disk: no torrent, no play link to register.
+function playLibraryFile(file) {
+  if (!file) return;
+  const url = libraryMediaUrl(file);
+  const id = currentPlayer();
+  if (id === "vlc" && VLC_HELPER_OS && !vlcHelperInstalled()) {
+    openVlcHelper(() => playLibraryFile(file));
+    return;
+  }
+  const appLink = PLAYERS[id].link(url, location.href);
+  if (appLink) location.href = appLink;
+  else copyText(url, `Link copied. In ${PLAYERS[id].name}, choose File > Open Network and paste it`);
+}
+
+// Library titles matching a search, as in the apps: words of the query in
+// the Ukrainian title, the original title or the folder name.
+function plainText(text) {
+  return (text || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+}
+function librarySearch(query) {
+  const words = plainText(query).split(" ").filter(Boolean);
+  if (!words.length) return [];
+  return libraryItems.filter(item => {
+    const hay = " " + plainText([item.display_title, item.title, item.name, ...(item.versions || []).map(v => v.name)].join(" ")) + " ";
+    return words.every(w => hay.includes(" " + w));
+  }).slice(0, 12);
+}
+
+function buildLibraryResult(item) {
+  const div = document.createElement("div");
+  div.className = "item";
+  const kind = (LIBRARY_KINDS.find(([k]) => k === item.kind) || [null, ""])[1];
+  const sub = [kind, item.year, item.rating > 0 ? `★ ${item.rating.toFixed(1)}` : ""].filter(Boolean).join(" · ");
+  div.innerHTML = `<div class="item-top">
+      ${item.poster ? `<img class="result-poster" src="${escapeHtml(item.poster)}" alt="" loading="lazy">` : `<div class="result-poster-fallback">${ICONS.download}</div>`}
+      <div class="item-meta">
+        <div class="item-title">${escapeHtml(libraryTitle(item))}</div>
+        <div class="item-sub">${escapeHtml(sub)}</div>
+        ${item.overview ? `<div class="item-overview">${escapeHtml(item.overview)}</div>` : ""}
+      </div>
+      <div class="search-result-actions"><button class="btn-secondary btn-add-result">${ICONS.play}<span>Open</span></button></div>
+    </div>`;
+  div.addEventListener("click", () => openLibraryTitle(item));
+  return div;
+}
+
+function sectionHead(text) {
+  const head = document.createElement("div");
+  head.className = "search-section-head";
+  head.textContent = text;
+  return head;
+}
+
+// ---------- Settings: Library ----------
+function renderLibraryStats() {
+  const stats = document.getElementById("libraryStats");
+  if (!stats) return;
+  const matched = libraryItems.filter(i => i.tmdb_id).length;
+  const cells = [[libraryItems.length, "titles"], ...LIBRARY_KINDS.map(([k, label]) => [libraryItems.filter(i => i.kind === k).length, label.toLowerCase()]),
+                 [matched, "matched on TMDB"], [libraryPending, "waiting"]];
+  stats.innerHTML = cells.map(([n, label]) => `<div class="library-stat"><b>${n}</b><span>${label}</span></div>`).join("");
+}
+const settingsShowLibrary = document.getElementById("settingsShowLibrary");
+settingsShowLibrary.checked = libraryShown();
+settingsShowLibrary.addEventListener("change", () => {
+  try { localStorage.setItem("showLibrary", settingsShowLibrary.checked ? "1" : "0"); } catch (e) {}
+  renderLibrary();
+});
+document.getElementById("libraryRefreshBtn").addEventListener("click", async () => {
+  await loadLibrary(true);
+  showToast(`Library: ${libraryItems.length} titles`);
+});
+document.getElementById("libraryRescanBtn").addEventListener("click", async () => {
+  try { await fetch("/api/library/metadata", { method: "DELETE" }); } catch (e) { showToast("Couldn't reach the server", true); return; }
+  showToast("Looking every title up on TMDB again…");
+  loadLibrary();
+});
+
 async function init() {
   // Back from the player: /played/<token> deleted the stream and sent us here.
   const params = new URLSearchParams(location.search);
@@ -4512,6 +4823,7 @@ async function init() {
   }
   loadConfig();
   loadLimits();
+  loadLibrary();
   await loadDiscoverFeeds();
   // Discover is the main screen whenever it's actually usable; if search
   // isn't configured on this server there's nothing to discover, so stay
