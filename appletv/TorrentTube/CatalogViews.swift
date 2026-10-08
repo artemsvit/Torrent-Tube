@@ -32,6 +32,7 @@ struct MainView: View {
     private func stack<Root: View>(_ tab: MainTab, @ViewBuilder root: () -> Root) -> some View {
         NavigationStack(path: path(tab)) {
             root().padding(.top, tab == .home ? 0 : 118).navigationDestination(for: MediaItem.self) { item in TitleView(item: item, api: api, config: config) }
+                .navigationDestination(for: PersonRoute.self) { PersonView(route: $0, api: api, config: config) }
         }
         .environment(\.backToTop) { paths[tab] = NavigationPath() }
     }
@@ -74,6 +75,7 @@ struct MainView: View {
                 TitleView(item: item, api: api, config: config)
                     .toolbar { ToolbarItem(placement: .topBarLeading) { Button(L("Back")) { shelfTitle = nil } } }
                     .navigationDestination(for: MediaItem.self) { item in TitleView(item: item, api: api, config: config) }
+                    .navigationDestination(for: PersonRoute.self) { PersonView(route: $0, api: api, config: config) }
             }
             .environment(catalog)
             .environment(\.backToTop) { shelfTitle = nil }
@@ -594,9 +596,12 @@ struct MediaShelf: View {
 struct PersonCard: View {
     let person: Details.Person
     @FocusState private var focused: Bool
+    /// A cast photo opens that person's films and shows.
+    @ViewBuilder private func personLink<Content: View>(@ViewBuilder _ label: () -> Content) -> some View {
+        if let route = person.route { NavigationLink(value: route, label: label) } else { Button(action: {}, label: label) }
+    }
     var body: some View {
-        Button {} label: {
-            VStack(spacing: 14) {
+        personLink { VStack(spacing: 14) {
                 ZStack {
                     Circle().fill(Color(white: 0.14))
                     if let photo = person.photo, let url = URL(string: photo) {
@@ -613,8 +618,7 @@ struct PersonCard: View {
                         Text(L(role)).font(.system(size: 18)).foregroundStyle(.white.opacity(0.5)).lineLimit(2)
                     }
                 }.multilineTextAlignment(.center).foregroundStyle(focused ? .white : .white.opacity(0.85))
-            }.frame(width: 190)
-        }
+            }.frame(width: 190) }
         .buttonStyle(CinemaCardStyle()).focused($focused)
         .accessibilityLabel([person.name, person.role.map { L($0) }].compactMap { $0 }.joined(separator: ", "))
     }
@@ -1079,6 +1083,56 @@ struct TVSelectionRowStyle: ButtonStyle {
                 .scaleEffect(focused ? 1.015 : 1.0)
                 .shadow(color: focused ? Color.black.opacity(0.35) : Color.clear, radius: 14, y: 6)
                 .animation(.easeOut(duration: 0.15), value: focused)
+        }
+    }
+}
+
+
+/// A person's page: their photo and name, then every film and show they are in.
+struct PersonView: View {
+    let route: PersonRoute
+    let api: TorrentTubeAPI
+    let config: ServerConfig
+    @State private var credits: PersonCredits?
+    @State private var error: String?
+    @State private var retry = 0
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 35) {
+                HStack(spacing: 30) {
+                    ZStack {
+                        Circle().fill(Color(white: 0.14))
+                        if let photo = credits?.photo ?? route.photo, let url = URL(string: photo) {
+                            AsyncImage(url: url) { $0.resizable().aspectRatio(contentMode: .fill) } placeholder: { Color.clear }
+                        } else {
+                            Text(String(route.name.prefix(1))).font(.system(size: 64, weight: .semibold)).foregroundStyle(.white.opacity(0.5))
+                        }
+                    }.frame(width: 180, height: 180).clipShape(Circle())
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(route.name).font(.system(size: 50, weight: .bold))
+                        if let credits, !credits.titles.isEmpty {
+                            Text(L("%ld titles", credits.titles.count)).font(.system(size: 26)).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                if let credits {
+                    if credits.titles.isEmpty {
+                        ContentUnavailableView(L("Nothing here yet"), systemImage: "film").frame(maxWidth: .infinity, minHeight: 400)
+                    } else {
+                        FilmGrid(items: credits.items, api: api, config: config)
+                    }
+                } else if let error {
+                    ErrorPanel(message: error) { retry += 1 }
+                } else {
+                    LoadingState(text: L("Loading titles…"), minHeight: 500)
+                }
+            }.padding(.horizontal, TVLayout.edge).padding(.top, ScreenLayout.top).padding(.bottom, 70)
+        }
+        .ignoresSafeArea(edges: .horizontal)
+        .task(id: retry) {
+            error = nil
+            do { credits = try await api.request("api/person", query: [.init(name: "id", value: String(route.id))]) }
+            catch is CancellationError {} catch { self.error = error.localizedDescription }
         }
     }
 }

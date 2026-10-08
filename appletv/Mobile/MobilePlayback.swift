@@ -88,7 +88,7 @@ struct MobilePlayback: View {
                         Image(systemName: "xmark").font(.title3.weight(.semibold))
                             .frame(width: 44, height: 44)
                             .background(.white.opacity(0.1), in: Circle())
-                    }.buttonStyle(.plain).accessibilityLabel(L("Close"))
+                    }.hapticButtonStyle(PlainButtonStyle()).accessibilityLabel(L("Close"))
                     Text(request.title).font(.headline).lineLimit(2)
                     Spacer(minLength: 0)
                 }.padding(20)
@@ -113,7 +113,7 @@ struct MobilePlayback: View {
                                 .accessibilityIdentifier("resume-playback")
                             Button(L("Start from beginning")) { model.openPlayer(at: 0) }
                                 .font(.headline).frame(maxWidth: .infinity, minHeight: 50)
-                                .background(.white.opacity(0.1), in: Capsule()).buttonStyle(.plain)
+                                .background(.white.opacity(0.1), in: Capsule()).hapticButtonStyle(PlainButtonStyle())
                         } else if let prepared = model.prepared {
                             Text(L("Choose a file")).font(.title2.bold()).frame(maxWidth: .infinity, alignment: .leading)
                             LazyVStack(spacing: 10) {
@@ -129,7 +129,7 @@ struct MobilePlayback: View {
                                         }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
                                             .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 18))
                                             .contentShape(RoundedRectangle(cornerRadius: 18))
-                                    }.buttonStyle(.plain).multilineTextAlignment(.leading)
+                                    }.hapticButtonStyle(PlainButtonStyle()).multilineTextAlignment(.leading)
                                         .accessibilityIdentifier("video-file-\(file.index)")
                                 }
                             }
@@ -151,7 +151,7 @@ struct MobilePlayback: View {
         Button(action: action) {
             Label(L(label), systemImage: icon).font(.headline).frame(maxWidth: .infinity, minHeight: 52)
                 .foregroundStyle(.black).background(.white, in: Capsule())
-        }.buttonStyle(.plain)
+        }.hapticButtonStyle(PlainButtonStyle())
     }
     @Environment(\.closeCover) private var closeCover
     private func close() { model.close(); if let closeCover { closeCover() } else { dismiss() } }
@@ -219,7 +219,7 @@ struct MobilePlayer: View {
                     .opacity(controller.buffering && controller.seconds == 0 ? 0 : 1)
             }
             Button { visible.toggle(); activity = Date() } label: { Color.clear.contentShape(Rectangle()) }
-                .buttonStyle(.plain).accessibilityLabel(L("Show playback controls"))
+                .hapticButtonStyle(PlainButtonStyle()).accessibilityLabel(L("Show playback controls"))
             if controller.buffering && controller.failure == nil {
                 MobilePlaybackLoading(title: title, message: L("Buffering…"))
                     .padding(28).background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 24))
@@ -228,8 +228,8 @@ struct MobilePlayer: View {
             if let failure = controller.failure {
                 VStack(spacing: 16) {
                     Text(failure).multilineTextAlignment(.center)
-                    Button(L("Try again"), action: retry).buttonStyle(.borderedProminent)
-                    Button(L("Close player"), action: close).buttonStyle(.bordered)
+                    Button(L("Try again"), action: retry).hapticButtonStyle(BorderedProminentButtonStyle())
+                    Button(L("Close player"), action: close).hapticButtonStyle(BorderedButtonStyle())
                 }.padding(24).background(.black.opacity(0.9), in: RoundedRectangle(cornerRadius: 16)).padding()
             } else if visible {
                 VStack {
@@ -373,7 +373,7 @@ private struct MobileTrackSheet: View {
                 Button(L("Done")) { dismiss() }
                     .font(.headline).padding(.horizontal, 18).frame(minHeight: 44)
                     .background(.white.opacity(0.12), in: Capsule())
-                    .buttonStyle(.plain).accessibilityIdentifier("track-panel-done")
+                    .hapticButtonStyle(PlainButtonStyle()).accessibilityIdentifier("track-panel-done")
             }
             Text(title).font(.subheadline).foregroundStyle(.white.opacity(0.7)).lineLimit(2)
             ScrollView {
@@ -404,7 +404,7 @@ private struct MobileTrackSheet: View {
                             }
                             .contentShape(RoundedRectangle(cornerRadius: 16))
                         }
-                        .buttonStyle(.plain)
+                        .hapticButtonStyle(PlainButtonStyle())
                         .accessibilityAddTraits(isSelected ? .isSelected : [])
                         .accessibilityIdentifier("\(subtitles ? "subtitle" : "audio")-track-\(track.id)")
                     }

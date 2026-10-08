@@ -35,7 +35,7 @@ struct MobileTitle: View {
             let heroHeight = HeroLayout.bannerHeight(screenHeight: screen.size.height, sizeClass: sizeClass)
             ScrollView {
                 VStack(alignment: .leading, spacing: 26) {
-                    hero(height: heroHeight)
+                    hero(height: heroHeight).padding(.top, -refreshSpinnerRoom)
                     if details?.mediaType == "tv", let seasons = details?.seasonList, !seasons.isEmpty { episodesSection(seasons) }
                     if let people = details?.people, !people.isEmpty { castSection(people) }
                     information(width: screen.size.width)
@@ -48,10 +48,22 @@ struct MobileTitle: View {
                     }
                 }.padding(.bottom, 32)
             }
+            .refreshable {
+                await catalog.loadDetails(item, api: api, config: config, refresh: true)
+                await loadEpisodes()
+            }
+            .contentMargins(.top, refreshSpinnerRoom, for: .scrollContent)
+            .pulledFill(height: heroHeight) { heroArt(regular: sizeClass == .regular) }
         }
         .ignoresSafeArea(edges: .top)
         .background(AppBackground())
         .navigationBarTitleDisplayMode(.inline)
+        #if !os(macOS)
+        .toolbar {
+            // Opposite the Back button, top right.
+            ToolbarItem(placement: .topBarTrailing) { favoriteButton }
+        }
+        #endif
         #if DEBUG
         .task { if UserDefaults.standard.bool(forKey: "macExpand") { expanded = true } }  // screenshots: -macExpand YES
         #endif
@@ -83,29 +95,41 @@ struct MobileTitle: View {
         } message: { Text(error ?? "") }
     }
 
+    private func heroArt(regular: Bool) -> some View {
+        ZStack {
+            if regular {
+                MobileBackdrop(url: details?.backdrop ?? value.poster)
+            } else if let poster = value.poster.map({ higherResolution($0, backdrop: false).replacingOccurrences(of: "/w500/", with: "/w780/") }) {
+                // A phone is tall: the poster fits it better than the wide backdrop.
+                HeroBackdrop(url: URL(string: poster), alignment: .top)
+            } else {
+                MobileBackdrop(url: details?.backdrop)
+            }
+            LinearGradient(stops: [.init(color: .black.opacity(0.55), location: 0), .init(color: .clear, location: 0.22),
+                                   .init(color: .black.opacity(0.75), location: 0.8),
+                                   .init(color: .black, location: 1.0)], startPoint: .top, endPoint: .bottom)
+            LinearGradient(stops: [.init(color: .black.opacity(0.7), location: 0),
+                                   .init(color: .clear, location: 0.6)], startPoint: .leading, endPoint: .trailing)
+        }
+        .mask(
+            LinearGradient(stops: [
+                .init(color: .white, location: 0),
+                .init(color: .white, location: 0.45),
+                .init(color: .white.opacity(0.85), location: 0.65),
+                .init(color: .white.opacity(0.35), location: 0.86),
+                .init(color: .clear, location: 1.0)
+            ], startPoint: .top, endPoint: .bottom)
+        )
+    }
+
     /// The backdrop fills the top of the page and fades into it; the title,
     /// facts and buttons sit over its lower part.
     private func hero(height: CGFloat) -> some View {
         let regular = sizeClass == .regular
         return ZStack(alignment: .bottomLeading) {
-            ZStack {
-                MobileBackdrop(url: details?.backdrop ?? value.poster)
-                LinearGradient(stops: [.init(color: .black.opacity(0.55), location: 0), .init(color: .clear, location: 0.22),
-                                       .init(color: .black.opacity(0.75), location: 0.8),
-                                       .init(color: .black, location: 1.0)], startPoint: .top, endPoint: .bottom)
-                LinearGradient(stops: [.init(color: .black.opacity(0.7), location: 0),
-                                       .init(color: .clear, location: 0.6)], startPoint: .leading, endPoint: .trailing)
-            }
-            .mask(
-                LinearGradient(stops: [
-                    .init(color: .white, location: 0),
-                    .init(color: .white, location: 0.45),
-                    .init(color: .white.opacity(0.85), location: 0.65),
-                    .init(color: .white.opacity(0.35), location: 0.86),
-                    .init(color: .clear, location: 1.0)
-                ], startPoint: .top, endPoint: .bottom)
-            )
-            .frame(height: height).frame(maxHeight: .infinity, alignment: .top)  // the image keeps its size
+            // Pulled down past the top, the area above the image is filled from its top edge.
+            HeroArtFrame(height: height) { heroArt(regular: regular) }
+                .frame(maxHeight: .infinity, alignment: .top)  // the image keeps its size
             HeroInfo(kind: mobileKind(value, details), title: details?.title ?? value.displayTitle, item: value, details: details,
                      overview: details?.overview ?? value.overview, tagline: details?.tagline, expanded: expanded,
                      // No animation: the text opens downward at once.
@@ -121,14 +145,16 @@ struct MobileTitle: View {
                     Button { episode = nil; showVersions = true } label: {
                         Image(systemName: "list.bullet").font(HeroFont.button).frame(width: 30, height: HeroFont.buttonHeight)
                     }
-                    .buttonStyle(.bordered).tint(.white)
+                    .hapticButtonStyle(BorderedButtonStyle()).tint(.white)
                     .help(L("Choose version")).accessibilityLabel(L("Choose version"))
                     .accessibilityIdentifier("choose-version")
                 }
             }
             .padding(.horizontal, edge).padding(.bottom, 12)
         }
-        .frame(height: height + heroGrowth).clipped()
+        .frame(height: height + heroGrowth)
+        // Clips the sides and bottom only: the art above the top edge shows when the page is pulled down.
+        .mask(Rectangle().padding(.top, -1500))
     }
 
     /// Seasons as a row of chips above the episodes, like the Apple TV app.
@@ -146,7 +172,7 @@ struct MobileTitle: View {
                                     .foregroundStyle(current ? .black : .white)
                                     .background(current ? Color.white : Color.white.opacity(0.12), in: Capsule())
                             }
-                            .buttonStyle(.plain)
+                            .hapticButtonStyle(PlainButtonStyle())
                             .accessibilityAddTraits(current ? .isSelected : [])
                             .accessibilityIdentifier("season-\(selection.number)")
                         }
@@ -199,8 +225,19 @@ struct MobileTitle: View {
         Button {
             launchingEpisode = ep.number
         } label: { label().contentShape(Rectangle()) }
-            .buttonStyle(.plain).accessibilityIdentifier("episode-\(ep.number)")
+            .hapticButtonStyle(PlainButtonStyle()).accessibilityIdentifier("episode-\(ep.number)")
             .overlay { if launchingEpisode == ep.number { ProgressView().tint(.white) } }
+    }
+
+    /// A cast photo opens that person's films and shows.
+    @ViewBuilder private func personLink<Content: View>(_ person: Details.Person, @ViewBuilder _ content: () -> Content) -> some View {
+        if let route = person.route {
+            NavigationLink(value: route) { content() }
+                .hapticButtonStyle(PlainButtonStyle())
+                .accessibilityIdentifier("person-\(route.id)")
+        } else {
+            content()
+        }
     }
 
     private func castSection(_ people: [Details.Person]) -> some View {
@@ -209,6 +246,7 @@ struct MobileTitle: View {
             ScrollView(.horizontal) {
                 LazyHStack(alignment: .top, spacing: 14) {
                     ForEach(Array(people.prefix(24).enumerated()), id: \.offset) { _, person in
+                        personLink(person) {
                         VStack(spacing: 6) {
                             ZStack {
                                 Circle().fill(Color(white: 0.14))
@@ -221,10 +259,22 @@ struct MobileTitle: View {
                             Text(person.name).font(.caption.weight(.semibold)).lineLimit(2)
                             if let role = person.role, !role.isEmpty { Text(L(role)).font(.caption2).foregroundStyle(.secondary).lineLimit(2) }
                         }.multilineTextAlignment(.center).frame(width: 96)
+                        }
                     }
                 }.padding(.horizontal, edge)
             }.scrollIndicators(.hidden)
         }
+    }
+
+    private var favoriteButton: some View {
+        Button { favorites.toggle(value, details: details, server: api.baseURL) } label: {
+            Image(systemName: saved ? "heart.fill" : "heart")
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .tint(.white)
+        .accessibilityLabel(L(saved ? "Remove from Favorites" : "Add to Favorites"))
+        .accessibilityIdentifier("favorite-toggle")
+        .sensoryFeedback(.success, trigger: saved)  // a light tap when saved or removed
     }
 
     @ViewBuilder private var secondaryActions: some View {
@@ -246,16 +296,18 @@ struct MobileTitle: View {
             .font(HeroFont.button).padding(.horizontal, sizeClass == .regular ? 10 : 0)
             .frame(minWidth: 30, minHeight: HeroFont.buttonHeight)
         }
-        .disabled(findingTrailer).buttonStyle(.bordered).tint(.white)
+        .disabled(findingTrailer).hapticButtonStyle(BorderedButtonStyle()).tint(.white)
         .accessibilityLabel(L(findingTrailer ? "Finding trailer…" : "Trailer")).accessibilityIdentifier("show-trailers")
+        #if os(macOS)
+        // The Mac has no navigation bar here, so the heart stays with the other actions.
         Button { favorites.toggle(value, details: details, server: api.baseURL) } label: {
             Image(systemName: saved ? "heart.fill" : "heart").font(HeroFont.button).frame(width: 30, height: HeroFont.buttonHeight)
                 .contentTransition(.symbolEffect(.replace))
         }
-        .buttonStyle(.bordered).tint(.white)
+        .hapticButtonStyle(BorderedButtonStyle()).tint(.white)
         .accessibilityLabel(L(saved ? "Remove from Favorites" : "Add to Favorites"))
         .accessibilityIdentifier("favorite-toggle")
-        .sensoryFeedback(.success, trigger: saved)  // a light tap when saved or removed
+        #endif
     }
 
     @ViewBuilder private func information(width: CGFloat) -> some View {
@@ -366,7 +418,7 @@ struct MobileTitle: View {
                     .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
             )
         }
-        .buttonStyle(.plain)
+        .hapticButtonStyle(PlainButtonStyle())
     }
 
     private var versionSheet: some View {
@@ -377,7 +429,7 @@ struct MobileTitle: View {
                     HStack {
                         Text(L("Choose version")).font(.system(size: 26, weight: .bold))
                         Spacer()
-                        Button(L("Cancel")) { showVersions = false }.buttonStyle(.bordered).keyboardShortcut(.cancelAction)
+                        Button(L("Cancel")) { showVersions = false }.hapticButtonStyle(BorderedButtonStyle()).keyboardShortcut(.cancelAction)
                     }
                     .padding(.top, 24)
                     #endif
@@ -434,7 +486,7 @@ struct MobileTitle: View {
                                 .padding(.vertical, 14)
                                 .background(Color.torrentAccent, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                             }
-                            .buttonStyle(.plain)
+                            .hapticButtonStyle(PlainButtonStyle())
                         } else {
                             Text(L("No versions found. Try searching for this title."))
                                 .font(.subheadline)

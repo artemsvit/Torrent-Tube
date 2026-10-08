@@ -243,11 +243,14 @@ final class CatalogStore {
             cache.store(result, asked: asked)
         }
     }
-    func loadDetails(_ item: MediaItem, api: TorrentTubeAPI, config: ServerConfig) async {
-        guard config.tmdbEnabled, details[item.title] == nil, !fetchingDetails.contains(item.title) else { return }
+    func loadDetails(_ item: MediaItem, api: TorrentTubeAPI, config: ServerConfig, refresh: Bool = false) async {
+        guard config.tmdbEnabled, refresh || details[item.title] == nil, !fetchingDetails.contains(item.title) else { return }
         if item.sourceOverride?.path != nil && !Self.libraryMetadataEnabled { return }
         let cache = metadataCache(api.baseURL)
-        if let saved = cache.details(for: item.title) { details[item.title] = saved; return }
+        // A copy saved before cast photos opened a person's page has no ids: fetch it again.
+        if !refresh, let saved = cache.details(for: item.title), !(saved.people ?? []).contains(where: { $0.id == nil }) {
+            details[item.title] = saved; return
+        }
         fetchingDetails.insert(item.title)
         defer { fetchingDetails.remove(item.title) }
         let resolved = resolved(item)

@@ -1,4 +1,7 @@
 import SwiftUI
+#if os(iOS)
+import UIKit
+#endif
 
 extension Color {
     static let torrentAccent = Color(red: 0.23, green: 0.576, blue: 1)
@@ -14,6 +17,10 @@ struct TorrentTubeMobileApp: App {
     /// At launch with a saved server: the splash, until the first try ends.
     @State private var launching = !(UserDefaults.standard.string(forKey: "serverAddress") ?? "").isEmpty
     init() {
+        #if os(iOS)
+        // The hero covers the system spinner, so pages draw their own (see pulledFill).
+        UIRefreshControl.appearance().tintColor = .clear
+        #endif
         // Posters, backdrops and cast photos stay on the device between launches.
         URLCache.shared = URLCache(memoryCapacity: 64 << 20, diskCapacity: 1 << 30)
     }
@@ -149,7 +156,7 @@ struct MobileConnection: View {
             .foregroundStyle(.white)
             .background(.white.opacity(0.12), in: Capsule())
         }
-        .buttonStyle(.plain)
+        .hapticButtonStyle(PlainButtonStyle())
         .focused($field, equals: .scan)
         .disabled(scanning || store.connecting)
         .accessibilityIdentifier("scan-network")
@@ -166,7 +173,7 @@ struct MobileConnection: View {
             .foregroundStyle(.black)
             .background(.white, in: Capsule())
         }
-        .buttonStyle(.plain)
+        .hapticButtonStyle(PlainButtonStyle())
         .focused($field, equals: .connect)
         .disabled(!canConnect)
         .opacity(canConnect || store.connecting ? 1 : 0.45)
@@ -229,6 +236,7 @@ struct MobileRoot: View {
             #endif
     }
     private func select(_ new: String) {
+        if new != tab { Haptics.tap() }
         if new == tab { paths[tab] = NavigationPath() }
         tab = new
         searchText = ""
@@ -282,7 +290,7 @@ struct MobileRoot: View {
                                     .padding(.horizontal, 16).frame(height: MacBar.control - 8)
                                     .background(current ? Color.white.opacity(0.14) : .clear, in: Capsule())
                                     .contentShape(Capsule())
-                            }.buttonStyle(.plain)
+                            }.hapticButtonStyle(PlainButtonStyle())
                         }
                     }
                     .padding(4)
@@ -382,6 +390,7 @@ struct MobileRoot: View {
                 .navigationTitle(title.map { L($0) } ?? "")
                 .navigationBarTitleDisplayMode(title == nil ? .inline : .large)
                 .navigationDestination(for: MediaItem.self) { MobileTitle(item: $0, api: api, config: config) }
+                .navigationDestination(for: PersonRoute.self) { MobilePerson(route: $0, api: api) }
                 #if os(macOS)
                 .navigationDestination(for: SettingsRoute.self) { _ in MobileSettings(store: store, api: api, config: config) }
                 #endif
@@ -416,6 +425,7 @@ struct MobileSettings: View {
     @State private var localizer = Localizer.shared
     @AppStorage("showContinueWatching") private var showContinue = true
     @AppStorage("previewFocusedTitle") private var previewTitle = true
+    @AppStorage(Haptics.key) private var haptics = true
     @AppStorage("seekInterval") private var seekInterval = 10
     @AppStorage("recentSearches") private var recent = ""
     @AppStorage("libraryMetadata") private var libraryMetadata = true
@@ -565,6 +575,22 @@ struct MobileSettings: View {
         .listRowSeparatorTint(Color.white.opacity(0.08))
     }
 
+    #if os(iOS)
+    /// iPhone only: the iPad has no Taptic Engine.
+    @ViewBuilder private var hapticsSection: some View {
+        if UIDevice.current.userInterfaceIdiom == .phone {
+            Section {
+                Toggle(L("Haptic feedback"), isOn: $haptics).tint(Color.torrentAccent)
+            } header: { header("Feel", "hand.tap") } footer: {
+                Text(L("A light tap when you press a button, card or tab."))
+                    .font(settingsFooterFont).foregroundStyle(.white.opacity(0.6))
+            }
+            .listRowBackground(Color.white.opacity(0.06))
+            .listRowSeparatorTint(Color.white.opacity(0.08))
+        }
+    }
+    #endif
+
     @ViewBuilder private var aboutSection: some View {
         Section {
             LabeledContent("Torrent Tube", value: L("Version %@", Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.0"))
@@ -587,14 +613,20 @@ struct MobileSettings: View {
             Form {
                 homeSection
                 playbackSection
+                #if os(iOS)
+                hapticsSection
+                #endif
                 languageSection
                 librarySection
                 serverSection
                 aboutSection
             }
+            #if !os(macOS)
+            .hapticButtonStyle(DefaultButtonStyle())  // the action rows tap too
+            #endif
             #if os(macOS)
             .formStyle(.grouped)
-            .buttonStyle(.plain)  // action rows read as list rows, not grey push buttons
+            .hapticButtonStyle(PlainButtonStyle())  // action rows read as list rows, not grey push buttons
             .font(.system(size: 18))
             .controlSize(.large)
             .environment(\.defaultMinListRowHeight, 56)

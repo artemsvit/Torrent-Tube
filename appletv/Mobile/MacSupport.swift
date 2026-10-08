@@ -233,7 +233,7 @@ extension View {
         #if os(macOS)
         buttonStyle(MacPrimaryStyle())
         #else
-        buttonStyle(.borderedProminent).tint(.white).foregroundStyle(.black)
+        hapticButtonStyle(BorderedProminentButtonStyle()).tint(.white).foregroundStyle(.black)
         #endif
     }
 }

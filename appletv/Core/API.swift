@@ -83,7 +83,7 @@ struct Details: Codable, Sendable {
     let recommendations: [Recommendation]?
     struct Fact: Codable, Hashable, Sendable { let label: String; let names: [String] }
     /// A lead (director, creator) or a cast member; role is the job or character.
-    struct Person: Codable, Hashable, Sendable { let name: String; let role: String?; let photo: String? }
+    struct Person: Codable, Hashable, Sendable { let id: Int?; let name: String; let role: String?; let photo: String? }
     struct Recommendation: Codable, Hashable, Sendable {
         let tmdbId: Int?
         let mediaType: String?

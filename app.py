@@ -1372,6 +1372,62 @@ def item_details():
         return jsonify({"error": "Couldn't reach TMDB"}), 502
 
 
+def tmdb_person(person_id: int) -> dict:
+    """An actor or crew member and every film and show they appear in, most
+    popular first - what a tap on a cast photo opens."""
+    cache_key = f"person:{person_id}:{TMDB_LANGUAGE}"
+    hit, val = TMDB_CACHE.get(cache_key)
+    if hit:
+        return val
+    data = _tmdb_get(f"/person/{person_id}", language=TMDB_LANGUAGE, append_to_response="combined_credits")
+    credits = data.get("combined_credits") or {}
+    titles = {}
+    # Cast first (they act in it), then crew (directing, writing), so a person's own roles lead.
+    for source, is_cast in ((credits.get("cast") or [], True), (credits.get("crew") or [], False)):
+        for c in source:
+            media_type = c.get("media_type")
+            if media_type not in ("movie", "tv") or not c.get("id") or not c.get("poster_path"):
+                continue
+            if is_cast and (media_type == "tv" and set(c.get("genre_ids") or []) & {10767, 10763, 10764}):
+                continue  # talk shows, news and reality: guest appearances as themselves
+            key = (media_type, c["id"])
+            if key in titles:
+                continue
+            date = c.get("release_date") or c.get("first_air_date") or ""
+            titles[key] = {
+                "tmdbId": c["id"], "mediaType": media_type,
+                "title": c.get("title") or c.get("name") or "",
+                "year": date[:4] or None,
+                "poster": _tmdb_image(c.get("poster_path"), "w342"),
+                "rating": round(c.get("vote_average") or 0, 1) or None,
+                "popularity": c.get("popularity") or 0,
+                "crew": not is_cast,
+            }
+    ordered = sorted(titles.values(), key=lambda t: (t["crew"], -t["popularity"]))
+    result = {
+        "id": person_id, "name": data.get("name") or "",
+        "photo": _tmdb_image(data.get("profile_path"), "w342"),
+        "department": data.get("known_for_department"),
+        "titles": [{k: v for k, v in t.items() if k not in ("popularity", "crew")} for t in ordered[:80]],
+    }
+    TMDB_CACHE.set(cache_key, result, ttl=TMDB_CACHE_TTL, is_hit=True)
+    return result
+
+
+@app.route("/api/person")
+def person_credits():
+    """Films and shows for one person (a TMDB id from the cast list)."""
+    if not TMDB_API_KEY:
+        return jsonify({"error": "Details need a TMDB API key - add one in Settings"}), 503
+    person_id = request.args.get("id", "")
+    if not person_id.isdigit():
+        return jsonify({"error": "Missing person id"}), 400
+    try:
+        return make_etag_response(tmdb_person(int(person_id)), max_age=86400, stale_revalidate=604800)
+    except Exception:
+        return jsonify({"error": "Couldn't reach TMDB"}), 502
+
+
 @app.route("/api/episodes")
 def season_episodes():
     """Episode artwork and facts for native title/file selectors."""

@@ -125,7 +125,7 @@ struct HeroInfo<Actions: View>: View {
             if let toggleMore {
                 Button(L(expanded ? "Show less" : "Read more"), action: toggleMore)
                     .font(HeroFont.overview.weight(.semibold)).foregroundStyle(.white)
-                    .buttonStyle(.plain)
+                    .hapticButtonStyle(PlainButtonStyle())
             }
         }
     }
@@ -174,6 +174,60 @@ struct MobileArtwork: View {
 }
 
 /// Full-height hero artwork, centered on iPhone.
+/// A hero's art, its top edge faded so it melts into the fill that `pulledFill` keeps behind the page.
+struct HeroArtFrame<Art: View>: View {
+    let height: CGFloat
+    @ViewBuilder let art: Art
+    static var feather: CGFloat { 70 }
+    var body: some View {
+        art.frame(height: height)
+            .mask(VStack(spacing: 0) {
+                LinearGradient(colors: [.clear, .white], startPoint: .top, endPoint: .bottom).frame(height: Self.feather)
+                Color.white
+            })
+    }
+}
+
+/// Room above the page for the refresh spinner, below the bar. The hero cancels it with a negative top padding.
+let refreshSpinnerRoom: CGFloat = 150
+
+extension View {
+    /// Pulled down past the top (or while the refresh spinner holds the page down), the plain background
+    /// would show above the hero. This keeps a blurred copy of the art behind the scroll view, so it never
+    /// moves with the content and never leaves a stripe. It shows only while the page is at its top.
+    func pulledFill<Art: View>(height: CGFloat, @ViewBuilder art: () -> Art) -> some View {
+        modifier(PulledFill(height: height, art: art()))
+    }
+}
+
+private struct PulledFill<Art: View>: ViewModifier {
+    let height: CGFloat
+    let art: Art
+    @State private var atTop = true
+    @State private var pulled = false
+    func body(content: Content) -> some View {
+        content
+            .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y + $0.contentInsets.top <= 1 } action: { _, new in atTop = new }
+            .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y + $0.contentInsets.top < -12 } action: { _, new in pulled = new }
+            #if os(iOS)
+            // The system spinner sits under the hero, so it is hidden. This one is drawn on top, below the bar.
+            .overlay(alignment: .top) {
+                ProgressView().tint(.white).controlSize(.regular)
+                    .padding(.top, 128)
+                    .opacity(pulled ? 1 : 0).animation(.easeOut(duration: 0.15), value: pulled)
+                    .allowsHitTesting(false).ignoresSafeArea(edges: .top)
+            }
+            #endif
+            .background(alignment: .top) {
+                // Moved up out of the screen, so the blur's own faded edge is never seen.
+                art.frame(height: height).drawingGroup().blur(radius: 70).offset(y: -90)
+                    .frame(height: 480, alignment: .top).clipped()
+                    .opacity(atTop ? 1 : 0).allowsHitTesting(false)
+                    .ignoresSafeArea(edges: .top)
+            }
+    }
+}
+
 struct MobileBackdrop: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     let url: String?
@@ -261,6 +315,7 @@ struct MobileCard: View {
 struct PressableStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
+            .onChange(of: configuration.isPressed) { _, pressed in if pressed { Haptics.tap() } }
             .scaleEffect(configuration.isPressed ? 0.96 : 1)
             .opacity(configuration.isPressed ? 0.85 : 1)
             .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
@@ -323,7 +378,7 @@ struct MobileChips: View {
                             .foregroundStyle(current ? .black : .white)
                             .background(current ? Color.white : Color.white.opacity(0.12), in: Capsule())
                     }
-                    .buttonStyle(.plain)
+                    .hapticButtonStyle(PlainButtonStyle())
                     .accessibilityAddTraits(current ? .isSelected : [])
                     .accessibilityIdentifier("chip-\(key)")
                 }
@@ -338,7 +393,7 @@ struct MobileError: View {
     var body: some View {
         VStack(spacing: 12) {
             Text(message).foregroundStyle(.secondary).multilineTextAlignment(.center)
-            Button(L("Try again"), action: retry).buttonStyle(.bordered).frame(minHeight: 44)
+            Button(L("Try again"), action: retry).hapticButtonStyle(BorderedButtonStyle()).frame(minHeight: 44)
         }.frame(maxWidth: .infinity).padding()
     }
 }
@@ -385,7 +440,7 @@ struct MobileHome: View {
             let heroHeight = HeroLayout.bannerHeight(screenHeight: screen.size.height, sizeClass: sizeClass)
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 28) {
-                    if let featured { hero(featured, height: heroHeight) }
+                    if let featured { hero(featured, height: heroHeight).padding(.top, -refreshSpinnerRoom) }
                     else if catalog.loading.contains("new") || catalog.libraryLoading { MobileLoading(text: L("Finding something to watch…")).padding(.top, 120) }
                     if showContinue { continueWatching }
                     ForEach(feeds, id: \.0) { feed, title in
@@ -408,6 +463,8 @@ struct MobileHome: View {
             .onScrollGeometryChange(for: Bool.self) { geometry in
                 geometry.contentOffset.y + geometry.contentInsets.top < heroHeight / 2
             } action: { _, visible in heroVisible = visible }
+            .contentMargins(.top, refreshSpinnerRoom, for: .scrollContent)
+            .pulledFill(height: heroHeight) { if let featured { homeHeroArt(featured, details: catalog.details[featured.title]) } }
         }
         // The hero runs under the status bar, like the Apple TV app.
         .ignoresSafeArea(edges: .top)
@@ -448,26 +505,32 @@ struct MobileHome: View {
         return catalog.details[next.title]?.backdrop ?? next.poster
     }
 
+    private func homeHeroArt(_ item: MediaItem, details: Details?) -> some View {
+        ZStack {
+            MobileBackdrop(url: details?.backdrop ?? item.poster, nextURL: nextHeroArtwork)
+            LinearGradient(stops: [.init(color: .black.opacity(0.6), location: 0), .init(color: .clear, location: 0.22),
+                                   .init(color: .black.opacity(0.75), location: 0.8),
+                                   .init(color: .black, location: 1.0)], startPoint: .top, endPoint: .bottom)
+            LinearGradient(stops: [.init(color: .black.opacity(0.7), location: 0),
+                                   .init(color: .clear, location: 0.6)], startPoint: .leading, endPoint: .trailing)
+        }
+        .mask(
+            LinearGradient(stops: [
+                .init(color: .white, location: 0),
+                .init(color: .white, location: 0.45),
+                .init(color: .white.opacity(0.85), location: 0.65),
+                .init(color: .white.opacity(0.35), location: 0.86),
+                .init(color: .clear, location: 1.0)
+            ], startPoint: .top, endPoint: .bottom)
+        )
+
+    }
+
     private func hero(_ item: MediaItem, height: CGFloat) -> some View {
         let details = catalog.details[item.title]
         return ZStack(alignment: .bottomLeading) {
-            ZStack {
-                MobileBackdrop(url: details?.backdrop ?? item.poster, nextURL: nextHeroArtwork)
-                LinearGradient(stops: [.init(color: .black.opacity(0.6), location: 0), .init(color: .clear, location: 0.22),
-                                       .init(color: .black.opacity(0.75), location: 0.8),
-                                       .init(color: .black, location: 1.0)], startPoint: .top, endPoint: .bottom)
-                LinearGradient(stops: [.init(color: .black.opacity(0.7), location: 0),
-                                       .init(color: .clear, location: 0.6)], startPoint: .leading, endPoint: .trailing)
-            }
-            .mask(
-                LinearGradient(stops: [
-                    .init(color: .white, location: 0),
-                    .init(color: .white, location: 0.45),
-                    .init(color: .white.opacity(0.85), location: 0.65),
-                    .init(color: .white.opacity(0.35), location: 0.86),
-                    .init(color: .clear, location: 1.0)
-                ], startPoint: .top, endPoint: .bottom)
-            )
+            HeroArtFrame(height: height) { homeHeroArt(item, details: details) }
+            .frame(maxHeight: .infinity, alignment: .top)
             HeroInfo(kind: mobileKind(item, details), title: details?.title ?? item.displayTitle, item: item, details: details,
                      overview: details?.overview ?? item.overview, tagline: details?.tagline) {
                 Button {
@@ -487,7 +550,7 @@ struct MobileHome: View {
                         .padding(.horizontal, sizeClass == .regular ? 16 : 0)
                         .frame(minWidth: sizeClass == .regular ? 140 : nil, maxWidth: sizeClass == .regular ? nil : .infinity, minHeight: HeroFont.buttonHeight)
                 }
-                .buttonStyle(.bordered).tint(.white)
+                .hapticButtonStyle(BorderedButtonStyle()).tint(.white)
                 .accessibilityIdentifier("featured-details")
                 // iPad and Mac: the trailer, as on Apple TV.
                 if sizeClass == .regular {
@@ -504,7 +567,7 @@ struct MobileHome: View {
                         }
                         .font(HeroFont.button).padding(.horizontal, 16).frame(minHeight: HeroFont.buttonHeight)
                     }
-                    .buttonStyle(.bordered).tint(.white).disabled(findingTrailer)
+                    .hapticButtonStyle(BorderedButtonStyle()).tint(.white).disabled(findingTrailer)
                     .accessibilityIdentifier("featured-trailer")
                 }
                 if sizeClass == .regular, featuredItems.count > 1 {
@@ -514,7 +577,8 @@ struct MobileHome: View {
             }
             .padding(.horizontal, edge).padding(.bottom, 12)
         }
-        .frame(height: height).clipped()
+        .frame(height: height)
+        .mask(Rectangle().padding(.top, -1500))  // sides and bottom only: the fill above the top edge shows when pulled down
         .contentShape(Rectangle())
         .simultaneousGesture(
             DragGesture(minimumDistance: 24)
@@ -561,7 +625,7 @@ struct MobileHome: View {
                                     Text(entry.title).font(.subheadline.weight(.semibold)).lineLimit(1)
                                     Text(L("Resume at %@", entry.displayPosition)).font(.caption).foregroundStyle(.secondary)
                                 }.frame(width: 250).contentShape(Rectangle())
-                            }.buttonStyle(.plain)
+                            }.hapticButtonStyle(PlainButtonStyle())
                         }
                     }.padding(.horizontal, edge)
                 }.scrollIndicators(.hidden)
@@ -592,7 +656,7 @@ private struct MobileHeroPageDots: View {
                 }
             }.padding(.horizontal, 10).frame(height: 44)
         }
-        .buttonStyle(.plain)
+        .hapticButtonStyle(PlainButtonStyle())
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: current)
         .accessibilityLabel(L("Featured title %ld of %ld", current + 1, count))
         .accessibilityHint(L("Next featured title"))
@@ -751,7 +815,7 @@ struct MobileSearch: View {
                                     Image(systemName: "xmark.circle.fill")
                                         .foregroundStyle(.secondary)
                                 }
-                                .buttonStyle(.plain)
+                                .hapticButtonStyle(PlainButtonStyle())
                             }
                         }
                         .padding(.horizontal, 14)
@@ -768,7 +832,7 @@ struct MobileSearch: View {
                                 .frame(width: 36, height: 36)
                                 .background(Color.white.opacity(0.15), in: Circle())
                         }
-                        .buttonStyle(.plain)
+                        .hapticButtonStyle(PlainButtonStyle())
                         .accessibilityIdentifier("close-search")
                     }
                     .padding(.horizontal, edge)
@@ -793,7 +857,7 @@ struct MobileSearch: View {
                                             Label(text, systemImage: "clock.arrow.circlepath").font(.subheadline)
                                                 .padding(.horizontal, 12).padding(.vertical, 8)
                                                 .background(.white.opacity(0.12), in: Capsule())
-                                        }.buttonStyle(.plain)
+                                        }.hapticButtonStyle(PlainButtonStyle())
                                     }
                                 }.padding(.horizontal, edge)
                             }.scrollIndicators(.hidden)
@@ -843,6 +907,7 @@ struct MobileSearch: View {
         .navigationDestination(for: MediaItem.self) { item in
             MobileTitle(item: item, api: api, config: config)
         }
+        .navigationDestination(for: PersonRoute.self) { MobilePerson(route: $0, api: api) }
     }
     .onAppear {
             isFieldFocused = true
@@ -870,5 +935,57 @@ struct MobileSearch: View {
     private func remember() {
         guard term.count >= 2 else { return }
         recent = ([term] + recentTerms.filter { $0.caseInsensitiveCompare(term) != .orderedSame }).prefix(8).joined(separator: "\n")
+    }
+}
+
+
+/// A person's page: their photo and name, then every film and show they are in.
+struct MobilePerson: View {
+    @Environment(\.mobileEdge) private var edge
+    let route: PersonRoute
+    let api: TorrentTubeAPI
+    @State private var credits: PersonCredits?
+    @State private var error: String?
+    @State private var retry = 0
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                HStack(spacing: 16) {
+                    ZStack {
+                        Circle().fill(Color(white: 0.14))
+                        if let photo = credits?.photo ?? route.photo, let url = URL(string: photo) {
+                            AsyncImage(url: url) { $0.resizable().scaledToFill() } placeholder: { Color.clear }
+                        } else {
+                            Text(String(route.name.prefix(1))).font(.largeTitle.weight(.semibold)).foregroundStyle(.white.opacity(0.5))
+                        }
+                    }.frame(width: 96, height: 96).clipShape(Circle())
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(route.name).font(.title.bold())
+                        if let credits, !credits.titles.isEmpty {
+                            Text(L("%ld titles", credits.titles.count)).font(.subheadline).foregroundStyle(.secondary)
+                        }
+                    }
+                }.padding(.horizontal, edge)
+                if let credits {
+                    if credits.titles.isEmpty {
+                        ContentUnavailableView(L("Nothing here yet"), systemImage: "film")
+                    } else {
+                        MobileGrid(items: credits.items)
+                    }
+                } else if let error {
+                    MobileError(message: error) { retry += 1 }
+                } else {
+                    MobileLoading(text: L("Loading titles…"))
+                }
+            }.padding(.vertical, 16)
+        }
+        .background(AppBackground())
+        .navigationTitle(route.name)
+        .navigationBarTitleDisplayMode(.inline)
+        .task(id: retry) {
+            error = nil
+            do { credits = try await api.request("api/person", query: [.init(name: "id", value: String(route.id))]) }
+            catch is CancellationError {} catch { self.error = error.localizedDescription }
+        }
     }
 }
