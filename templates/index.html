@@ -381,10 +381,37 @@
   }
   .side-column { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
   body.discover-active .layout.has-library { display: block; }
-  body.discover-active .library-panel { display: none; }
+  /* Wide screens: the library keeps its title and tabs in place and scrolls
+     only its posters, the height of the window under the top bar. (Body
+     zoom does not scale viewport units, hence the division.) */
+  @media (min-width: 1001px) {
+    .layout.has-library .library-panel {
+      position: sticky; top: calc(var(--topbar-h, 140px) + 16px);
+      height: calc(100dvh / var(--ui-zoom) - var(--topbar-h, 140px) - 44px); min-height: 420px;
+      display: flex; flex-direction: column;
+    }
+    .layout.has-library .library-grid {
+      flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+      align-content: start; padding: 6px 8px 16px 2px; margin-right: -8px;
+    }
+  }
+  /* The library belongs to Downloads: Discover (the main screen) is as before. */
+  body.discover-active .layout .library-panel { display: none !important; }
   @media (max-width: 1000px) {
     .layout.has-library { display: flex; flex-direction: column; }
-    .layout.has-library .side-column { order: -1; }
+    .layout.has-library > * { width: 100%; }
+    /* Downloads first only when there is something in them. */
+    .layout.has-library:not(.downloads-empty) .side-column { order: -1; }
+    .layout.downloads-empty #downloadsTab .empty-state { padding: 14px 8px; }
+    .layout.downloads-empty #downloadsTab .clear-all-btn { display: none; }
+  }
+  @media (max-width: 700px) {
+    /* The title and count on one line, the tabs below in one sideways row. */
+    .library-panel .library-chips { flex-basis: 100%; margin-left: 0; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+    .library-panel .library-chips::-webkit-scrollbar { display: none; }
+    .library-panel .library-chip { flex: none; }
+    .library-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 16px 10px; }
+    .dt-episode-still { width: 96px; }
   }
   .library-panel .panel-header { flex-wrap: wrap; gap: 10px; }
   .library-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
@@ -395,7 +422,9 @@
   .library-chip.is-active { background: var(--text); color: var(--bg-base); border-color: transparent; }
   .library-note { font-size: 12.5px; color: var(--text-secondary); margin: 0 0 12px; }
   .library-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(138px, 1fr)); gap: 20px 14px; }
-  .lib-card { display: block; text-align: left; background: none; border: 0; padding: 0; color: inherit; font: inherit; cursor: pointer; min-width: 0; }
+  /* A column from the top: a button centres its content, which lifted the
+     poster of a card whose title takes two lines. */
+  .lib-card { display: flex; flex-direction: column; justify-content: flex-start; align-self: start; text-align: left; background: none; border: 0; padding: 0; color: inherit; font: inherit; cursor: pointer; min-width: 0; }
   .lib-poster {
     position: relative; aspect-ratio: 2 / 3; border-radius: var(--radius-md); overflow: hidden;
     background: var(--surface-hover); border: 1px solid var(--border); transition: transform .15s ease, box-shadow .15s ease;
@@ -411,6 +440,13 @@
   .dt-file { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--radius-md); background: var(--surface); border: 1px solid var(--border); }
   .dt-file-name { flex: 1; min-width: 0; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dt-file-size { font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
+  .dt-seasons-pick { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .dt-episode { display: flex; align-items: center; gap: 12px; padding: 8px; border-radius: var(--radius-md); background: var(--surface); border: 1px solid var(--border); cursor: pointer; text-align: left; color: inherit; font: inherit; width: 100%; }
+  .dt-episode:hover { background: var(--surface-hover); }
+  .dt-episode-still { width: 132px; aspect-ratio: 16 / 9; border-radius: var(--radius-sm); object-fit: cover; background: var(--surface-hover); flex: none; }
+  .dt-episode-text { flex: 1; min-width: 0; }
+  .dt-episode-title { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dt-episode-sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .library-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin: 6px 0 14px; }
   .library-stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; }
   .library-stat b { display: block; font-size: 20px; }
@@ -2767,9 +2803,11 @@ function renderStreamItem(st) {
 // The Buffering block under Downloads - shown only while something plays,
 // and not over Discover.
 function renderStreams(streams) {
-  streamsPanel.hidden = discoverMode || !streams.length;
+  // Always there beside Downloads (empty like it), hidden only in Discover.
+  streamsPanel.hidden = discoverMode;
   streamsCount.textContent = streams.length;
-  streamsList.replaceChildren(...streams.map(renderStreamItem));
+  if (streams.length) streamsList.replaceChildren(...streams.map(renderStreamItem));
+  else streamsList.innerHTML = `<div class="empty-state">Nothing is playing. Films you play in Infuse or VLC buffer here.</div>`;
 }
 
 function render(torrents) {
@@ -2861,6 +2899,7 @@ async function refresh() {
     renderViewToggleBtn();
     currentTorrents = torrents;
     clearAllBtn.disabled = torrents.length === 0;
+    layoutEl.classList.toggle("downloads-empty", torrents.length === 0 && !currentStreams.length);
     if (!discoverMode) render(torrents);
     renderStreams(currentStreams);
   } catch (e) {
@@ -4520,7 +4559,23 @@ function renderDetailsBody() {
       ? `<button type="button" class="dt-link-btn" data-act="toggle-releases">${s.showAllReleases ? "Show fewer" : "Show all"}</button>` : ""}</div>` : "";
 
   // --- a library title's own files (its versions' videos, episodes in order) ---
-  if (s.library) {
+  const episodes = s.library && s.libraryFiles ? libraryEpisodes() : null;
+  if (episodes) {
+    const seasons = [...new Set(episodes.map(e => e.season))];
+    if (!seasons.includes(s.librarySeason)) s.librarySeason = seasons[0];
+    const names = (s.episodeNames || {})[s.librarySeason];
+    if (!names) loadEpisodeNames(s.librarySeason);
+    const known = names && names !== "loading" ? names : {};
+    releases = `${seasons.length > 1 ? `<div class="dt-seasons-pick">${seasons.map(n =>
+        `<button type="button" class="library-chip${n === s.librarySeason ? " is-active" : ""}" data-act="lib-season" data-season="${n}">Season ${n}</button>`).join("")}</div>` : ""}
+      <div class="dt-files">${episodes.map((e, i) => e.season !== s.librarySeason ? "" : (() => {
+        const info = known[e.episode] || {};
+        const sub = [info.runtime ? `${info.runtime} min` : "", info.overview || ""].filter(Boolean).join(" · ") || e.file.name;
+        return `<button type="button" class="dt-episode" data-act="play-episode" data-index="${i}" title="Play from here in ${escapeHtml(PLAYERS[playerId].name)} - the next episodes follow">
+          ${info.still ? `<img class="dt-episode-still" src="${escapeHtml(info.still)}" alt="" loading="lazy">` : `<div class="dt-episode-still"></div>`}
+          <div class="dt-episode-text"><div class="dt-episode-title">${e.episode}. ${escapeHtml(info.name || `Episode ${e.episode}`)}</div><div class="dt-episode-sub">${escapeHtml(sub)}</div></div>
+          <span class="action-btn">${ICONS.play}</span></button>`; })()).join("")}</div>`;
+  } else if (s.library) {
     const files = libraryFileList();
     const list = !s.libraryFiles ? `<div class="dt-status">Reading the folder…</div>`
       : `<div class="dt-files">${files.map((f, i) => `<div class="dt-file">
@@ -4530,7 +4585,9 @@ function renderDetailsBody() {
         </div>`).join("")}</div>`;
     releases = list;
   }
-  const filesHead = s.library ? `<div class="dt-section-head"><div class="section-label">${libraryFileList().length > 1 ? `Files · ${libraryFileList().length}` : "File"}</div></div>` : "";
+  const filesHead = !s.library ? "" : episodes
+    ? `<div class="dt-section-head"><div class="section-label">Episodes</div></div>`
+    : `<div class="dt-section-head"><div class="section-label">${libraryFileList().length > 1 ? "Versions" : "File"}</div></div>`;
 
   // --- more like this ---
   const recs = (d.recommendations || []).map((r, i) => `
@@ -4547,7 +4604,7 @@ function renderDetailsBody() {
       ${facts.length ? `<div class="dt-facts">${facts.join("")}</div>` : ""}
     </div>
     ${people ? `<div class="dt-section"><div class="dt-section-head"><div class="section-label">Cast &amp; crew</div></div><div class="dt-row">${people}</div></div>` : ""}
-    ${seasons ? `<div class="dt-section"><div class="dt-section-head"><div class="section-label">Seasons</div></div><div class="dt-seasons">${seasons}</div></div>` : ""}
+    ${seasons && !(s.library && s.libraryFiles && libraryEpisodes()) ? `<div class="dt-section"><div class="dt-section-head"><div class="section-label">Seasons</div></div><div class="dt-seasons">${seasons}</div></div>` : ""}
     ${s.library ? `<div class="dt-section">${filesHead}${releases}</div>` : releasesHead || releases ? `<div class="dt-section">${releasesHead}${releases}</div>` : ""}
     ${recs ? `<div class="dt-section"><div class="dt-section-head"><div class="section-label">More like this</div></div><div class="dt-row">${recs}</div></div>` : ""}
   `;
@@ -4592,8 +4649,10 @@ detailsBody.addEventListener("click", (e) => {
       else findYoutubeTrailers();
       break;
     case "download-best": { const best = primaryRelease(); if (best) downloadRelease(best); break; }
-    case "play": if (s.library) playLibraryFile(libraryFileList()[0]); else playRelease(s.torrent ? null : primaryRelease()); break;
+    case "play": if (s.library) { const eps = libraryEpisodes(); playLibraryFrom(eps ? eps[0].file : libraryFileList()[0]); } else playRelease(s.torrent ? null : primaryRelease()); break;
     case "play-file": playLibraryFile(libraryFileList()[Number(el.dataset.index)]); break;
+    case "play-episode": playLibraryFrom(libraryEpisodes()[Number(el.dataset.index)].file); break;
+    case "lib-season": s.librarySeason = Number(el.dataset.season); renderDetailsBody(); break;
     case "play-release": playRelease((s.showAllReleases ? s.releases : s.releases.slice(0, RELEASES_SHOWN))[Number(el.dataset.index)]); break;
     case "pick-player": openPlayerPicker(); break;
     case "download-release": downloadRelease((s.showAllReleases ? s.releases : s.releases.slice(0, RELEASES_SHOWN))[Number(el.dataset.index)]); break;
@@ -4683,7 +4742,7 @@ function buildLibraryCard(item) {
   card.type = "button";
   card.className = "lib-card";
   const versions = (item.versions || []).length;
-  const badge = versions > 1 ? `${versions} versions` : item.files > 1 ? `${item.files} files` : "";
+  const badge = item.seasons > 0 ? `${item.seasons} season${item.seasons === 1 ? "" : "s"}` : versions > 1 ? `${versions} versions` : "";
   const sub = [item.year, item.rating > 0 ? `★ ${item.rating.toFixed(1)}` : ""].filter(Boolean).join(" · ");
   card.innerHTML = `<div class="lib-poster">${item.poster
       ? `<img src="${escapeHtml(item.poster.replace("/w200/", "/w342/"))}" alt="" loading="lazy">`
@@ -4693,9 +4752,17 @@ function buildLibraryCard(item) {
   return card;
 }
 
+// The top bar's height, for the library's own scrolling area.
+function measureTopBar() {
+  const bar = document.querySelector(".top-bar");
+  if (bar) document.documentElement.style.setProperty("--topbar-h", `${bar.offsetHeight}px`);
+}
+window.addEventListener("resize", measureTopBar);
+measureTopBar();
+
 libraryChips.addEventListener("click", e => {
   const chip = e.target.closest(".library-chip");
-  if (chip) { librarySection = chip.dataset.kind; renderLibrary(); }
+  if (chip) { librarySection = chip.dataset.kind; renderLibrary(); libraryGrid.scrollTop = 0; }
 });
 
 // The details popup, with the title's files to play instead of releases.
@@ -4735,13 +4802,70 @@ function libraryMediaUrl(file) {
   return `${location.origin}/media/${file.path.split("/").map(encodeURIComponent).join("/")}`;
 }
 
+// Season and episode of a library file, as the apps read it: S01E02 or
+// 1x02 in the name, else a "Season 1" / "Сезон 1" folder and a leading number.
+function episodeOf(file) {
+  const name = file.name, m = name.match(/(?:^|[^a-z0-9])s(\d{1,2})[ ._-]*e(\d{1,3})(?!\d)/i) || name.match(/(?:^|[^a-z0-9])(\d{1,2})x(\d{1,3})(?!\d)/i);
+  if (m) return { season: +m[1], episode: +m[2] };
+  const folders = file.path.split("/").slice(0, -1).reverse();
+  for (const folder of folders) {
+    const s = folder.match(/(?:^|[^\p{L}\d])(?:season|сезон|s)[ ._-]*(\d{1,2})(?!\d)/iu) || folder.match(/(?:^|[^\p{L}\d])(\d{1,2})[ ._-]+(?:season|сезон)/iu);
+    if (s) {
+      const e = name.match(/^(?:(?:episode|ep|e)[ ._-]*)?(\d{1,3})(?=[ ._-])/i);
+      return e ? { season: +s[1], episode: +e[1] } : null;
+    }
+  }
+  return null;
+}
+
+// A series' episodes: one file per season and episode (the first copy of
+// each), in order. Null for a film.
+function libraryEpisodes() {
+  const seen = new Map();
+  for (const file of libraryFileList()) {
+    const id = episodeOf(file);
+    if (id && !seen.has(`${id.season}:${id.episode}`)) seen.set(`${id.season}:${id.episode}`, { ...id, file });
+  }
+  if (seen.size < 2) return null;
+  return [...seen.values()].sort((a, b) => a.season - b.season || a.episode - b.episode);
+}
+
+// TMDB's names and stills for a season's episodes, once per season.
+async function loadEpisodeNames(season) {
+  const s = detailsState, id = s.data && s.data.tmdb_id;
+  if (!id || s.data.media_type !== "tv") return;
+  s.episodeNames = s.episodeNames || {};
+  if (s.episodeNames[season]) return;
+  s.episodeNames[season] = "loading";
+  try {
+    const d = await fetch(`/api/episodes?id=${encodeURIComponent(id)}&season=${season}`).then(r => r.json());
+    if (detailsState !== s) return;
+    s.episodeNames[season] = Object.fromEntries((d.episodes || []).map(e => [e.number, e]));
+  } catch (e) { s.episodeNames[season] = {}; }
+  renderDetailsBody();
+}
+
+// An episode plays in a playlist with every episode after it, so the
+// player goes on to the next one (and the next season), as in the apps.
+function playLibraryFrom(file) {
+  const episodes = libraryEpisodes();
+  if (!episodes) { playLibraryFile(file); return; }
+  const start = episodes.findIndex(e => e.file.path === file.path);
+  const files = episodes.slice(Math.max(0, start)).map(e => e.file.path);
+  const token = hashHex(files.join("\n"));
+  fetch("/api/library/playlist", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, files }) }).catch(() => {});
+  playLibraryUrl(`${location.origin}/playlist/${token}.m3u`, file);
+}
+
 // Straight from disk: no torrent, no play link to register.
 function playLibraryFile(file) {
-  if (!file) return;
-  const url = libraryMediaUrl(file);
+  if (file) playLibraryUrl(libraryMediaUrl(file), file);
+}
+function playLibraryUrl(url, file) {
   const id = currentPlayer();
   if (id === "vlc" && VLC_HELPER_OS && !vlcHelperInstalled()) {
-    openVlcHelper(() => playLibraryFile(file));
+    openVlcHelper(() => playLibraryUrl(url, file));
     return;
   }
   const appLink = PLAYERS[id].link(url, location.href);

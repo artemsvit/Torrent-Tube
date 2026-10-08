@@ -49,9 +49,9 @@ struct LibraryView: View {
                     }
                     FilmGrid(items: items.map(libraryItem), api: api, config: config)
                 }
-            }.padding(.horizontal, 70).padding(.top, ScreenLayout.top).padding(.bottom, 70)
+            }.padding(.horizontal, TVLayout.edge).padding(.top, ScreenLayout.top).padding(.bottom, 70)
         }
-        .background(AppBackground())
+        .ignoresSafeArea(edges: .horizontal)
         .task {
             await catalog.loadLibrary(api: api)
             // The server is still matching titles: show them as they come in.

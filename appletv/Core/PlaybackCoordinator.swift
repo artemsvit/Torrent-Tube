@@ -33,6 +33,25 @@ final class PlaybackCoordinator {
         self.api = api
     }
 
+    var episodeLabel: String? {
+        let identity: EpisodeIdentity?
+        if let session {
+            let file = prepared?.files.first { $0.index == session.file }
+            let source = selectedSource ?? request.source
+            identity = file.flatMap { file in
+                EpisodeIdentity.parse(name: file.name, path: file.path ?? source.path.map { $0 + "/" + file.name })
+            }
+                ?? EpisodeIdentity.parse(session.name)
+        } else {
+            identity = nil
+        }
+        if let identity { return L("Season %ld · Episode %ld", identity.season, identity.episode) }
+        if let season = request.season, let episode = request.episode {
+            return L("Season %ld · Episode %ld", season, episode)
+        }
+        return nil
+    }
+
     static func selectedFile(request: PlaybackRequest, prepared: PreparedPlayback) -> Int? {
         if let season = request.season, let episode = request.episode {
             let matches = prepared.files.filter { file in

@@ -40,6 +40,11 @@ class MediaLibraryTests(unittest.TestCase):
         self.assertEqual(items["TV Shows/Chernobyl"]["kind"], "tv")
         self.assertEqual(items["TV Shows/Chernobyl"]["files"], 3)
 
+    def test_series_count_their_seasons_films_none(self):
+        items = {item["id"]: item for item in self.library.items()}
+        self.assertEqual(items["TV Shows/Chernobyl"]["seasons"], 1)
+        self.assertEqual(items["Movies/Heat (1995).mkv"]["seasons"], 0)
+
     def test_episodes_play_in_natural_order(self):
         names = [f["name"] for f in self.library.files("TV Shows/Chernobyl")]
         self.assertEqual(names, ["Chernobyl.S01E01.mkv", "Chernobyl.S01E02.mkv", "Chernobyl.S01E10.mkv"])
@@ -83,6 +88,17 @@ class LibraryAPITests(unittest.TestCase):
         self.assertTrue(heartbeat.json["ready"])
         self.assertEqual(self.client.delete(f"/api/playback/sessions/{session['session']}").json, {"ok": True})
         self.assertTrue((Path(self.root.name) / "Movies" / "Heat (1995).mkv").exists(), "closing never deletes a library file")
+
+    def test_playlist_lists_the_episodes_from_the_chosen_one(self):
+        bad = self.client.post("/api/library/playlist", json={"token": "0123456789abcdef", "files": ["../secret"]})
+        self.assertEqual(bad.status_code, 404)
+        ok = self.client.post("/api/library/playlist", json={"token": "0123456789abcdef", "files": ["Movies/Heat (1995).mkv"]}).json
+        self.assertEqual(ok["url"], "/playlist/0123456789abcdef.m3u")
+        playlist = self.client.get(ok["url"])
+        self.assertEqual(playlist.mimetype, "audio/x-mpegurl")
+        text = playlist.get_data(as_text=True)
+        self.assertTrue(text.startswith("#EXTM3U\n#EXTINF:-1,Heat (1995)\n"))
+        self.assertIn("/media/Movies/Heat%20%281995%29.mkv", text)
 
     def test_bad_paths_and_indexes(self):
         self.assertEqual(self.client.post("/api/playback/prepare", json={"path": "../secret"}).status_code, 404)

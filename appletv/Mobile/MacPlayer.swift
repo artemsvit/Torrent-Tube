@@ -10,6 +10,7 @@ struct MacPlayer: View {
     let controller: EmbeddedPlayer
     let title: String
     let streamStatus: StreamStatus?
+    var episodeLabel: String? = nil
     var artwork: String? = nil
     var intro: ClosedRange<Double>? = nil
     let retry: () -> Void
@@ -97,8 +98,11 @@ struct MacPlayer: View {
                     .overlay(Circle().strokeBorder(.white.opacity(0.15)))
             }
             .buttonStyle(.plain).help(L("Close")).accessibilityIdentifier("close-player")
-            Text(title).font(.system(size: 15, weight: .semibold)).lineLimit(1)
-                .shadow(color: .black.opacity(0.5), radius: 6)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.system(size: 15, weight: .semibold)).lineLimit(1)
+                if let episodeLabel { Text(episodeLabel).font(.system(size: 13)).foregroundStyle(.white.opacity(0.7)) }
+            }
+            .shadow(color: .black.opacity(0.5), radius: 6)
         }
         .padding(20)
     }

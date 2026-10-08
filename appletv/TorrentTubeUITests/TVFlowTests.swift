@@ -1,6 +1,34 @@
 import XCTest
 
 final class TVFlowTests: XCTestCase {
+    func testSingleNavigationMenuAndUkrainianScreenSpacing() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-appLanguage", "uk", "-serverAddress", "http://192.168.0.102:5058"]
+        app.launch()
+        let settings = app.buttons["main-tab-settings"], search = app.buttons["main-tab-search"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 30))
+        let home = app.buttons["main-tab-home"], library = app.buttons["main-tab-library"]
+        XCTAssertLessThan(home.frame.maxX, library.frame.minX)
+        XCTAssertLessThan(search.frame.maxX, settings.frame.minX)
+        XCTAssertLessThan(library.frame.maxX, search.frame.minX)
+        XCTAssertEqual(home.label, "Головна")
+        add(keep(app, "Ukrainian navigation"))
+        openTab(app, "Фільми")
+        XCTAssertTrue(app.buttons["main-tab-movies"].isSelected)
+        openTab(app, "Медіатека")
+        XCTAssertTrue(app.buttons["main-tab-library"].isSelected)
+        openTab(app, "Пошук")
+        XCTAssertTrue(app.buttons["key-а"].waitForExistence(timeout: 10) || app.buttons["key-a"].exists)
+        let firstKey = app.buttons["key-а"].exists ? app.buttons["key-а"] : app.buttons["key-a"]
+        XCTAssertGreaterThan(firstKey.frame.minY, search.frame.maxY + 40)
+        add(keep(app, "Search below navigation"))
+        openTab(app, "Налаштування")
+        let heading = app.staticTexts["settings-heading"]
+        XCTAssertTrue(heading.waitForExistence(timeout: 10))
+        XCTAssertGreaterThan(heading.frame.minY, settings.frame.maxY + 20)
+        add(keep(app, "Settings below navigation"))
+    }
+
     func testConnectionScreen() {
         let app = XCUIApplication()
         app.launchArguments = ["-appLanguage", "en", "-serverAddress", ""]
@@ -499,8 +527,8 @@ final class TVFlowTests: XCTestCase {
         for _ in 0..<6 { if card.hasFocus { break }; XCUIRemote.shared.press(.down) }
         XCUIRemote.shared.press(.select)
         XCTAssertTrue(app.buttons["title-play"].waitForExistence(timeout: 15))
-        let movies = app.tabBars.buttons["Movies"]
-        for _ in 0..<10 { if movies.hasFocus { break }; XCUIRemote.shared.press(.up); if app.tabBars.buttons["Home"].hasFocus { XCUIRemote.shared.press(.right) } }
+        let movies = app.buttons["Movies"]
+        for _ in 0..<10 { if movies.hasFocus { break }; XCUIRemote.shared.press(.up); if app.buttons["Home"].hasFocus { XCUIRemote.shared.press(.right) } }
         XCTAssertTrue(movies.hasFocus, "the tab bar is reachable from a title page")
         XCUIRemote.shared.press(.left)  // back to Home
         XCTAssertTrue(app.buttons["hero-play"].waitForExistence(timeout: 10))
@@ -613,20 +641,20 @@ final class TVFlowTests: XCTestCase {
         let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = name; shot.lifetime = .keepAlways; return shot
     }
     private func openTab(_ app: XCUIApplication, _ name: String) {
-        let tab = app.tabBars.buttons[name]
+        let tab = app.buttons[name]
         XCTAssertTrue(tab.waitForExistence(timeout: 15))
-        for _ in 0..<6 { if app.tabBars.buttons.allElementsBoundByIndex.contains(where: { $0.hasFocus }) { break }; XCUIRemote.shared.press(.up) }
+        for _ in 0..<6 { if app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "main-tab-")).allElementsBoundByIndex.contains(where: { $0.hasFocus }) { break }; XCUIRemote.shared.press(.up) }
         for _ in 0..<8 where !tab.hasFocus {
-            let focused = app.tabBars.buttons.allElementsBoundByIndex.first { $0.hasFocus }
+            let focused = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "main-tab-")).allElementsBoundByIndex.first { $0.hasFocus }
             XCUIRemote.shared.press((focused?.frame.minX ?? 0) < tab.frame.minX ? .right : .left)
         }
         XCUIRemote.shared.press(.select)
         sleep(2)
     }
     private func openSearch(_ app: XCUIApplication) {
-        let search = app.tabBars.buttons["Search"]
+        let search = app.buttons["Search"]
         XCTAssertTrue(search.waitForExistence(timeout: 30))
-        for _ in 0..<4 { if app.tabBars.firstMatch.buttons.element(boundBy: 0).hasFocus || search.hasFocus { break }; XCUIRemote.shared.press(.up) }
+        for _ in 0..<4 { if app.buttons["main-tab-home"].hasFocus || search.hasFocus { break }; XCUIRemote.shared.press(.up) }
         for _ in 0..<8 { if search.hasFocus { break }; XCUIRemote.shared.press(.right) }
         XCTAssertTrue(search.hasFocus)
         XCUIRemote.shared.press(.select)

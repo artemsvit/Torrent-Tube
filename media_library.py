@@ -17,6 +17,23 @@ def _natural(name: str):
     return [int(part) if part.isdigit() else part.lower() for part in re.split(r"(\d+)", name)]
 
 
+_EPISODE_RE = re.compile(r"(?i)(?:^|[^a-z0-9])s(\d{1,2})[ ._-]*e\d{1,3}(?!\d)|(?:^|[^a-z0-9])(\d{1,2})x\d{1,3}(?!\d)")
+_SEASON_FOLDER_RE = re.compile(r"(?i)(?:^|[^\w])(?:season|сезон|s)[ ._-]*(\d{1,2})(?!\d)|(?:^|[^\w])(\d{1,2})[ ._-]+(?:season|сезон)")
+
+
+def season_of(path: Path):
+    """The season a video belongs to: from S01E02 / 1x02 in its name, else
+    from a "Season 1" / "Сезон 1" folder above it. None for a film."""
+    match = _EPISODE_RE.search(path.name)
+    if match:
+        return int(match.group(1) or match.group(2))
+    for folder in reversed(path.parent.parts[-3:]):
+        match = _SEASON_FOLDER_RE.search(folder)
+        if match:
+            return int(match.group(1) or match.group(2))
+    return None
+
+
 def _hidden(name: str) -> bool:
     # Synology's @eaDir thumbnails, .DS_Store, the stream cache, app state.
     return name.startswith((".", "@", "#"))
@@ -77,6 +94,8 @@ class MediaLibrary:
                         "category": category,
                         "kind": kind,
                         "files": len(videos),
+                        # How many seasons the episodes are in (0 for a film).
+                        "seasons": len({s for s in map(season_of, videos) if s is not None}) if len(videos) > 1 else 0,
                         "size": sum(v.stat().st_size for v in videos),
                         "added": int(entry.stat().st_mtime),
                     })

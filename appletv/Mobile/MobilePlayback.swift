@@ -64,7 +64,7 @@ struct MobilePlayback: View {
     var body: some View {
         Group {
             if let controller = model.controller {
-                MobilePlayer(controller: controller, title: request.title, streamStatus: model.streamStatus, artwork: request.artwork, intro: model.intro,
+                MobilePlayer(controller: controller, title: request.title, streamStatus: model.streamStatus, episodeLabel: model.episodeLabel, artwork: request.artwork, intro: model.intro,
                              retry: { Task { await model.prepare() } }, close: close)
             } else {
                 preparation
@@ -184,6 +184,7 @@ struct MobilePlayer: View {
     let controller: EmbeddedPlayer
     let title: String
     let streamStatus: StreamStatus?
+    var episodeLabel: String? = nil
     var artwork: String? = nil
     var intro: ClosedRange<Double>? = nil
     let retry: () -> Void
@@ -202,7 +203,7 @@ struct MobilePlayer: View {
     var body: some View {
         #if os(macOS)
         // The Mac has its own player, in the way of QuickTime.
-        MacPlayer(controller: controller, title: title, streamStatus: streamStatus, artwork: artwork, intro: intro, retry: retry, close: close)
+        MacPlayer(controller: controller, title: title, streamStatus: streamStatus, episodeLabel: episodeLabel, artwork: artwork, intro: intro, retry: retry, close: close)
         #else
         touchPlayer
         #endif
@@ -234,7 +235,10 @@ struct MobilePlayer: View {
                 VStack {
                     HStack {
                         control("Close", icon: "xmark", action: close).accessibilityIdentifier("close-player")
-                        Text(title).font(.headline).lineLimit(2)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(title).font(.headline).lineLimit(2)
+                            if let episodeLabel { Text(episodeLabel).font(.subheadline).foregroundStyle(.white.opacity(0.7)) }
+                        }
                         Spacer(minLength: 0)
                     }.padding(12).background(.black.opacity(0.65))
                     Spacer()

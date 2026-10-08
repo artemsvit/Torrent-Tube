@@ -14,7 +14,7 @@ struct PlaybackLauncher: View {
     var body: some View {
         Group {
             if let controller = model.controller {
-                PlayerView(controller: controller, title: request.title, streamStatus: model.streamStatus, intro: model.intro) { close() }
+                PlayerView(controller: controller, title: request.title, streamStatus: model.streamStatus, episodeLabel: model.episodeLabel, intro: model.intro) { close() }
 
             } else {
                 ZStack(alignment: .leading) {
@@ -199,6 +199,7 @@ struct PlayerView: View {
     let controller: EmbeddedPlayer
     let title: String
     let streamStatus: StreamStatus?
+    var episodeLabel: String? = nil
     var intro: ClosedRange<Double>? = nil
     let close: () -> Void
     @State private var showControls = true
@@ -240,7 +241,10 @@ struct PlayerView: View {
                     HStack {
                         Button(action: close) { Label(L("Close"), systemImage: "xmark") }.labelStyle(.iconOnly)
                             .focused($focusedControl, equals: .close)
-                        Text(title).font(.headline).lineLimit(1)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(title).font(.headline).lineLimit(1)
+                            if let episodeLabel { Text(episodeLabel).font(.subheadline).foregroundStyle(.white.opacity(0.7)) }
+                        }
                         Spacer()
                     }
                     Spacer()

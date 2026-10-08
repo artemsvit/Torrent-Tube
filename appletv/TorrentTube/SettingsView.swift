@@ -30,7 +30,7 @@ struct SettingsView: View {
         // The title spans both columns, so the section list and the
         // settings start on the same line and their rows share one grid.
         VStack(alignment: .leading, spacing: 32) {
-        Text(L("Settings")).font(.system(size: 54, weight: .bold)).padding(.horizontal, 14)
+        Text(L("Settings")).accessibilityIdentifier("settings-heading").font(.system(size: 54, weight: .bold)).padding(.horizontal, 14)
         HStack(alignment: .top, spacing: 68) {
             VStack(alignment: .leading, spacing: 38) {
                 VStack(spacing: 16) {
@@ -137,7 +137,6 @@ struct SettingsView: View {
         }
         }
         .padding(.horizontal, 58).padding(.top, ScreenLayout.top).padding(.bottom, 40)
-        .background(AppBackground())
         .defaultFocus($focusedSection, .home, priority: .userInitiated)
         .alert(L("Clear viewing history?"), isPresented: $clearingHistory) {
             Button(L("Cancel"), role: .cancel) {}

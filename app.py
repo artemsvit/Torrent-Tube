@@ -2514,6 +2514,52 @@ def _library_files(payload):
     return path, files
 
 
+# Library playlists: Play on an episode in the web page opens an .m3u with it
+# and every episode after it, so Infuse and VLC go on to the next one. The
+# page registers the list under a token it derives from it (opening the
+# player must happen in the tap itself, before any reply).
+LIBRARY_PLAYLISTS = {}
+PLAYLIST_TOKEN_RE = re.compile(r"^[0-9a-f]{16}$")
+
+
+@app.route("/api/library/playlist", methods=["POST"])
+def register_library_playlist():
+    payload = request.get_json(silent=True) or {}
+    token, files = str(payload.get("token", "")), payload.get("files")
+    if not PLAYLIST_TOKEN_RE.match(token) or not isinstance(files, list) or not files:
+        return jsonify({"error": "Expected a token and files"}), 400
+    paths = [f for f in files[:2000] if isinstance(f, str) and LIBRARY.resolve(f) is not None]
+    if not paths:
+        return jsonify({"error": "Not library files"}), 404
+    with LOCK:
+        if len(LIBRARY_PLAYLISTS) >= 200:
+            LIBRARY_PLAYLISTS.pop(next(iter(LIBRARY_PLAYLISTS)))
+        LIBRARY_PLAYLISTS[token] = paths
+    return jsonify({"ok": True, "url": f"/playlist/{token}.m3u"})
+
+
+@app.route("/playlist/<token>.m3u")
+def library_playlist(token):
+    if not PLAYLIST_TOKEN_RE.match(token):
+        return jsonify({"error": "Unknown playlist"}), 404
+    # The player can ask before the page's registration has arrived.
+    for _ in range(50):
+        with LOCK:
+            paths = LIBRARY_PLAYLISTS.get(token)
+        if paths:
+            break
+        time.sleep(0.1)
+    else:
+        return jsonify({"error": "Unknown playlist"}), 404
+    base = request.url_root.rstrip("/")
+    lines = ["#EXTM3U"]
+    for path in paths:
+        lines.append(f"#EXTINF:-1,{Path(path).stem}")
+        lines.append(f"{base}/media/{urllib.parse.quote(path)}")
+    return Response("\n".join(lines) + "\n", mimetype="audio/x-mpegurl",
+                    headers={"Content-Disposition": f'inline; filename="{token}.m3u"', "Cache-Control": "no-store"})
+
+
 @app.route("/media/<path:relative>")
 def library_file(relative):
     """A library video straight from disk, with Range support for seeking."""

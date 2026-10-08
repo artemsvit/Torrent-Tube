@@ -31,40 +31,25 @@ struct MainView: View {
     /// A tab's stack, with title pages pushed as values so it can be reset.
     private func stack<Root: View>(_ tab: MainTab, @ViewBuilder root: () -> Root) -> some View {
         NavigationStack(path: path(tab)) {
-            root().navigationDestination(for: MediaItem.self) { item in TitleView(item: item, api: api, config: config) }
+            root().padding(.top, tab == .home ? 0 : 118).navigationDestination(for: MediaItem.self) { item in TitleView(item: item, api: api, config: config) }
         }
         .environment(\.backToTop) { paths[tab] = NavigationPath() }
     }
     var body: some View {
-        TabView(selection: $tab) {
-            stack(.home) { HomeView(api: api, config: config) }
-                .tabItem { Image(systemName: "house").accessibilityLabel(L("Home")) }.tag(MainTab.home)
-            if config.searchEnabled {
-                stack(.movies) { CategoryView(feed: "movies", title: "Movies", api: api, config: config) }
-                    .tabItem { Label(L("Movies"), systemImage: "film") }.tag(MainTab.movies)
-                stack(.tv) { CategoryView(feed: "tv", title: "TV Shows", api: api, config: config) }
-                    .tabItem {
-                        Label { Text(L("TV Shows")) } icon: {
-                            Image(systemName: "tv").renderingMode(.template).symbolRenderingMode(.monochrome)
-                        }
-                    }.tag(MainTab.tv)
-                stack(.cartoons) { CategoryView(feed: "cartoons", title: "Cartoons", api: api, config: config) }
-                    // Tab bars draw icons filled; these two stay outlined. In current SF Symbols
-                    // "face.smiling.fill" is the outlined face and "face.smiling" the solid one.
-                    .tabItem {
-                        Label { Text(L("Cartoons")) } icon: {
-                            Image(systemName: "face.smiling.fill").renderingMode(.template).symbolRenderingMode(.monochrome)
-                        }
-                    }.tag(MainTab.cartoons)
+        Group {
+            switch tab {
+            case .home: stack(.home) { HomeView(api: api, config: config) }
+            case .movies: stack(.movies) { CategoryView(feed: "movies", title: "Movies", api: api, config: config) }
+            case .tv: stack(.tv) { CategoryView(feed: "tv", title: "TV Shows", api: api, config: config) }
+            case .cartoons: stack(.cartoons) { CategoryView(feed: "cartoons", title: "Cartoons", api: api, config: config) }
+            case .library: stack(.library) { LibraryView(api: api, config: config) }
+            case .search: stack(.search) { SearchView(api: api, config: config) }
+            case .settings: NavigationStack { SettingsView(store: store, api: api, config: config).padding(.top, 118) }.id(settingsReset)
             }
-                stack(.library) { LibraryView(api: api, config: config) }
-                    .tabItem { Image(systemName: "folder").environment(\.symbolVariants, .none).accessibilityLabel(L("Library")) }.tag(MainTab.library)
-                stack(.search) { SearchView(api: api, config: config) }
-                    .tabItem { Image(systemName: "magnifyingglass").accessibilityLabel(L("Search")) }.tag(MainTab.search)
-            // Settings pushes a plain view (Licenses), so it resets by being rebuilt.
-            NavigationStack { SettingsView(store: store, api: api, config: config) }.id(settingsReset)
-                .tabItem { Image(systemName: "gearshape").accessibilityLabel(L("Settings")) }.tag(MainTab.settings)
         }
+        // NavigationStack does not pass an outer safe-area inset to every root.
+        // Reserve actual layout space so fixed screens cannot sit behind the bar.
+        .overlay(alignment: .top) { navigationBar }
         .onChange(of: tab) { old, _ in
             if old == .settings { settingsReset += 1 } else { paths[old] = NavigationPath() }
         }
@@ -93,6 +78,73 @@ struct MainView: View {
             .environment(catalog)
             .environment(\.backToTop) { shelfTitle = nil }
             .onExitCommand { shelfTitle = nil }
+        }
+    }
+
+    private var navigationBar: some View {
+        HStack(spacing: 6) {
+            navigationButton(.home, title: "Home", icon: nil)
+            if config.searchEnabled {
+                navigationButton(.movies, title: "Movies", icon: nil)
+                navigationButton(.tv, title: "TV Shows", icon: nil)
+                navigationButton(.cartoons, title: "Cartoons", icon: nil)
+            }
+            navigationButton(.library, title: "Library", icon: nil)
+            navigationButton(.search, title: "Search", icon: "magnifyingglass", iconOnly: true)
+            navigationButton(.settings, title: "Settings", icon: "gearshape", iconOnly: true)
+        }
+        .padding(6)
+        .modifier(TVNavigationGlass())
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity)
+        .focusSection()
+    }
+
+    private func navigationButton(_ destination: MainTab, title: String, icon: String?, iconOnly: Bool = false) -> some View {
+        Button { tab = destination } label: {
+            HStack(spacing: 10) {
+                if let icon { Image(systemName: icon).environment(\.symbolVariants, .none) }
+                if !iconOnly { Text(L(title)) }
+            }
+            .lineLimit(1)
+        }
+        .buttonStyle(TVNavigationButtonStyle(selected: tab == destination, iconOnly: iconOnly))
+        .accessibilityIdentifier("main-tab-\(destination)")
+        .accessibilityLabel(L(title))
+        .accessibilityAddTraits(tab == destination ? .isSelected : [])
+    }
+
+}
+
+private struct TVNavigationGlass: ViewModifier {
+    @ViewBuilder func body(content: Content) -> some View {
+        if #available(tvOS 26.0, *) {
+            content.glassEffect(.clear, in: Capsule())
+        } else {
+            content.background(.ultraThinMaterial, in: Capsule())
+                .overlay(Capsule().strokeBorder(.white.opacity(0.14), lineWidth: 1))
+        }
+    }
+}
+
+private struct TVNavigationButtonStyle: ButtonStyle {
+    let selected: Bool
+    let iconOnly: Bool
+    func makeBody(configuration: Configuration) -> some View {
+        NavigationLabel(content: configuration.label, selected: selected, iconOnly: iconOnly)
+    }
+    private struct NavigationLabel<Content: View>: View {
+        let content: Content
+        let selected: Bool
+        let iconOnly: Bool
+        @Environment(\.isFocused) private var focused
+        var body: some View {
+            content
+                .font(.system(size: 26, weight: .semibold))
+                .padding(.horizontal, iconOnly ? 0 : 20)
+                .frame(width: iconOnly ? 66 : nil, height: 62)
+                .foregroundStyle(focused ? .black : .white)
+                .background(focused ? Color.white : (selected ? Color.white.opacity(0.22) : Color.clear), in: Capsule())
         }
     }
 }
@@ -126,6 +178,21 @@ struct HomeView: View {
     @State private var showServerNotice = false
     @State private var highlighted: MediaItem?
     @State private var playback: PlaybackRequest?
+    @State private var trailer: Trailer?
+    @State private var findingTrailer = false
+    @State private var trailerError: String?
+    private func playTrailer(_ item: MediaItem) {
+        findingTrailer = true; trailerError = nil
+        Task {
+            defer { findingTrailer = false }
+            do {
+                let details = catalog.details[item.title]
+                if let found = try await TrailerChoice.find(title: details?.title ?? item.displayTitle, year: details?.year, known: details?.trailers ?? [], api: api) {
+                    trailer = found
+                } else { trailerError = L("No trailer was found for this title.") }
+            } catch { trailerError = error.localizedDescription }
+        }
+    }
     private let shelves = [("new", "New to Explore"), ("popular", "Popular Now"), ("movies", "Movies"), ("tv", "TV Shows"), ("cartoons", "Cartoons"), ("ukrainian", "Ukrainian")]
     private var recent: [ResumeEntry] { history.entries.filter { $0.server == api.baseURL.absoluteString } }
     private var featured: [MediaItem] {
@@ -160,29 +227,12 @@ struct HomeView: View {
                                 .accessibilityIdentifier("hero-play").focused($heroAction, equals: .play)
                             NavigationLink(value: active) { Label(L("Details"), systemImage: "info.circle") }
                                 .buttonStyle(.bordered).tint(.white).focused($heroAction, equals: .details)
-                            Button {
-                                if preview.controller != nil || preview.loading {
-                                    preview.stop()
-                                } else {
-                                    preview.start(item: catalog.resolved(active), details: catalog.details[active.title], api: api)
-                                }
-                            } label: {
-                                Label(L(preview.controller != nil || preview.loading ? "Stop preview" : "Trailer"),
-                                      systemImage: preview.controller != nil || preview.loading ? "stop.fill" : "play.rectangle")
-                            }.buttonStyle(.bordered).tint(.white).accessibilityIdentifier("hero-trailer").focused($heroAction, equals: .trailer)
-                            if preview.controller != nil {
-                                Button { preview.toggleMute() } label: {
-                                    Image(systemName: preview.muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                                }.buttonStyle(.bordered).buttonBorderShape(.circle).tint(.white)
-                                    .accessibilityLabel(L(preview.muted ? "Unmute preview" : "Mute preview"))
-                                    .accessibilityIdentifier("hero-preview-mute").focused($heroAction, equals: .mute)
-                            }
+                            Button { playTrailer(active) } label: {
+                                Label(L(findingTrailer ? "Finding trailer…" : "Trailer"), systemImage: "play.rectangle")
+                            }.disabled(findingTrailer)
+                                .buttonStyle(.bordered).tint(.white).accessibilityIdentifier("hero-trailer").focused($heroAction, equals: .trailer)
                             Group {
-                                if preview.loading {
-                                    Label(L("Preparing trailer…"), systemImage: "hourglass")
-                                } else if let error = preview.error {
-                                    Text(error).lineLimit(2)
-                                }
+                                if let trailerError { Text(trailerError).lineLimit(2) }
                             }
                             .font(.system(size: 22)).foregroundStyle(.secondary).frame(maxWidth: 340, alignment: .leading)
                             Spacer(minLength: 32)
@@ -273,6 +323,7 @@ struct HomeView: View {
         .onChange(of: heroAction) { _, action in if action != nil { highlighted = nil } }
         .onDisappear { preview.stop() }
         .fullScreenCover(item: $playback) { request in PlaybackLauncher(request: request, api: api) }
+        .fullScreenCover(item: $trailer) { trailer in TrailerPlayer(trailer: trailer, api: api) }
         .alert(L("Streaming unavailable"), isPresented: $showServerNotice) { Button(L("OK"), role: .cancel) {} } message: { Text(L("Update Torrent Tube on your server to stream on this Apple TV.")) }
         .task {
             await catalog.loadLibrary(api: api)
@@ -661,8 +712,10 @@ struct CategoryView: View {
                         .frame(maxWidth: .infinity, minHeight: 500)
                 }
                 FilmGrid(items: catalog.rows[activeFeed] ?? [], api: api, config: config)
-            }.padding(.horizontal, 70).padding(.top, ScreenLayout.top).padding(.bottom, 70)
-        }.background(AppBackground()).task(id: activeFeed) { await catalog.loadFeed(activeFeed, api: api, config: config) }
+            }.padding(.horizontal, TVLayout.edge).padding(.top, ScreenLayout.top).padding(.bottom, 70)
+        }
+        .ignoresSafeArea(edges: .horizontal)
+        .task(id: activeFeed) { await catalog.loadFeed(activeFeed, api: api, config: config) }
     }
 }
 
@@ -832,7 +885,7 @@ struct SearchView: View {
         }
         .padding(.horizontal, TVLayout.edge).padding(.top, ScreenLayout.top)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(AppBackground())
+        .ignoresSafeArea(edges: .horizontal)
         .defaultFocus($focusedKey, layout.letters.first.map(String.init), priority: .userInitiated)
         // A hardware keyboard types and deletes wherever the focus is.
         .onKeyPress(phases: .down) { press in
