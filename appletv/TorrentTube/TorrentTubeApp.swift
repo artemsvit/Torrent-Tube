@@ -53,35 +53,66 @@ struct TorrentTubeApp: App {
     }
 }
 
+/// The welcome screen: the brand on a glowing backdrop and one glass card
+/// with the server address - the same design on Apple TV, iPad and iPhone.
 struct ConnectionView: View {
     @Bindable var store: AppStore
     @FocusState private var field: Field?
     private enum Field { case address, connect }
+    private var canConnect: Bool { !store.connecting && !store.address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     var body: some View {
-        VStack(spacing: 28) {
-            Image(systemName: "play.fill").font(.system(size: 65, weight: .semibold)).foregroundStyle(.white)
-                .frame(width: 110, height: 110).background(Color.torrentAccent, in: RoundedRectangle(cornerRadius: 26))
-            Text("Torrent Tube").font(.largeTitle.bold())
-            Text(L("Connect to your server")).font(.title2)
-            TextField(L("Server address"), text: $store.address)
-                .textContentType(.URL)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-                .focused($field, equals: .address)
-                .accessibilityIdentifier("server-address")
-                .onSubmit { Task { await store.connect() } }
-            Text(L("Example: %@", "http://192.168.0.102:5058")).font(.callout).foregroundStyle(.secondary)
-            if store.connecting { ProgressView(L("Connecting…")) }
-            if let error = store.error { Text(error).foregroundStyle(.orange).multilineTextAlignment(.center) }
-            Button(L("Connect")) { Task { await store.connect() } }
-                .focused($field, equals: .connect)
-                .disabled(store.connecting || store.address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .accessibilityIdentifier("connect")
+        ZStack {
+            BrandBackground()
+            VStack(spacing: 44) {
+                VStack(spacing: 22) {
+                    BrandMark(size: 140)
+                    Text("Torrent Tube").font(.system(size: 66, weight: .heavy))
+                    Text(L("Enter the address of your Torrent Tube server."))
+                        .font(.system(size: 30)).foregroundStyle(.white.opacity(0.65))
+                        .fixedSize(horizontal: false, vertical: true).multilineTextAlignment(.center)
+                }
+                VStack(alignment: .leading, spacing: 18) {
+                    Label(L("Server address"), systemImage: "server.rack")
+                        .font(.system(size: 22, weight: .semibold)).foregroundStyle(.white.opacity(0.6))
+                    TextField("http://192.168.0.102:5058", text: $store.address)
+                        .font(.system(size: 30))
+                        .textContentType(.URL)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                        .focused($field, equals: .address)
+                        .accessibilityIdentifier("server-address")
+                        .onSubmit { Task { await store.connect() } }
+                    Text(L("Example: %@", "http://192.168.0.102:5058")).font(.system(size: 22)).foregroundStyle(.white.opacity(0.45))
+                    if let error = store.error {
+                        Label(error, systemImage: "exclamationmark.triangle.fill")
+                            .font(.system(size: 24)).foregroundStyle(.orange)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Button { Task { await store.connect() } } label: {
+                        HStack(spacing: 16) {
+                            if store.connecting { ProgressView().tint(.black) }
+                            Text(store.connecting ? L("Connecting…") : L("Connect")).font(.system(size: 30, weight: .semibold))
+                            if !store.connecting { Image(systemName: "arrow.right").font(.system(size: 26, weight: .semibold)) }
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 64)
+                    }
+                    .buttonStyle(.borderedProminent).tint(.white).foregroundStyle(.black)
+                    .focused($field, equals: .connect)
+                    .disabled(!canConnect)
+                    .opacity(canConnect || store.connecting ? 1 : 0.45)
+                    .accessibilityIdentifier("connect")
+                    .padding(.top, 10)
+                }
+                .padding(44)
+                .frame(width: 900)
+                .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 36, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 36, style: .continuous).strokeBorder(.white.opacity(0.1), lineWidth: 1))
+                .focusSection()
+                Label(L("The server and this device must be on the same network."), systemImage: "wifi")
+                    .font(.system(size: 22)).foregroundStyle(.white.opacity(0.45))
+            }
+            .padding(60)
         }
-        .frame(maxWidth: 780)
-        .padding(60)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(red: 0.035, green: 0.065, blue: 0.08))
         .defaultFocus($field, .address)
     }
 }

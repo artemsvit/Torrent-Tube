@@ -206,6 +206,8 @@ private let ukrainian: [String: String] = [
 
     // Connecting
     "Connect to your server": "Підключіться до свого сервера",
+    "Enter the address of your Torrent Tube server.": "Вкажіть адресу свого сервера Torrent Tube.",
+    "The server and this device must be on the same network.": "Сервер і цей пристрій мають бути в одній мережі.",
     "Server address": "Адреса сервера",
     "Example: %@": "Приклад: %@",
     "Connecting…": "Підключення…",

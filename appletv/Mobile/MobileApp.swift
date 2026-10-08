@@ -38,37 +38,82 @@ struct TorrentTubeMobileApp: App {
     }
 }
 
+/// The welcome screen: the brand on a glowing backdrop and one glass card
+/// with the server address - the same design as on Apple TV.
 struct MobileConnection: View {
     @Bindable var store: AppStore
+    @FocusState private var focused: Bool
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    private var canConnect: Bool { !store.connecting && !store.address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Image(systemName: "play.square.fill").font(.system(size: 56)).foregroundStyle(Color.torrentAccent)
-                        Text("Torrent Tube").font(.largeTitle.bold())
-                        Text(L("Connect to your server")).font(.title3).foregroundStyle(.secondary)
-                    }.padding(.vertical, 20)
-                }.listRowBackground(Color.clear)
-                Section(L("Server address")) {
-                    TextField("http://192.168.0.102:5058", text: $store.address)
-                        .keyboardType(.URL).textContentType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
-                        .accessibilityIdentifier("server-address")
-                        .onSubmit { Task { await store.connect() } }
-                    Button { Task { await store.connect() } } label: {
-                        HStack { Text(L("Connect")); Spacer(); if store.connecting { ProgressView() } }
-                    }.disabled(store.connecting || store.address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        .accessibilityIdentifier("connect")
-                }
-                if let error = store.error {
-                    Section {
-                        Text(error).foregroundStyle(.orange)
-                        Text(L("Use the same Wi-Fi as your server. Allow Local Network access in Settings."))
-                        Button(L("Open device settings")) { UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!) }
+        ZStack {
+            BrandBackground()
+            GeometryReader { screen in
+            ScrollView {
+                VStack(spacing: 28) {
+                    VStack(spacing: 14) {
+                        BrandMark(size: sizeClass == .regular ? 104 : 88)
+                        Text("Torrent Tube").font(.system(size: sizeClass == .regular ? 44 : 36, weight: .heavy))
+                        Text(L("Enter the address of your Torrent Tube server."))
+                            .font(.callout).foregroundStyle(.white.opacity(0.65)).multilineTextAlignment(.center)
                     }
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label(L("Server address"), systemImage: "server.rack")
+                            .font(.footnote.weight(.semibold)).foregroundStyle(.white.opacity(0.6))
+                        TextField("", text: $store.address, prompt: Text(verbatim: "http://192.168.0.102:5058").foregroundStyle(.white.opacity(0.3)))
+                            .foregroundStyle(.white)
+                            .keyboardType(.URL).textContentType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
+                            .submitLabel(.go)
+                            .focused($focused)
+                            .padding(.horizontal, 14).frame(height: 50)
+                            .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .strokeBorder(focused ? Color.torrentAccent : .white.opacity(0.12), lineWidth: focused ? 1.5 : 1))
+                            .accessibilityIdentifier("server-address")
+                            .onSubmit { Task { await store.connect() } }
+                        Text(L("Example: %@", "http://192.168.0.102:5058")).font(.caption).foregroundStyle(.white.opacity(0.45))
+                        if let error = store.error {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                                Text(L("Use the same Wi-Fi as your server. Allow Local Network access in Settings."))
+                                    .foregroundStyle(.white.opacity(0.6))
+                                Button(L("Open device settings")) { UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!) }
+                                    .font(.footnote.weight(.semibold))
+                            }
+                            .font(.footnote).fixedSize(horizontal: false, vertical: true)
+                        }
+                        Button { focused = false; Task { await store.connect() } } label: {
+                            HStack(spacing: 10) {
+                                if store.connecting { ProgressView().tint(.black) }
+                                Text(store.connecting ? L("Connecting…") : L("Connect")).font(.headline)
+                                if !store.connecting { Image(systemName: "arrow.right").font(.headline) }
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 50)
+                            .foregroundStyle(.black)
+                            .background(.white, in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!canConnect)
+                        .opacity(canConnect || store.connecting ? 1 : 0.45)
+                        .accessibilityIdentifier("connect")
+                        .padding(.top, 6)
+                    }
+                    .padding(22)
+                    .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(.white.opacity(0.1), lineWidth: 1))
+                    Label(L("The server and this device must be on the same network."), systemImage: "wifi")
+                        .font(.footnote).foregroundStyle(.white.opacity(0.45)).multilineTextAlignment(.center)
                 }
-            }.navigationTitle(L("Welcome")).navigationBarTitleDisplayMode(.inline)
+                .padding(.horizontal, 20).padding(.vertical, 32)
+                .frame(maxWidth: 520)
+                // Centred on the screen like on Apple TV; it scrolls when the keyboard needs room.
+                .frame(maxWidth: .infinity, minHeight: screen.size.height)
+            }
+            .scrollDismissesKeyboard(.interactively)
+            }
         }
+        .tint(Color.torrentAccent)
     }
 }
 
