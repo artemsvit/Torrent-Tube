@@ -18,6 +18,38 @@ struct BarelessWindow: NSViewRepresentable {
                 window.standardWindowButton(button)?.isHidden = true
             }
             window.backgroundColor = .black
+            // The app never shows a window toolbar (its own top row instead).
+            window.toolbar = nil
+            guard observers.isEmpty else { return }
+            #if DEBUG
+            // Screenshots of full screen: -macFullScreen YES
+            if UserDefaults.standard.bool(forKey: "macFullScreen") {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak window] in window?.toggleFullScreen(nil) }
+            }
+            #endif
+            // Full screen shows the title bar area as a grey strip and pushes the
+            // content down: hide it (and the toolbar) there, bring it back after.
+            let center = NotificationCenter.default
+            observers = [
+                // After entering: changing the toolbar while entering cancels full screen.
+                center.addObserver(forName: NSWindow.didEnterFullScreenNotification, object: window, queue: .main) { [weak window] _ in
+                    MainActor.assumeIsolated { Self.fullScreen(true, window) }
+                },
+                center.addObserver(forName: NSWindow.didExitFullScreenNotification, object: window, queue: .main) { [weak window] _ in
+                    MainActor.assumeIsolated { Self.fullScreen(false, window) }
+                },
+            ]
+        }
+        private var observers: [NSObjectProtocol] = []
+        deinit { observers.forEach(NotificationCenter.default.removeObserver) }
+        @MainActor private static func fullScreen(_ on: Bool, _ window: NSWindow?) {
+            guard let window else { return }
+            // SwiftUI may add its (hidden) toolbar back; full screen keeps a title
+            // bar strip above the content for it, so keep it removed.
+            window.toolbar = nil
+            // The view holding the title bar (the window buttons' container's container).
+            window.standardWindowButton(.closeButton)?.superview?.superview?.isHidden = on
+            window.titlebarSeparatorStyle = .none
         }
     }
 }

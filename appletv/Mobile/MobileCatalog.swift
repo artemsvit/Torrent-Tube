@@ -393,7 +393,7 @@ struct MobileHome: View {
         .task {
             guard UserDefaults.standard.string(forKey: "macOpen") == "play" else { return }
             for _ in 0..<40 where catalog.library.isEmpty { try? await Task.sleep(for: .milliseconds(250)) }
-            if let first = catalog.library.first(where: { !$0.isTorrent }) {
+            if let first = catalog.library.first(where: { !$0.isTorrent && $0.kind == "movie" && $0.files == 1 }) {
                 let item = libraryItem(first)
                 playback = PlaybackRequest(source: item.source, title: item.displayTitle, artwork: item.poster)
             }
