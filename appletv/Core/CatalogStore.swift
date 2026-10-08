@@ -18,6 +18,10 @@ final class CatalogStore {
     /// then the apps never look those titles up on their own.
     var libraryMatchedByServer = false
     var libraryPending = 0
+    /// Library sync: details and images saved on the device, new titles only.
+    var syncing = false
+    var syncDone = 0
+    var syncTotal = 0
     private var enriching: Set<String> = []
     private var fetchingDetails: Set<String> = []
 
@@ -75,6 +79,75 @@ final class CatalogStore {
         metadata = [:]
         details = [:]
     }
+    /// Settings: "Sync now" saves what is missing; "Rescan" has the server match
+    /// every title again first, waits for it, then saves everything anew.
+    func syncNow(api: TorrentTubeAPI, config: ServerConfig, rescan: Bool) async {
+        if rescan { await refreshMetadata(api: api) }
+        await loadLibrary(api: api)
+        var waited = 0
+        while libraryPending > 0 && waited < 600 && !Task.isCancelled {
+            do { try await Task.sleep(for: .seconds(3)) } catch { return }
+            waited += 3
+            await loadLibrary(api: api)
+        }
+        await syncLibrary(api: api, config: config)
+    }
+    /// One line for Settings: when, how many titles, how much space.
+    func syncSummary(_ server: URL) -> String {
+        if syncing { return L("Saving %ld of %ld…", syncDone, syncTotal) }
+        if libraryPending > 0 { return L("The server is matching %ld titles…", libraryPending) }
+        let cache = metadataCache(server)
+        let images = ByteCountFormatter.string(fromByteCount: Int64(URLCache.shared.currentDiskUsage), countStyle: .file)
+        let data = ByteCountFormatter.string(fromByteCount: Int64(cache.bytes), countStyle: .file)
+        guard let synced = cache.library?.synced else { return L("Not synced yet") }
+        let when = synced.formatted(.relative(presentation: .named, unitsStyle: .wide).locale(Localizer.shared.language.locale))
+        return L("Synced %@ · %ld titles · data %@ · images %@", when, cache.library?.titles.count ?? 0, data, images)
+    }
+
+    /// When the Library was last saved on this device.
+    func lastSync(_ server: URL) -> Date? { metadataCache(server).library?.synced }
+
+    /// Saves everything a Library title page shows - details, poster, backdrop,
+    /// cast photos - for every title not saved yet. Run after each list load,
+    /// it does nothing once all are saved, so only new titles cost requests.
+    func syncLibrary(api: TorrentTubeAPI, config: ServerConfig) async {
+        guard !syncing, config.tmdbEnabled, Self.libraryMetadataEnabled, libraryPending == 0 else { return }
+        syncing = true
+        defer { syncing = false }
+        let cache = metadataCache(api.baseURL)
+        let items = library.filter { !$0.isTorrent && $0.tmdbId != nil }.map(libraryItem)
+        let missing = items.filter { !cache.hasDetails($0.title) }
+        syncDone = 0
+        syncTotal = missing.count
+        for chunk in stride(from: 0, to: missing.count, by: 3).map({ Array(missing[$0..<min($0 + 3, missing.count)]) }) {
+            await withTaskGroup(of: Void.self) { group in
+                for item in chunk { group.addTask { await self.loadDetails(item, api: api, config: config) } }
+            }
+            syncDone += chunk.count
+            if Task.isCancelled { return }
+        }
+        // Images go to the on-device image cache; ones already there cost nothing.
+        var urls: [URL] = []
+        for item in items {
+            if let poster = item.poster { urls.append(contentsOf: [URL(string: higherResolution(poster, backdrop: false))].compactMap { $0 }) }
+            let saved = details[item.title] ?? cache.details(for: item.title)
+            if let backdrop = saved?.backdrop, let url = URL(string: higherResolution(backdrop, backdrop: true)) { urls.append(url) }
+            for person in (saved?.people ?? []).prefix(12) { if let photo = person.photo, let url = URL(string: photo) { urls.append(url) } }
+        }
+        let needed = urls.filter { URLCache.shared.cachedResponse(for: URLRequest(url: $0)) == nil }
+        syncTotal += needed.count
+        for chunk in stride(from: 0, to: needed.count, by: 6).map({ Array(needed[$0..<min($0 + 6, needed.count)]) }) {
+            await withTaskGroup(of: Void.self) { group in
+                for url in chunk {
+                    group.addTask { _ = try? await URLSession.shared.data(for: URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad)) }
+                }
+            }
+            syncDone += chunk.count
+            if Task.isCancelled { return }
+        }
+        cache.storeLibrary(library)
+    }
+
     /// Library titles are looked up only while "Posters and details" is on.
     nonisolated static var libraryMetadataEnabled: Bool { UserDefaults.standard.object(forKey: "libraryMetadata") as? Bool ?? true }
 
@@ -113,11 +186,17 @@ final class CatalogStore {
         }
         if let result: Details = try? await api.request("api/details", query: query), !Task.isCancelled {
             details[item.title] = result
-            cache.store(result, for: item.title)
+            cache.store(result, for: item.title, permanent: item.sourceOverride?.path != nil)
         }
     }
     func loadLibrary(api: TorrentTubeAPI) async {
         guard !libraryLoading else { return }
+        let cache = metadataCache(api.baseURL)
+        // The list saved at the last sync shows at once; the server's answer replaces it.
+        if library.isEmpty, let saved = cache.library {
+            library = saved.titles
+            libraryMatchedByServer = true
+        }
         libraryLoading = true
         defer { libraryLoading = false }
         do {
@@ -126,6 +205,7 @@ final class CatalogStore {
                 library = result.items
                 libraryMatchedByServer = result.metadataPending != nil
                 libraryPending = result.metadataPending ?? 0
+                if libraryMatchedByServer && libraryPending == 0 { cache.storeLibrary(result.items) }
             } else {
                 try Task.checkCancellation()
                 let result: TorrentListResponse = try await api.request("api/torrents")

@@ -328,7 +328,7 @@ final class TVFlowTests: XCTestCase {
         XCTAssertTrue(playback.hasFocus)
         XCUIRemote.shared.press(.select)
         XCUIRemote.shared.press(.right)
-        let skip = app.buttons["setting-Skip forward and back"]
+        let skip = app.buttons["setting-Skip"]
         XCTAssertTrue(skip.hasFocus)
         let previous = skip.label
         XCUIRemote.shared.press(.select)

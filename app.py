@@ -2321,7 +2321,31 @@ def _library_with_metadata(items: list) -> list:
                         merged[key] = entry[key]
             result.append(merged)
         pending = len(LIBRARY_META_PENDING)
-    return result, pending
+    return _merge_library_versions(result), pending
+
+
+def _merge_library_versions(items: list) -> list:
+    """One card per TMDB title. The same film saved in two folders, or a show
+    split over two folders, becomes one title whose "versions" list every
+    copy - the one with the most files (then the newest) plays by default."""
+    groups, order = {}, []
+    for item in items:
+        key = (item.get("media_type"), item.get("tmdb_id")) if item.get("tmdb_id") else ("path", item["id"])
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(item)
+    merged = []
+    for key in order:
+        group = groups[key]
+        primary = max(group, key=lambda i: (i["files"], i["kind"] == i["folder_kind"], i["added"]))
+        entry = dict(primary)
+        if len(group) > 1:
+            entry["versions"] = [{"id": i["id"], "name": i["name"], "files": i["files"], "size": i["size"],
+                                  "category": i["category"]} for i in sorted(group, key=lambda i: i is not primary)]
+            entry["added"] = max(i["added"] for i in group)
+        merged.append(entry)
+    return merged
 
 
 @app.route("/api/library")

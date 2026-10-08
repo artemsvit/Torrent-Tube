@@ -62,7 +62,7 @@ struct TitleView: View {
                             .disabled(findingTrailer)
                             .buttonStyle(.bordered).tint(.white).accessibilityIdentifier("show-trailers")
                         FavoriteButton(item: value, details: details, server: api.baseURL)
-                        if item.sourceOverride == nil {
+                        if item.sourceOverride == nil || (item.releases?.count ?? 0) > 1 {  // a library title saved twice has versions too
                             Button(L("Choose version")) { selectedEpisode = nil; showVersions = true }.buttonStyle(.bordered).tint(.white)
                         }
                     }

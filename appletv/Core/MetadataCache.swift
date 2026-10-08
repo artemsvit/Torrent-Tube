@@ -7,7 +7,12 @@ import Foundation
 @MainActor
 final class MetadataCache {
     struct Match: Codable { var metadata: Metadata?; var fetched: Date }
-    struct SavedDetails: Codable { var details: Details; var fetched: Date }
+    struct SavedDetails: Codable {
+        var details: Details; var fetched: Date
+        /// Library titles keep their details until a rescan; others are renewed after a month.
+        var permanent: Bool? = nil
+    }
+    struct SavedLibrary: Codable { var titles: [LibraryTitle]; var synced: Date }
     static let missRetry: TimeInterval = 7 * 24 * 3600
     static let detailsLifetime: TimeInterval = 30 * 24 * 3600
     private static let detailsLimit = 600
@@ -16,6 +21,9 @@ final class MetadataCache {
     private var savedDetails: [String: SavedDetails] = [:]
     private let matchesFile: URL?
     private let detailsFile: URL?
+    private let libraryFile: URL?
+    /// The server's Library as last synced - shown at once on the next launch.
+    private(set) var library: SavedLibrary?
 
     init(server: URL) {
         let name = server.absoluteString.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "server"
@@ -23,6 +31,7 @@ final class MetadataCache {
         // "v2": matches saved before the server weighed year and type are dropped.
         matchesFile = folder?.appendingPathComponent("metadata-v2-\(name).json")
         detailsFile = folder?.appendingPathComponent("details-v2-\(name).json")
+        libraryFile = folder?.appendingPathComponent("library-v2-\(name).json")
         for old in ["metadata-\(name).json", "details-\(name).json"] {
             if let file = folder?.appendingPathComponent(old) { try? FileManager.default.removeItem(at: file) }
         }
@@ -32,6 +41,9 @@ final class MetadataCache {
         }
         if let file = detailsFile, let data = try? Data(contentsOf: file) {
             savedDetails = (try? decoder.decode([String: SavedDetails].self, from: data)) ?? [:]
+        }
+        if let file = libraryFile, let data = try? Data(contentsOf: file) {
+            library = try? decoder.decode(SavedLibrary.self, from: data)
         }
     }
 
@@ -61,28 +73,37 @@ final class MetadataCache {
     }
 
     func details(for title: String) -> Details? {
-        guard let saved = savedDetails[title], Date().timeIntervalSince(saved.fetched) < Self.detailsLifetime else { return nil }
+        guard let saved = savedDetails[title],
+              saved.permanent == true || Date().timeIntervalSince(saved.fetched) < Self.detailsLifetime else { return nil }
         return saved.details
     }
-    func store(_ details: Details, for title: String) {
-        savedDetails[title] = SavedDetails(details: details, fetched: Date())
-        if savedDetails.count > Self.detailsLimit {  // the oldest go first
-            for (key, _) in savedDetails.sorted(by: { $0.value.fetched < $1.value.fetched }).prefix(savedDetails.count - Self.detailsLimit) {
+    func store(_ details: Details, for title: String, permanent: Bool = false) {
+        savedDetails[title] = SavedDetails(details: details, fetched: Date(), permanent: permanent)
+        let temporary = savedDetails.filter { $0.value.permanent != true }
+        if temporary.count > Self.detailsLimit {  // the oldest catalog details go first; library ones stay
+            for (key, _) in temporary.sorted(by: { $0.value.fetched < $1.value.fetched }).prefix(temporary.count - Self.detailsLimit) {
                 savedDetails[key] = nil
             }
         }
         write(savedDetails, to: detailsFile)
     }
 
+    func storeLibrary(_ titles: [LibraryTitle]) {
+        library = SavedLibrary(titles: titles, synced: Date())
+        write(library, to: libraryFile)
+    }
+    /// Library titles whose details are saved.
+    func hasDetails(_ title: String) -> Bool { details(for: title) != nil }
+
     /// Titles saved with a match, and the space both files take.
     var matchedCount: Int { matches.values.filter { $0.metadata != nil }.count }
     var bytes: Int {
-        [matchesFile, detailsFile].compactMap { $0 }
+        [matchesFile, detailsFile, libraryFile].compactMap { $0 }
             .compactMap { try? FileManager.default.attributesOfItem(atPath: $0.path)[.size] as? Int }.reduce(0, +)
     }
     func clear() {
-        matches = [:]; savedDetails = [:]
-        for file in [matchesFile, detailsFile].compactMap({ $0 }) { try? FileManager.default.removeItem(at: file) }
+        matches = [:]; savedDetails = [:]; library = nil
+        for file in [matchesFile, detailsFile, libraryFile].compactMap({ $0 }) { try? FileManager.default.removeItem(at: file) }
     }
 
     private func write<T: Encodable>(_ value: T, to file: URL?) {

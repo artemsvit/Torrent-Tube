@@ -331,6 +331,7 @@ struct MobileHome: View {
     }
     private func load(refresh: Bool) async {
         await catalog.loadLibrary(api: api)
+        Task { await catalog.syncLibrary(api: api, config: config) }  // new library titles only
         await catalog.loadFeed("new", api: api, config: config, refresh: refresh)
         await withTaskGroup(of: Void.self) { group in
             for (feed, _) in feeds.dropFirst() { group.addTask { await catalog.loadFeed(feed, api: api, config: config, refresh: refresh) } }
@@ -378,6 +379,7 @@ struct MobileCategory: View {
 /// first) and Favorites (grouped by type) - as on Apple TV.
 struct MobileLibrary: View {
     let api: TorrentTubeAPI
+    @Environment(MobileContext.self) private var context
     @Environment(CatalogStore.self) private var catalog
     @Environment(FavoritesStore.self) private var favorites
     @Environment(\.mobileEdge) private var edge
@@ -425,6 +427,7 @@ struct MobileLibrary: View {
                 do { try await Task.sleep(for: .seconds(4)) } catch { return }
                 await catalog.loadLibrary(api: api)
             }
+            await catalog.syncLibrary(api: api, config: context.config)  // saves only titles not saved yet
         }
     }
 }

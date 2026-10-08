@@ -1,7 +1,14 @@
 import Foundation
 
 func libraryItem(_ title: LibraryTitle) -> MediaItem {
-    var item = MediaItem(title: title.name, magnet: nil, downloadLink: nil, sizeLabel: nil, seeders: nil, releases: nil)
+    // Several copies on the server: "Choose version" lists them (folder, files, size).
+    let versions: [Release]? = title.versions.count > 1 ? title.versions.map { version in
+        let size = ByteCountFormatter.string(fromByteCount: version.size, countStyle: .file)
+        let detail = version.files > 1 ? L("%ld files", version.files) + " · " + size : size
+        return Release(title: "\(version.category) / \(version.name)", magnet: nil, downloadLink: nil,
+                       sizeLabel: detail, seeders: nil, path: version.id)
+    } : nil
+    var item = MediaItem(title: title.name, magnet: nil, downloadLink: nil, sizeLabel: nil, seeders: nil, releases: versions)
     item.sourceOverride = title.source
     if !title.isTorrent {
         item.mediaType = title.kind == "tv" ? "tv" : "movie"

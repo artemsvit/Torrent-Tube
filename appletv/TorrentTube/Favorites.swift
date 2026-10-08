@@ -65,6 +65,7 @@ struct LibraryView: View {
                 do { try await Task.sleep(for: .seconds(4)) } catch { return }
                 await catalog.loadLibrary(api: api)
             }
+            await catalog.syncLibrary(api: api, config: config)  // saves only titles not saved yet
         }
     }
     @ViewBuilder private var favoritesSection: some View {

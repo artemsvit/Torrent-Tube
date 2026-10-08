@@ -91,7 +91,7 @@ struct MobileTitle: View {
                     .accessibilityIdentifier("title-play")
                     secondaryActions
                 }.padding(.top, 6)
-                if item.sourceOverride == nil {
+                if item.sourceOverride == nil || (item.releases?.count ?? 0) > 1 {  // a library title saved twice has versions too
                     Button { episode = nil; showVersions = true } label: {
                         Label(L("Choose version"), systemImage: "list.bullet").font(.subheadline.weight(.semibold))
                     }

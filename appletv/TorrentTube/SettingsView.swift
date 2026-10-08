@@ -14,7 +14,6 @@ struct SettingsView: View {
     @AppStorage("recentSearches") private var recentSearches = ""
     @AppStorage("libraryMetadata") private var libraryMetadata = true
     @State private var refreshingMetadata = false
-    @State private var cacheSummary = ""
     @State private var section: Section = .home
     @State private var localizer = Localizer.shared
     @FocusState private var focusedSection: Section?
@@ -78,7 +77,7 @@ struct SettingsView: View {
                         setting("Continue Watching", value: showContinue ? L("Show") : L("Hide"), subtitle: "Display your unfinished titles on Home. Saved positions are kept.") { showContinue.toggle() }
                         setting("Title preview while browsing", value: previewTitle ? L("On") : L("Off"), subtitle: "Update the Home banner as you move between movie cards.") { previewTitle.toggle() }
                     case .playback:
-                        setting("Skip forward and back", value: L("%ld seconds", seekInterval), subtitle: "Choose how far the player moves with each skip.") {
+                        setting("Skip", value: L("%ld seconds", seekInterval), subtitle: "Choose how far the player moves with each skip.") {
                             let intervals = [10, 15, 30]
                             seekInterval = intervals[((intervals.firstIndex(of: seekInterval) ?? 0) + 1) % intervals.count]
                         }
@@ -92,19 +91,20 @@ struct SettingsView: View {
                                 subtitle: "Look up library titles on TMDB. Matches are saved on this device, so the Library opens without waiting.") {
                             libraryMetadata.toggle()
                         }
-                        setting("Refresh library metadata", value: refreshingMetadata ? L("Refreshing…") : nil,
-                                subtitle: "Forget the saved posters and details and look them up again.") {
+                        setting("Sync now", value: catalog.syncing && !refreshingMetadata ? L("Syncing…") : nil,
+                                subtitle: "Save details and images for titles new on the server.") {
+                            Task { await catalog.syncNow(api: api, config: config, rescan: false) }
+                        }.disabled(catalog.syncing)
+                        setting("Rescan library", value: refreshingMetadata ? L("Refreshing…") : nil,
+                                subtitle: "Match every title again on the server and save everything anew.") {
                             Task {
                                 refreshingMetadata = true
-                                await catalog.refreshMetadata(api: api)
-                                await catalog.loadLibrary(api: api)
-                                await catalog.enrich(catalog.library.map(libraryItem), api: api, config: config)
-                                updateCacheSummary()
+                                await catalog.syncNow(api: api, config: config, rescan: true)
                                 refreshingMetadata = false
                             }
-                        }.disabled(refreshingMetadata)
-                        Text(cacheSummary).font(.system(size: 22)).foregroundStyle(.secondary).padding(.horizontal, 28).padding(.top, 8)
-                            .onAppear { updateCacheSummary() }
+                        }.disabled(refreshingMetadata || catalog.syncing)
+                        Text(catalog.syncSummary(api.baseURL)).font(.system(size: 22)).foregroundStyle(.secondary)
+                            .padding(.horizontal, 28).padding(.top, 8)
                     case .server:
                         Text(api.baseURL.absoluteString).font(.system(size: 25)).foregroundStyle(.secondary).padding(.bottom, 12)
                         if !config.supportsPlayback { UpdateServerNotice().padding(.bottom, 12) }
@@ -136,11 +136,6 @@ struct SettingsView: View {
             Button(L("Cancel"), role: .cancel) {}
             Button(L("Clear history"), role: .destructive) { history.clear(server: api.baseURL) }
         } message: { Text(L("Saved playback positions for this server will be removed from this Apple TV. Your server files stay untouched.")) }
-    }
-    private func updateCacheSummary() {
-        let cache = catalog.metadataCache(api.baseURL)
-        cacheSummary = L("Saved on this device: %ld titles · %@", cache.matchedCount,
-                         ByteCountFormatter.string(fromByteCount: Int64(cache.bytes), countStyle: .file))
     }
     private func setting(_ title: String, value: String?, subtitle: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {

@@ -11,6 +11,10 @@ struct TorrentTubeMobileApp: App {
     @State private var favorites = FavoritesStore()
     @State private var localizer = Localizer.shared
     @State private var reconnected = false
+    init() {
+        // Posters, backdrops and cast photos stay on the device between launches.
+        URLCache.shared = URLCache(memoryCapacity: 64 << 20, diskCapacity: 1 << 30)
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -163,14 +167,8 @@ struct MobileSettings: View {
     @AppStorage("recentSearches") private var recent = ""
     @AppStorage("libraryMetadata") private var libraryMetadata = true
     @State private var refreshingMetadata = false
-    @State private var cacheSummary = ""
     @State private var clearHistory = false
     @State private var refreshing = false
-    private func updateCacheSummary() {
-        let cache = catalog.metadataCache(api.baseURL)
-        cacheSummary = L("Saved on this device: %ld titles · %@", cache.matchedCount,
-                         ByteCountFormatter.string(fromByteCount: Int64(cache.bytes), countStyle: .file))
-    }
     private func header(_ title: String, _ icon: String) -> some View {
         // A fixed icon column, so every section title starts on the same line.
         HStack(spacing: 8) {
@@ -188,7 +186,7 @@ struct MobileSettings: View {
                     Text(L("Display your unfinished titles on Home. Saved positions are kept."))
                 }
                 Section {
-                    Picker(L("Skip forward and back"), selection: $seekInterval) {
+                    Picker(L("Skip"), selection: $seekInterval) {
                         ForEach([10, 15, 30], id: \.self) { Text(L("%ld seconds", $0)).tag($0) }
                     }.pickerStyle(.menu)
                     NavigationLink(L("Player licenses")) {
@@ -212,19 +210,19 @@ struct MobileSettings: View {
                 Section {
                     Toggle(L("Posters and details"), isOn: $libraryMetadata).tint(Color.torrentAccent)
                     Button {
+                        Task { await catalog.syncNow(api: api, config: config, rescan: false) }
+                    } label: { HStack { Text(L("Sync now")); Spacer(); if catalog.syncing && !refreshingMetadata { ProgressView() } } }
+                        .disabled(catalog.syncing)
+                    Button {
                         Task {
                             refreshingMetadata = true
-                            await catalog.refreshMetadata(api: api)
-                            await catalog.loadLibrary(api: api)
-                            await catalog.enrich(catalog.library.map(libraryItem), api: api, config: config)
-                            updateCacheSummary()
+                            await catalog.syncNow(api: api, config: config, rescan: true)
                             refreshingMetadata = false
                         }
-                    } label: { HStack { Text(L("Refresh library metadata")); Spacer(); if refreshingMetadata { ProgressView() } } }
-                        .disabled(refreshingMetadata)
+                    } label: { HStack { Text(L("Rescan library")); Spacer(); if refreshingMetadata { ProgressView() } } }
+                        .disabled(refreshingMetadata || catalog.syncing)
                 } header: { header("Library", "folder") } footer: {
-                    Text(L("Look up library titles on TMDB. Matches are saved on this device, so the Library opens without waiting.") + "\n" + cacheSummary)
-                        .onAppear { updateCacheSummary() }
+                    Text(L("Look up library titles on TMDB. Matches are saved on this device, so the Library opens without waiting.") + "\n" + catalog.syncSummary(api.baseURL))
                 }
                 Section {
                     VStack(alignment: .leading, spacing: 4) {

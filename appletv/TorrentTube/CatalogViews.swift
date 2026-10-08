@@ -208,6 +208,7 @@ struct HomeView: View {
         .alert(L("Streaming unavailable"), isPresented: $showServerNotice) { Button(L("OK"), role: .cancel) {} } message: { Text(L("Update Torrent Tube on your server to stream on this Apple TV.")) }
         .task {
             await catalog.loadLibrary(api: api)
+            Task { await catalog.syncLibrary(api: api, config: config) }  // new library titles only
             await catalog.loadFeed("new", api: api, config: config)
             await withTaskGroup(of: Void.self) { group in
                 for (feed, _) in shelves.dropFirst() {

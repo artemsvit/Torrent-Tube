@@ -72,5 +72,25 @@ class ClassifyTests(unittest.TestCase):
         self.assertEqual(server.classify_library_item("movie", "tv", None), "tv")
 
 
+class MergeTests(unittest.TestCase):
+    def item(self, path, files, kind="movie", folder="movie", tmdb=7, added=1):
+        return {"id": path, "name": path.split("/")[-1], "files": files, "size": files * 10, "category": path.split("/")[0],
+                "kind": kind, "folder_kind": folder, "added": added, "tmdb_id": tmdb, "media_type": "movie"}
+
+    def test_copies_of_one_title_become_one_card_with_versions(self):
+        items = [self.item("Cartoon/Film.mkv", 1, folder="cartoon"), self.item("Movies/Film.mkv", 1, added=5),
+                 self.item("Movies/Other.mkv", 1, tmdb=8)]
+        merged = server._merge_library_versions(items)
+        self.assertEqual(len(merged), 2)
+        film = merged[0]
+        self.assertEqual(film["id"], "Movies/Film.mkv", "the copy in the right folder plays by default")
+        self.assertEqual([v["id"] for v in film["versions"]], ["Movies/Film.mkv", "Cartoon/Film.mkv"])
+        self.assertNotIn("versions", merged[1])
+
+    def test_titles_without_a_match_are_never_merged(self):
+        items = [self.item("Movies/A.mkv", 1, tmdb=None), self.item("Movies/B.mkv", 1, tmdb=None)]
+        self.assertEqual(len(server._merge_library_versions(items)), 2)
+
+
 if __name__ == "__main__":
     unittest.main()

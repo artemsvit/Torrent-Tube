@@ -15,6 +15,9 @@ struct TorrentTubeApp: App {
     @State private var didAttemptReconnect = false
     @State private var localizer = Localizer.shared
     init() {
+        // Posters, backdrops and cast photos stay on the device between launches
+        // (tvOS keeps it in Caches, which the system may clear when space runs low).
+        URLCache.shared = URLCache(memoryCapacity: 64 << 20, diskCapacity: 512 << 20)
         let appearance = UITabBar.appearance().standardAppearance.copy()
         for items in [appearance.stackedLayoutAppearance, appearance.inlineLayoutAppearance, appearance.compactInlineLayoutAppearance] {
             items.focused.iconColor = .black
