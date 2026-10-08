@@ -5,14 +5,14 @@ import Foundation
 enum ReleaseChoice {
     /// Only releases named after the title (anything else the search matched,
     /// like an album, goes); for an episode, those with its season first.
-    static func rank(_ results: [MediaItem], names: [String], season: Int?) -> [MediaItem] {
+    static func rank(_ results: [MediaItem], names: [String], season: Int?, allowUnmatched: Bool = true) -> [MediaItem] {
         func plain(_ text: String) -> String {
             text.lowercased().folding(options: .diacriticInsensitive, locale: nil)
                 .components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }.joined(separator: " ")
         }
         let wanted = names.map(plain).filter { !$0.isEmpty }
         let named = results.filter { result in let title = " " + plain(result.title) + " "; return wanted.contains { title.contains(" " + $0 + " ") } }
-        let kept = named.isEmpty ? results : named
+        let kept = named.isEmpty && allowUnmatched ? results : named
         guard let season else { return kept }
         func hasSeason(_ title: String) -> Bool {
             let text = title.lowercased()
@@ -70,8 +70,36 @@ enum ReleaseChoice {
         return nil
     }
 
+    /// Prefer a seeded season pack; never select a different season or episode.
+    static func automaticRelease(_ releases: [Release], season: Int, episode: Int) -> Release? {
+        releases.enumerated().filter { _, release in
+            guard release.source.isPlayable, seasons(in: release.title).contains(season) else { return false }
+            if let identity = EpisodeIdentity.parse(release.title) {
+                return identity == EpisodeIdentity(season: season, episode: episode)
+            }
+            return true
+        }.sorted { lhs, rhs in
+            let left = lhs.element.seeders ?? -1, right = rhs.element.seeders ?? -1
+            return left == right ? lhs.offset < rhs.offset : left > right
+        }.first?.element
+    }
+
+    static func resolveEpisodeSource(for item: MediaItem, title: String, original: String?, tmdbID: Int?,
+                                     season: Int, episode: Int, api: TorrentTubeAPI) async throws -> PlaybackSource? {
+        if let source = episodeSource(for: item, tmdbID: tmdbID, season: season) {
+            // A remembered individual episode must not be reused for another episode.
+            let sourceTitle = remembered(for: tmdbID).flatMap { $0.source == source ? $0.title : nil } ?? item.title
+            if item.sourceOverride != nil || EpisodeIdentity.parse(sourceTitle).map({ $0.episode == episode }) != false { return source }
+        }
+        let releases = try await search(title: title, original: original, season: season, api: api, allowUnmatched: false)
+        try Task.checkCancellation()
+        guard let release = automaticRelease(releases, season: season, episode: episode) else { return nil }
+        remember(release.source, title: release.title, for: tmdbID)
+        return release.source
+    }
+
     /// Search by the Ukrainian and the original title, then rank.
-    static func search(title: String, original: String?, season: Int?, api: TorrentTubeAPI) async throws -> [Release] {
+    static func search(title: String, original: String?, season: Int?, api: TorrentTubeAPI, allowUnmatched: Bool = true) async throws -> [Release] {
         var names = [title]
         if let original, !original.isEmpty, original.lowercased() != title.lowercased() { names.append(original) }
         var found: [MediaItem] = []
@@ -80,7 +108,7 @@ enum ReleaseChoice {
             try Task.checkCancellation()
             found += result.results.filter { new in !found.contains { $0.id == new.id } }
         }
-        return rank(found, names: names, season: season)
+        return rank(found, names: names, season: season, allowUnmatched: allowUnmatched)
             .map { Release(title: $0.title, magnet: $0.magnet, downloadLink: $0.downloadLink, sizeLabel: $0.sizeLabel, seeders: $0.seeders) }
     }
 }

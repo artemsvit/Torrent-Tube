@@ -13,6 +13,7 @@ struct TitleView: View {
     @State private var findingTrailer = false
     @State private var trailerError: String?
     @State private var season = 1
+    @State private var launchingEpisode: Int?
     @State private var selectedEpisode: Int?
     @State private var episodes: [Episode] = []
     @State private var episodeLoading = false
@@ -96,12 +97,7 @@ struct TitleView: View {
                             LazyHStack(alignment: .top, spacing: 32) {
                                 ForEach(episodes) { episode in
                                     Button {
-                                        selectedEpisode = episode.number
-                                        // On the server: its folder. Otherwise the release chosen before
-                                        // for this series, or the torrent this page came from.
-                                        if let release = ReleaseChoice.episodeSource(for: item, tmdbID: details?.tmdbId ?? value.tmdbId, season: season) {
-                                            if config.supportsPlayback { playback = request(source: release) } else { showServerNotice = true }
-                                        } else { showVersions = true }
+                                        launchingEpisode = episode.number
                                     } label: {
                                         VStack(alignment: .leading, spacing: 14) {
                                             ArtworkView(url: episode.still).frame(width: 380, height: 215).clipShape(RoundedRectangle(cornerRadius: 12))
@@ -110,6 +106,7 @@ struct TitleView: View {
                                             if let overview = episode.overview { Text(overview).font(.system(size: 22)).foregroundStyle(.secondary).lineLimit(3) }
                                         }.frame(width: 380, alignment: .leading)
                                     }.buttonStyle(CinemaCardStyle())
+                                        .overlay { if launchingEpisode == episode.number { ProgressView().tint(.white) } }
                                 }
                             }.padding(.horizontal, TVLayout.edge).padding(.vertical, 18)
                         }.focusSection()
@@ -205,6 +202,20 @@ struct TitleView: View {
             if let first = details?.seasonList?.first { season = first.number }
         }
         .task(id: "\(details?.tmdbId ?? 0):\(season)") { await loadEpisodes() }
+        .onChange(of: season) { launchingEpisode = nil }
+        .task(id: launchingEpisode) {
+            guard let number = launchingEpisode else { return }
+            selectedEpisode = number
+            defer { if !Task.isCancelled { launchingEpisode = nil } }
+            guard config.supportsPlayback else { showServerNotice = true; return }
+            do {
+                let source = try await ReleaseChoice.resolveEpisodeSource(for: item, title: value.displayTitle,
+                    original: details?.originalTitle, tmdbID: details?.tmdbId ?? value.tmdbId,
+                    season: season, episode: number, api: api)
+                try Task.checkCancellation()
+                if let source { playback = request(source: source) } else { showVersions = true }
+            } catch is CancellationError {} catch { versionError = error.localizedDescription; showVersions = true }
+        }
     }
     private func play() {
         guard config.supportsPlayback else { showServerNotice = true; return }

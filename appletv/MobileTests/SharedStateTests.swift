@@ -126,6 +126,21 @@ final class SharedStateTests: XCTestCase {
         XCTAssertEqual(ReleaseChoice.rank(results, names: ["Nothing like this"], season: nil).count, titles.count, "no match keeps the search")
     }
 
+    func testAutomaticEpisodeReleasePrefersSeededMatchingSeason() {
+        func release(_ title: String, _ seeds: Int) -> Release {
+            Release(title: title, magnet: "magnet:?xt=\(title)", downloadLink: nil, sizeLabel: nil, seeders: seeds)
+        }
+        let wrongSeason = release("Nobody Wants This S02", 100)
+        let wrongEpisode = release("Nobody Wants This S01E04", 200)
+        let unseeded = release("Nobody Wants This S01 2160p", 0)
+        let seeded = release("Nobody Wants This (S1) 1080p", 22)
+        XCTAssertEqual(ReleaseChoice.automaticRelease([wrongSeason, wrongEpisode, unseeded, seeded], season: 1, episode: 3), seeded)
+        XCTAssertNil(ReleaseChoice.automaticRelease([wrongSeason, wrongEpisode], season: 1, episode: 3))
+        XCTAssertNil(ReleaseChoice.automaticRelease([release("Unknown show", 300)], season: 1, episode: 3))
+        let unrelated = MediaItem(title: "Other show S01", magnet: "magnet:test", downloadLink: nil, sizeLabel: nil, seeders: 100, releases: nil)
+        XCTAssertTrue(ReleaseChoice.rank([unrelated], names: ["Nobody Wants This"], season: 1, allowUnmatched: false).isEmpty)
+    }
+
     func testReleaseNamesTellTheirSeasons() {
         XCTAssertEqual(ReleaseChoice.seasons(in: "Nobody Wants This S02E07 (2026) NF WEB-DL 1080p"), [2])
         XCTAssertEqual(ReleaseChoice.seasons(in: "Below (S1) (2026) WEB-DL 1080p Ukr/Eng (S1)"), [1])

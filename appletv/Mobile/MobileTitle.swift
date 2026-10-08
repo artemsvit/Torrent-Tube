@@ -10,6 +10,7 @@ struct MobileTitle: View {
     @State private var expanded = false
     @State private var heroGrowth: CGFloat = 0
     @State private var season = 1
+    @State private var launchingEpisode: Int?
     @State private var episode: Int?
     @State private var episodes: [Episode] = []
     @State private var episodeError: String?
@@ -60,6 +61,20 @@ struct MobileTitle: View {
             if let first = details?.seasonList?.first { season = first.number }
         }
         .task(id: "\(details?.tmdbId ?? 0):\(season)") { await loadEpisodes() }
+        .onChange(of: season) { launchingEpisode = nil }
+        .task(id: launchingEpisode) {
+            guard let number = launchingEpisode else { return }
+            episode = number
+            defer { if !Task.isCancelled { launchingEpisode = nil } }
+            guard config.supportsPlayback else { error = L("Update Torrent Tube on your server to stream on this device."); return }
+            do {
+                let source = try await ReleaseChoice.resolveEpisodeSource(for: item, title: value.displayTitle,
+                    original: details?.originalTitle, tmdbID: details?.tmdbId ?? value.tmdbId,
+                    season: season, episode: number, api: api)
+                try Task.checkCancellation()
+                if let source { play(source: source) } else { showVersions = true }
+            } catch is CancellationError {} catch { self.error = error.localizedDescription }
+        }
         .versionsPresentation(isPresented: $showVersions, onDismiss: { if let pending { playback = pending; self.pending = nil } }) { versionSheet }
         .fullScreenCover(item: $playback) { MobilePlayback(request: $0, api: api) }
         .fullScreenCover(item: $trailer) { MobileTrailer(trailer: $0, api: api) }
@@ -182,13 +197,10 @@ struct MobileTitle: View {
     }
     private func episodeButton<Label: View>(_ ep: Episode, @ViewBuilder label: () -> Label) -> some View {
         Button {
-            episode = ep.number
-            // On the server: its folder. Otherwise the release chosen before for this
-            // series, or the torrent this page came from; the list only when neither.
-            if let release = ReleaseChoice.episodeSource(for: item, tmdbID: details?.tmdbId ?? value.tmdbId, season: season) { play(source: release) }
-            else { showVersions = true }
+            launchingEpisode = ep.number
         } label: { label().contentShape(Rectangle()) }
             .buttonStyle(.plain).accessibilityIdentifier("episode-\(ep.number)")
+            .overlay { if launchingEpisode == ep.number { ProgressView().tint(.white) } }
     }
 
     private func castSection(_ people: [Details.Person]) -> some View {

@@ -149,7 +149,7 @@ struct HomeView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 54) {
                 if let active {
-                    CinemaHero(item: catalog.resolved(active), details: catalog.details[active.title], height: 1080, bottomInset: 165, preview: preview.controller, nextArtwork: nextHeroArtwork) {
+                    CinemaHero(item: catalog.resolved(active), details: catalog.details[active.title], height: 1080, bottomInset: 245, preview: preview.controller, nextArtwork: nextHeroArtwork) {
                         // Actions stay on the left; page indicators align with the right screen margin.
                         HStack(spacing: 28) {
                             Button {
@@ -194,6 +194,9 @@ struct HomeView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.trailing, TVLayout.edge)
                     }
+                    // The first row rises into the banner's fade. The banner gives up that
+                    // height itself: the rows are lazy and appear only when their frames are on screen.
+                    .padding(.bottom, -210)
                 } else if catalog.loading.contains("new") || catalog.libraryLoading {
                     LoadingState(text: L("Finding something to watch…"), minHeight: 600)
                 } else {
@@ -231,7 +234,7 @@ struct HomeView: View {
                             }.padding(.horizontal, TVLayout.edge).padding(.vertical, 18)
                         }.scrollIndicators(.hidden).focusSection()
                     }
-                    .padding(.top, active == nil ? 0 : -130)  // up into the hero's fade
+                    
                 }
                 if config.searchEnabled {
                     ForEach(Array(shelves.enumerated()), id: \.element.0) { index, shelf in
@@ -239,7 +242,6 @@ struct HomeView: View {
                         if let items = catalog.rows[feed], !items.isEmpty {
                             MediaShelf(title: L(label), items: Array(items.prefix(24)), api: api, config: config) { if previewFocusedTitle { highlighted = $0 } }
                                 // The first shelf rises into the hero's fade, unless Continue Watching already did.
-                                .padding(.top, index == 0 && active != nil && !(showContinueWatching && !recent.isEmpty) ? -130 : 0)
                         } else if let error = catalog.errors[feed] {
                             ErrorPanel(message: "\(L(label)): \(error)") { Task { await catalog.loadFeed(feed, api: api, config: config, refresh: true) } }.padding(.horizontal, TVLayout.edge)
                         }

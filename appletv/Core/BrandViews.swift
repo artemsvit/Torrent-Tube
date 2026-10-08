@@ -168,12 +168,9 @@ struct BrandBackground: View {
 }
 
 /// While the app connects to the saved server at launch: the brand mark on
-/// the welcome screen's glow, waves around it, and "Connecting…".
+/// the welcome background and "Connecting…".
 /// The connection screen appears only when connecting fails.
 struct SplashView: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var breathe = false
-    @State private var ripple = false
     #if os(tvOS)
     private let mark: CGFloat = 170, title: CGFloat = 76, caption: CGFloat = 28
     #else
@@ -182,21 +179,8 @@ struct SplashView: View {
     var body: some View {
         ZStack {
             BrandBackground()
-            Circle().fill(Color.torrentAccent.opacity(0.22))
-                .frame(width: mark * 3.2, height: mark * 3.2).blur(radius: mark * 0.6)
-                .scaleEffect(breathe ? 1.15 : 0.85)
             VStack(spacing: mark * 0.32) {
-                ZStack {
-                    ForEach(0..<2) { ring in
-                        RoundedRectangle(cornerRadius: mark * 0.3, style: .continuous)
-                            .strokeBorder(Color.torrentAccent.opacity(0.5), lineWidth: 2)
-                            .frame(width: mark, height: mark)
-                            .scaleEffect(ripple ? 1.7 : 1)
-                            .opacity(ripple ? 0 : 0.8)
-                            .animation(reduceMotion ? nil : .easeOut(duration: 2.2).repeatForever(autoreverses: false).delay(Double(ring) * 1.1), value: ripple)
-                    }
-                    BrandMark(size: mark)  // still; only the waves move
-                }
+                BrandMark(size: mark)
                 Text("Torrent Tube").font(.system(size: title, weight: .heavy)).foregroundStyle(.white)
                 HStack(spacing: 10) {
                     ProgressView().tint(.white.opacity(0.7))
@@ -204,11 +188,6 @@ struct SplashView: View {
                         .font(.system(size: caption, weight: .medium)).foregroundStyle(.white.opacity(0.6))
                 }
             }
-        }
-        .onAppear {
-            guard !reduceMotion else { return }
-            withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) { breathe = true }
-            ripple = true
         }
         .accessibilityElement(children: .combine)
     }
@@ -299,7 +278,7 @@ struct RoundedPlayShape: Shape {
     }
 }
 
-/// The app icon: a rounded play outline on an accent gradient, with a glow.
+/// The static app icon: a rounded play outline on an accent gradient.
 struct BrandMark: View {
     var size: CGFloat
     var body: some View {
@@ -317,8 +296,6 @@ struct BrandMark: View {
                 LinearGradient(colors: [Color(red: 0.11, green: 0.48, blue: 0.95), Color.torrentAccent, Color(red: 0.05, green: 0.39, blue: 0.84)],
                                startPoint: .topLeading, endPoint: .bottomTrailing),
                 in: RoundedRectangle(cornerRadius: size * 0.24, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: size * 0.24, style: .continuous).strokeBorder(.white.opacity(0.25), lineWidth: 1))
-            .shadow(color: Color.torrentAccent.opacity(0.55), radius: size * 0.35, y: size * 0.08)
             .accessibilityHidden(true)
     }
 }
