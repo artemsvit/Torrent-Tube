@@ -329,7 +329,12 @@ enum HeroLayout {
     /// opening a title never makes it jump.
     static func bannerHeight(screenHeight: CGFloat, sizeClass: UserInterfaceSizeClass?) -> CGFloat {
         let base = mobileHeight(screenHeight: screenHeight, sizeClass: sizeClass)
-        return screenHeight >= 500 ? max(base, screenHeight * (sizeClass == .regular ? 0.82 : 0.88)) : base
+        #if os(macOS)
+        let share = 0.82
+        #else
+        let share = sizeClass == .regular ? 0.76 : 0.88  // iPad a little lower than the Mac
+        #endif
+        return screenHeight >= 500 ? max(base, screenHeight * share) : base
     }
     /// Adaptive height for the hero banner on mobile (iPhone / iPad).
     static func mobileHeight(screenHeight: CGFloat, sizeClass: UserInterfaceSizeClass?) -> CGFloat {

@@ -24,8 +24,8 @@ struct BarelessWindow: NSViewRepresentable {
 
 /// The Mac top row: one height for every control in it.
 enum MacBar {
-    static let height: CGFloat = 60
-    static let control: CGFloat = 40
+    static let height: CGFloat = 70
+    static let control: CGFloat = 46
 }
 
 /// The always-visible search field at the right of the Mac top row (⌘F).
@@ -34,9 +34,9 @@ struct MacSearchField: View {
     var focused: FocusState<Bool>.Binding
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass").font(.system(size: 14, weight: .semibold)).foregroundStyle(.white.opacity(0.7))
+            Image(systemName: "magnifyingglass").font(.system(size: 16, weight: .semibold)).foregroundStyle(.white.opacity(0.7))
             TextField(L("Search"), text: $text)
-                .textFieldStyle(.plain).font(.system(size: 14))
+                .textFieldStyle(.plain).font(.system(size: 16))
                 .focused(focused)
                 .onExitCommand { text = ""; focused.wrappedValue = false }
             if !text.isEmpty {
@@ -45,7 +45,7 @@ struct MacSearchField: View {
             }
         }
         .padding(.horizontal, 14)
-        .frame(width: 240, height: MacBar.control)
+        .frame(width: 280, height: MacBar.control)
         .background(.ultraThinMaterial, in: Capsule())
         .overlay(Capsule().strokeBorder(.white.opacity(focused.wrappedValue ? 0.35 : 0.1)))
         .background { Button("") { focused.wrappedValue = true }.keyboardShortcut("f", modifiers: .command).hidden() }
@@ -59,7 +59,7 @@ struct MacBarButton: View {
     let action: () -> Void
     var body: some View {
         Button(action: action) {
-            Image(systemName: symbol).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+            Image(systemName: symbol).font(.system(size: 17, weight: .semibold)).foregroundStyle(.white)
                 .frame(width: MacBar.control, height: MacBar.control)
                 .background(.ultraThinMaterial, in: Circle())
                 .overlay(Circle().strokeBorder(.white.opacity(0.1)))
@@ -135,6 +135,30 @@ enum DeviceKind {
         #endif
     }
 }
+
+extension View {
+    /// The white Play button. macOS greys out prominent buttons while the
+    /// window is inactive, so the Mac draws its own white pill.
+    @ViewBuilder func primaryHeroButton() -> some View {
+        #if os(macOS)
+        buttonStyle(MacPrimaryStyle())
+        #else
+        buttonStyle(.borderedProminent).tint(.white).foregroundStyle(.black)
+        #endif
+    }
+}
+
+#if os(macOS)
+private struct MacPrimaryStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(.black)
+            .padding(.horizontal, 18)
+            .background(.white.opacity(configuration.isPressed ? 0.8 : 1), in: Capsule())
+            .contentShape(Capsule())
+    }
+}
+#endif
 
 /// Keeps the screen awake while a video plays.
 enum ScreenSleep {

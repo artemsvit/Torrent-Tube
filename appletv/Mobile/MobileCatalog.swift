@@ -13,14 +13,16 @@ enum HeroFont {
     static let overview = Font.system(size: 16)
     static let button = Font.system(size: 15, weight: .semibold)
     static let buttonHeight: CGFloat = 40
-    static func title(regular: Bool) -> Font { .system(size: 60, weight: .heavy) }
+    static func titleSize(regular: Bool) -> CGFloat { 60 }
+    static func title(regular: Bool) -> Font { .system(size: titleSize(regular: regular), weight: .heavy) }
     #else
     static let kind = Font.caption.bold()
     static let facts = Font.subheadline
     static let overview = Font.subheadline
     static let button = Font.headline
     static let buttonHeight: CGFloat = 36
-    static func title(regular: Bool) -> Font { .system(size: regular ? 48 : 34, weight: .heavy) }
+    static func titleSize(regular: Bool) -> CGFloat { regular ? 48 : 34 }
+    static func title(regular: Bool) -> Font { .system(size: titleSize(regular: regular), weight: .heavy) }
     #endif
 }
 
@@ -42,7 +44,7 @@ struct HeroInfo<Actions: View>: View {
                 Text(kind.uppercased()).font(HeroFont.kind).tracking(2).foregroundStyle(.white.opacity(0.65))
             }
             Text(title).font(HeroFont.title(regular: sizeClass == .regular))
-                .lineLimit(2).minimumScaleFactor(0.7)
+                .lineLimit(2).minimumScaleFactor(0.7).tightTitleLines(size: HeroFont.titleSize(regular: sizeClass == .regular))
                 .frame(maxWidth: 900, alignment: .leading)
             MobileFacts(item: item, details: details)
             if let overview, !overview.isEmpty {
@@ -286,6 +288,8 @@ struct MobileHome: View {
     @State private var previewed: MediaItem?
     @State private var playback: PlaybackRequest?
     @State private var serverNotice = false
+    @State private var trailer: Trailer?
+    @State private var findingTrailer = false
     @Environment(\.scenePhase) private var scenePhase
     @State private var featuredIndex = 0
     @State private var heroVisible = true
@@ -348,6 +352,7 @@ struct MobileHome: View {
             nextFeatured()
         }
         .fullScreenCover(item: $playback) { MobilePlayback(request: $0, api: api) }
+        .fullScreenCover(item: $trailer) { MobileTrailer(trailer: $0, api: api) }
         .alert(L("Streaming unavailable"), isPresented: $serverNotice) { Button(L("OK"), role: .cancel) {} } message: {
             Text(L("Update Torrent Tube on your server to stream on this device."))
         }
@@ -390,7 +395,7 @@ struct MobileHome: View {
                     Label(L("Play"), systemImage: "play.fill").font(HeroFont.button)
                         .frame(maxWidth: sizeClass == .regular ? 220 : .infinity, minHeight: HeroFont.buttonHeight)
                 }
-                .buttonStyle(.borderedProminent).tint(.white).foregroundStyle(.black)
+                .primaryHeroButton()
                 .accessibilityIdentifier("hero-play")
                 NavigationLink(value: item) {
                     Label(L("Details"), systemImage: "info.circle").font(HeroFont.button)
@@ -399,6 +404,24 @@ struct MobileHome: View {
                 }
                 .buttonStyle(.bordered).tint(.white)
                 .accessibilityIdentifier("featured-details")
+                // iPad and Mac: the trailer, as on Apple TV.
+                if sizeClass == .regular {
+                    Button {
+                        findingTrailer = true
+                        Task {
+                            defer { findingTrailer = false }
+                            trailer = try? await TrailerChoice.find(title: item.title, year: details?.year, known: details?.trailers ?? [], api: api)
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Group { if findingTrailer { ProgressView() } else { Image(systemName: "play.rectangle") } }
+                            Text(L("Trailer"))
+                        }
+                        .font(HeroFont.button).padding(.horizontal, 16).frame(minHeight: HeroFont.buttonHeight)
+                    }
+                    .buttonStyle(.bordered).tint(.white).disabled(findingTrailer)
+                    .accessibilityIdentifier("featured-trailer")
+                }
                 if sizeClass == .regular, featuredItems.count > 1 {
                     Spacer(minLength: 16)
                     carouselDots

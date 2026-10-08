@@ -408,7 +408,7 @@ struct CinemaHero<Actions: View>: View {
                 if let kind {
                     Text(kind.uppercased()).font(.system(size: 20, weight: .bold)).tracking(3).foregroundStyle(.white.opacity(0.65))
                 }
-                Text(details?.title ?? item.displayTitle).font(.system(size: 80, weight: .heavy)).lineLimit(2)
+                Text(details?.title ?? item.displayTitle).font(.system(size: 80, weight: .heavy)).lineLimit(2).tightTitleLines(size: 80)
                     .accessibilityIdentifier("hero-title")
                     .minimumScaleFactor(0.7).shadow(color: .black.opacity(0.5), radius: 12, y: 4)
                     .frame(maxWidth: 1000, alignment: .leading)

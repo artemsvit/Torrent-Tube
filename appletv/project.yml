@@ -116,9 +116,8 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.artsvit.torrenttube.mobile
         TARGETED_DEVICE_FAMILY: '1,2'
         SUPPORTS_MACCATALYST: NO
-        # Runs on Apple silicon Macs as the iPad app ("Designed for iPad"):
-        # VLCKit has no Mac Catalyst build, so this is the Mac option.
-        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: YES
+        # The Mac has its own app (TorrentTubeMac); not the iPad app in a window.
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
         # Signing a Mac build needs a team; the Apple TV targets keep running
         # in the simulator without one.
         DEVELOPMENT_TEAM: 8KK8V96Q6B

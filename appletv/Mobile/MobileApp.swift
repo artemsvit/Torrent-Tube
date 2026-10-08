@@ -48,7 +48,7 @@ struct TorrentTubeMobileApp: App {
             }
             #if os(macOS)
             .background(BarelessWindow())
-            .frame(minWidth: 1040, minHeight: 640)
+            .frame(minWidth: 1120, minHeight: 680)
             #endif
         }
         #if os(macOS)
@@ -255,19 +255,23 @@ struct MobileRoot: View {
             .buttonBorderShape(.capsule)  // round buttons, as on iPhone and iPad
             .safeAreaPadding(.top, MacBar.height)
             .overlay(alignment: .top) {
-                // Fixed places on every screen: Back and Settings on the left
+                // Fixed places on every screen: Settings, then Back, on the left
                 // (Back dims when there is nowhere to go), the tabs in the
                 // exact centre, the search field on the right.
                 ZStack {
+                    // No bar, only a fade: pages scrolling under the row stay out of its way.
+                    LinearGradient(colors: [Color.appBase.opacity(0.85), Color.appBase.opacity(0.5), .clear], startPoint: .top, endPoint: .bottom)
+                        .frame(height: MacBar.height + 36).frame(maxHeight: .infinity, alignment: .top)
+                        .allowsHitTesting(false)
                     Color.clear.contentShape(Rectangle()).gesture(WindowDragGesture())
                     HStack(spacing: 2) {
                         ForEach(tabs, id: \.key) { item in
                             let current = tab == item.key && !searching
                             Button { select(item.key) } label: {
                                 Label(L(item.title), systemImage: item.symbol)
-                                    .font(.system(size: 14, weight: .semibold))
+                                    .font(.system(size: 16, weight: .semibold))
                                     .foregroundStyle(current ? Color.torrentAccent : .white)
-                                    .padding(.horizontal, 14).frame(height: MacBar.control - 8)
+                                    .padding(.horizontal, 16).frame(height: MacBar.control - 8)
                                     .background(current ? Color.white.opacity(0.14) : .clear, in: Capsule())
                                     .contentShape(Capsule())
                             }.buttonStyle(.plain)
@@ -277,14 +281,14 @@ struct MobileRoot: View {
                     .background(.ultraThinMaterial, in: Capsule())
                     .overlay(Capsule().strokeBorder(.white.opacity(0.1)))
                     HStack(spacing: 10) {
-                        MacBarButton(symbol: "chevron.left", label: L("Back")) { goBack() }
-                            .disabled(!canGoBack).opacity(canGoBack ? 1 : 0.35)
-                            .keyboardShortcut("[", modifiers: .command)
                         MacBarButton(symbol: "gearshape", label: L("Settings")) {
                             searchText = ""
                             if !inSettings { open(SettingsRoute()); settingsDepth = paths[tab]?.count }
                         }
                             .keyboardShortcut(",", modifiers: .command)
+                        MacBarButton(symbol: "chevron.left", label: L("Back")) { goBack() }
+                            .disabled(!canGoBack).opacity(canGoBack ? 1 : 0.35)
+                            .keyboardShortcut("[", modifiers: .command)
                         Spacer(minLength: 0)
                         // Settings needs no search; the slot stays so nothing moves.
                         MacSearchField(text: $searchText, focused: $searchFocused)

@@ -98,7 +98,7 @@ struct MobileTitle: View {
                 Button { episode = nil; play(source: item.source) } label: {
                     Label(L("Play"), systemImage: "play.fill").font(HeroFont.button).frame(maxWidth: regular ? 220 : .infinity, minHeight: HeroFont.buttonHeight)
                 }
-                .buttonStyle(.borderedProminent).tint(.white).foregroundStyle(.black)
+                .primaryHeroButton()
                 .accessibilityIdentifier("title-play")
                 secondaryActions
                 if item.sourceOverride == nil || (item.releases?.count ?? 0) > 1 {  // a library title saved twice has versions too
@@ -223,8 +223,13 @@ struct MobileTitle: View {
                 } catch is CancellationError {} catch { self.error = error.localizedDescription }
             }
         } label: {
-            Group { if findingTrailer { ProgressView() } else { Image(systemName: "play.rectangle") } }
-                .font(HeroFont.button).frame(width: 30, height: HeroFont.buttonHeight)
+            // iPad and Mac name it, as on Apple TV; iPhone keeps the icon.
+            HStack(spacing: 8) {
+                Group { if findingTrailer { ProgressView() } else { Image(systemName: "play.rectangle") } }
+                if sizeClass == .regular { Text(L("Trailer")) }
+            }
+            .font(HeroFont.button).padding(.horizontal, sizeClass == .regular ? 10 : 0)
+            .frame(minWidth: 30, minHeight: HeroFont.buttonHeight)
         }
         .disabled(findingTrailer).buttonStyle(.bordered).tint(.white)
         .accessibilityLabel(L(findingTrailer ? "Finding trailer…" : "Trailer")).accessibilityIdentifier("show-trailers")
