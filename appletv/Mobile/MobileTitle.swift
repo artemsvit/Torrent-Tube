@@ -185,8 +185,7 @@ struct MobileTitle: View {
             episode = ep.number
             // On the server: its folder. Otherwise the release chosen before for this
             // series, or the torrent this page came from; the list only when neither.
-            if item.sourceOverride != nil { play(source: item.source) }
-            else if let release = rememberedRelease ?? (item.source.isPlayable ? item.source : nil) { play(source: release) }
+            if let release = ReleaseChoice.episodeSource(for: item, tmdbID: details?.tmdbId ?? value.tmdbId, season: season) { play(source: release) }
             else { showVersions = true }
         } label: { label().contentShape(Rectangle()) }
             .buttonStyle(.plain).accessibilityIdentifier("episode-\(ep.number)")
@@ -464,12 +463,10 @@ struct MobileTitle: View {
     private func selectVersion(_ source: PlaybackSource) {
         guard config.supportsPlayback else { showVersions = false; error = L("Update Torrent Tube on your server to stream on this device."); return }
         pending = makeRequest(source); showVersions = false
-        rememberedRelease = source
-    }
-    /// The release last chosen for this series: its other episodes play from it at once.
-    private var rememberedRelease: PlaybackSource? {
-        get { ReleaseChoice.remembered(for: details?.tmdbId ?? value.tmdbId) }
-        nonmutating set { if details?.mediaType == "tv" { ReleaseChoice.remember(newValue, for: details?.tmdbId ?? value.tmdbId) } }
+        // Remembered for this series: its other episodes play from it at once.
+        if details?.mediaType == "tv" {
+            ReleaseChoice.remember(source, title: versions.first { $0.source == source }?.title ?? value.title, for: details?.tmdbId ?? value.tmdbId)
+        }
     }
     private func loadVersions() async {
         if let releases = item.releases, episode == nil { versions = releases; return }

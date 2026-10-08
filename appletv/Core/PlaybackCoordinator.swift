@@ -42,7 +42,13 @@ final class PlaybackCoordinator {
             return matches.count == 1 ? matches.first?.index : nil
         }
         if let file = request.source.file, prepared.files.contains(where: { $0.index == file }) { return file }
-        return prepared.files.count == 1 ? prepared.files.first?.index : nil
+        if prepared.files.count == 1 { return prepared.files.first?.index }
+        // A season or a whole series: start at its first episode instead of asking.
+        let episodes = prepared.files.compactMap { file in
+            EpisodeIdentity.parse(name: file.name, path: file.path ?? request.source.path.map { $0 + "/" + file.name }).map { (file.index, $0) }
+        }
+        guard episodes.count > 1 else { return nil }
+        return episodes.min { ($0.1.season, $0.1.episode) < ($1.1.season, $1.1.episode) }?.0
     }
 
     /// The file to play after `current`: the next episode by season and

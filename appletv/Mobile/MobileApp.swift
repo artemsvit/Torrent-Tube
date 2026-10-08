@@ -435,12 +435,26 @@ struct MobileSettings: View {
         let summary = catalog.syncSummary(api.baseURL)
         return "\(intro)\n\(summary)"
     }
+    private var settingsFooterFont: Font {
+        #if os(macOS)
+        .system(size: 14)
+        #else
+        .footnote
+        #endif
+    }
+    private var settingsHeaderFont: Font {
+        #if os(macOS)
+        .system(size: 18, weight: .semibold)
+        #else
+        .subheadline.weight(.semibold)
+        #endif
+    }
     private func header(_ title: String, _ icon: String) -> some View {
         // A fixed icon column, so every section title starts on the same line.
         HStack(spacing: 8) {
             Image(systemName: icon).frame(width: 24)
             Text(L(title))
-        }.font(.subheadline.weight(.semibold)).foregroundStyle(.white.opacity(0.7)).textCase(nil)
+        }.font(settingsHeaderFont).foregroundStyle(.white.opacity(0.8)).textCase(nil)
     }
     @ViewBuilder private var homeSection: some View {
         Section {
@@ -448,7 +462,7 @@ struct MobileSettings: View {
             Toggle(L("Title preview while browsing"), isOn: $previewTitle).tint(Color.torrentAccent)
         } header: { header("Home", "rectangle.topthird.inset.filled") } footer: {
             Text(L("Display your unfinished titles on Home. Title preview updates the banner as you move between titles."))
-                .font(.footnote).foregroundStyle(.white.opacity(0.6))
+                .font(settingsFooterFont).foregroundStyle(.white.opacity(0.6))
         }
         .listRowBackground(Color.white.opacity(0.06))
         .listRowSeparatorTint(Color.white.opacity(0.08))
@@ -469,7 +483,7 @@ struct MobileSettings: View {
             }
         } header: { header("Playback", "play.circle") } footer: {
             Text(L("Choose how far the player moves with each skip. Audio and subtitles can be changed while a title is playing."))
-                .font(.footnote).foregroundStyle(.white.opacity(0.6))
+                .font(settingsFooterFont).foregroundStyle(.white.opacity(0.6))
         }
         .listRowBackground(Color.white.opacity(0.06))
         .listRowSeparatorTint(Color.white.opacity(0.08))
@@ -482,7 +496,7 @@ struct MobileSettings: View {
             }.pickerStyle(.menu)
         } header: { header("Language", "globe") } footer: {
             Text(L("Menus, buttons and messages. Titles and descriptions come from your server’s catalog settings."))
-                .font(.footnote).foregroundStyle(.white.opacity(0.6))
+                .font(settingsFooterFont).foregroundStyle(.white.opacity(0.6))
         }
         .listRowBackground(Color.white.opacity(0.06))
         .listRowSeparatorTint(Color.white.opacity(0.08))
@@ -504,7 +518,7 @@ struct MobileSettings: View {
             } label: { HStack { Text(L("Rescan library")).foregroundStyle(.white); Spacer(); if refreshingMetadata { ProgressView() } } }
                 .disabled(refreshingMetadata || catalog.syncing)
         } header: { header("Library", "folder") } footer: {
-            Text(libraryFooterText).font(.footnote).foregroundStyle(.white.opacity(0.6))
+            Text(libraryFooterText).font(settingsFooterFont).foregroundStyle(.white.opacity(0.6))
         }
         .listRowBackground(Color.white.opacity(0.06))
         .listRowSeparatorTint(Color.white.opacity(0.08))
@@ -518,7 +532,7 @@ struct MobileSettings: View {
             }
             if !config.supportsPlayback {
                 Label(L("Update your server to enable streaming on this device."), systemImage: "exclamationmark.circle")
-                    .font(.footnote).foregroundStyle(.orange)
+                    .font(settingsFooterFont).foregroundStyle(.orange)
             }
             Button(L("Change server")) { dismiss(); store.disconnect() }.foregroundStyle(.white)
             Button {
@@ -538,14 +552,14 @@ struct MobileSettings: View {
                     Text(L("Refresh catalog")).foregroundStyle(.white)
                     Spacer()
                     if refreshing { ProgressView() }
-                    else if let refreshMessage { Text(refreshMessage).font(.footnote).foregroundStyle(.secondary) }
+                    else if let refreshMessage { Text(refreshMessage).font(settingsFooterFont).foregroundStyle(.secondary) }
                 }
             }
             .disabled(refreshing)
             Button(L("Clear viewing history"), role: .destructive) { clearHistory = true }
             Button(L("Clear recent searches"), role: .destructive) { recent = "" }.disabled(recent.isEmpty)
         } header: { header("Server & Storage", "externaldrive") } footer: {
-            Text(L("Favorites and viewing history stay on this device.")).font(.footnote).foregroundStyle(.white.opacity(0.6))
+            Text(L("Favorites and viewing history stay on this device.")).font(settingsFooterFont).foregroundStyle(.white.opacity(0.6))
         }
         .listRowBackground(Color.white.opacity(0.06))
         .listRowSeparatorTint(Color.white.opacity(0.08))
@@ -581,7 +595,17 @@ struct MobileSettings: View {
             #if os(macOS)
             .formStyle(.grouped)
             .buttonStyle(.plain)  // action rows read as list rows, not grey push buttons
-            .frame(maxWidth: 760).frame(maxWidth: .infinity)
+            .font(.system(size: 18))
+            .controlSize(.large)
+            .environment(\.defaultMinListRowHeight, 56)
+            .frame(maxWidth: 1000)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                Text(L("Settings")).font(.system(size: 32, weight: .bold))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20).padding(.top, 24).padding(.bottom, 12)
+            }
+            .padding(.horizontal, 32)
+            .frame(maxWidth: .infinity)
             #endif
             // White controls like the rest of the app; the accent stays on the switch.
             .tint(.white)

@@ -126,6 +126,22 @@ final class SharedStateTests: XCTestCase {
         XCTAssertEqual(ReleaseChoice.rank(results, names: ["Nothing like this"], season: nil).count, titles.count, "no match keeps the search")
     }
 
+    func testReleaseNamesTellTheirSeasons() {
+        XCTAssertEqual(ReleaseChoice.seasons(in: "Nobody Wants This S02E07 (2026) NF WEB-DL 1080p"), [2])
+        XCTAssertEqual(ReleaseChoice.seasons(in: "Below (S1) (2026) WEB-DL 1080p Ukr/Eng (S1)"), [1])
+        XCTAssertEqual(ReleaseChoice.seasons(in: "Reacher (Seasons 2-4) (2023-2026)"), [2, 3, 4])
+        XCTAssertEqual(ReleaseChoice.seasons(in: "Друзі (Сезон 3) WEB-DL"), [3])
+        XCTAssertEqual(ReleaseChoice.seasons(in: "The Last of Us S01-S02 BDRip"), [1, 2])
+        XCTAssertTrue(ReleaseChoice.covers("Columbo 1080p complete", season: 5), "no season named: the whole series")
+        XCTAssertFalse(ReleaseChoice.covers("Nobody Wants This S02 (2026)", season: 1))
+    }
+
+    func testPlayOnASeriesStartsAtItsFirstEpisode() {
+        let files = ["Show S02E07.mkv", "Show S02E02.mkv", "Show S02E10.mkv"].enumerated().map { VideoFile(index: $0.offset, name: $0.element, size: 1) }
+        let request = PlaybackRequest(source: PlaybackSource(magnet: "magnet:?x"), title: "Show")
+        XCTAssertEqual(PlaybackCoordinator.selectedFile(request: request, prepared: PreparedPlayback(id: "t", selected: 0, files: files)), 1)
+    }
+
     func testFavoritesPersistAndStayScopedToServer() throws {
         let server = URL(string: "http://nas/tube/")!
         let other = URL(string: "http://other/")!

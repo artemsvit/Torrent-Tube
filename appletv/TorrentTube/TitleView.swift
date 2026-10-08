@@ -99,9 +99,7 @@ struct TitleView: View {
                                         selectedEpisode = episode.number
                                         // On the server: its folder. Otherwise the release chosen before
                                         // for this series, or the torrent this page came from.
-                                        let release = item.sourceOverride != nil ? item.source
-                                            : ReleaseChoice.remembered(for: details?.tmdbId ?? value.tmdbId) ?? (item.source.isPlayable ? item.source : nil)
-                                        if let release {
+                                        if let release = ReleaseChoice.episodeSource(for: item, tmdbID: details?.tmdbId ?? value.tmdbId, season: season) {
                                             if config.supportsPlayback { playback = request(source: release) } else { showServerNotice = true }
                                         } else { showVersions = true }
                                     } label: {
@@ -169,7 +167,7 @@ struct TitleView: View {
                                 if config.supportsPlayback {
                                     pendingPlayback = request(source: release.source)
                                     showVersions = false
-                                    if details?.mediaType == "tv" { ReleaseChoice.remember(release.source, for: details?.tmdbId ?? value.tmdbId) }
+                                    if details?.mediaType == "tv" { ReleaseChoice.remember(release.source, title: release.title, for: details?.tmdbId ?? value.tmdbId) }
                                 } else { showServerNotice = true; showVersions = false }
                             } label: {
                                 HStack(spacing: 28) {

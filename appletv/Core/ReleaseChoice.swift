@@ -22,14 +22,52 @@ enum ReleaseChoice {
         return kept.filter { hasSeason($0.title) } + kept.filter { !hasSeason($0.title) }
     }
 
-    static func remembered(for tmdbID: Int?) -> PlaybackSource? {
-        guard let tmdbID, let data = UserDefaults.standard.data(forKey: "release-\(tmdbID)") else { return nil }
-        return try? JSONDecoder().decode(PlaybackSource.self, from: data)
+    /// A release chosen before, with its name (which tells its seasons).
+    struct Saved: Codable { let title: String; let source: PlaybackSource }
+    static func remembered(for tmdbID: Int?) -> Saved? {
+        guard let tmdbID, let data = UserDefaults.standard.data(forKey: "release-v2-\(tmdbID)") else { return nil }
+        return try? JSONDecoder().decode(Saved.self, from: data)
     }
-    static func remember(_ source: PlaybackSource?, for tmdbID: Int?) {
+    static func remember(_ source: PlaybackSource, title: String, for tmdbID: Int?) {
         guard let tmdbID else { return }
-        var source = source; source?.file = nil
-        UserDefaults.standard.set(source.flatMap { try? JSONEncoder().encode($0) }, forKey: "release-\(tmdbID)")
+        var source = source; source.file = nil
+        UserDefaults.standard.set(try? JSONEncoder().encode(Saved(title: title, source: source)), forKey: "release-v2-\(tmdbID)")
+    }
+
+    /// The seasons a release's name mentions ("S02", "Сезон 2", "Seasons 2-4");
+    /// empty when it names none (often the whole series).
+    static func seasons(in title: String) -> Set<Int> {
+        let text = title.lowercased()
+        var found = Set<Int>()
+        func numbers(_ pattern: String) -> [[Int]] {
+            guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+            return regex.matches(in: text, range: NSRange(text.startIndex..., in: text)).map { match in
+                (1..<match.numberOfRanges).compactMap { Range(match.range(at: $0), in: text).flatMap { Int(text[$0]) } }
+            }
+        }
+        for range in numbers(#"(?:^|[^a-zа-яіїє0-9])s(\d{1,2})\s*[-–]\s*s?(\d{1,2})(?!\d)"#)
+            + numbers(#"(?:seasons?|сезон[иі]?)\s*(\d{1,2})\s*[-–]\s*(\d{1,2})(?!\d)"#) where range.count == 2 && range[0] <= range[1] {
+            found.formUnion(range[0]...range[1])
+        }
+        for single in numbers(#"(?:^|[^a-zа-яіїє0-9])s(\d{1,2})(?:e\d{1,3})?(?![\d])"#)
+            + numbers(#"(?:season|сезон)\s*(\d{1,2})(?!\d)"#) + numbers(#"(\d{1,2})\s*(?:-?й\s*)?сезон"#) {
+            if let season = single.first { found.insert(season) }
+        }
+        return found
+    }
+    static func covers(_ title: String, season: Int) -> Bool {
+        let mentioned = seasons(in: title)
+        return mentioned.isEmpty || mentioned.contains(season)
+    }
+
+    /// Where an episode plays from without asking: the library folder, else
+    /// the release chosen before, else the torrent the page came from - when
+    /// its name does not leave out that season. Nil: let the viewer choose.
+    static func episodeSource(for item: MediaItem, tmdbID: Int?, season: Int) -> PlaybackSource? {
+        if item.sourceOverride != nil { return item.source }
+        if let saved = remembered(for: tmdbID), covers(saved.title, season: season) { return saved.source }
+        if item.source.isPlayable, covers(item.title, season: season) { return item.source }
+        return nil
     }
 
     /// Search by the Ukrainian and the original title, then rank.
