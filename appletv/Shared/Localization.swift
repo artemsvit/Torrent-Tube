@@ -173,6 +173,7 @@ private let ukrainian: [String: String] = [
     "Writers": "Сценаристи",
     "Network": "Телеканал",
     "Director": "Режисер",
+    "Starring": "У ролях",
     "Creator": "Автор",
 
     // Search

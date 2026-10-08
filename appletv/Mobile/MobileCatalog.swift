@@ -9,14 +9,14 @@ enum MobileStyle {
 enum HeroFont {
     #if os(macOS)
     static let kind = Font.system(size: 13, weight: .bold)
-    static let facts = Font.system(size: 15)
-    static let overview = Font.system(size: 16)
+    static let facts = Font.system(size: 14, weight: .medium)
+    static let overview = Font.system(size: 15)
     static let button = Font.system(size: 15, weight: .semibold)
     static let buttonHeight: CGFloat = 40
     static let chip = Font.system(size: 16, weight: .semibold)
     static let chipPadding = EdgeInsets(top: 10, leading: 20, bottom: 10, trailing: 20)
-    static func titleSize(regular: Bool) -> CGFloat { 60 }
-    static func title(regular: Bool) -> Font { .system(size: titleSize(regular: regular), weight: .heavy) }
+    static func titleSize(regular: Bool) -> CGFloat { 44 }
+    static func title(regular: Bool) -> Font { .system(size: titleSize(regular: regular), weight: .bold) }
     #else
     static let kind = Font.caption.bold()
     static let facts = Font.subheadline
@@ -25,8 +25,8 @@ enum HeroFont {
     static let buttonHeight: CGFloat = 36
     static let chip = Font.subheadline.weight(.semibold)
     static let chipPadding = EdgeInsets(top: 8, leading: 14, bottom: 8, trailing: 14)
-    static func titleSize(regular: Bool) -> CGFloat { regular ? 48 : 34 }
-    static func title(regular: Bool) -> Font { .system(size: titleSize(regular: regular), weight: .heavy) }
+    static func titleSize(regular: Bool) -> CGFloat { regular ? 40 : 30 }
+    static func title(regular: Bool) -> Font { .system(size: titleSize(regular: regular), weight: .bold) }
     #endif
 }
 
@@ -46,48 +46,87 @@ struct HeroInfo<Actions: View>: View {
     var toggleMore: (() -> Void)? = nil
     /// How much taller the open description is than its three lines - the
     /// title page grows its banner by this, so the text opens downward.
+    /// Title pages show the credits at the right (iPad and Mac).
+    var showsCredits = false
     var growth: Binding<CGFloat>? = nil
     @State private var collapsedHeight: CGFloat = 0
     @ViewBuilder let actions: () -> Actions
     @Environment(\.horizontalSizeClass) private var sizeClass
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if let kind {
-                Text(kind.uppercased()).font(HeroFont.kind).tracking(2).foregroundStyle(.white.opacity(0.65))
-            }
-            Text(title).font(HeroFont.title(regular: sizeClass == .regular))
-                .lineLimit(2).minimumScaleFactor(0.7).tightTitleLines(size: HeroFont.titleSize(regular: sizeClass == .regular))
-                .frame(maxWidth: 900, alignment: .leading)
-            MobileFacts(item: item, details: details)
-            if let tagline, !tagline.isEmpty {
-                Text(tagline).font(HeroFont.overview.weight(.semibold)).foregroundStyle(.white.opacity(0.9))
-                    .lineLimit(2).frame(maxWidth: 640, alignment: .leading)
-            }
-            if let overview, !overview.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(overview).font(HeroFont.overview).foregroundStyle(.white.opacity(0.75))
-                        .lineLimit(expanded ? nil : 3)
-                        .fixedSize(horizontal: false, vertical: expanded)
-                        // The three-line height, from a hidden copy of the current text.
-                        .background(alignment: .topLeading) {
-                            Text(overview).font(HeroFont.overview).lineLimit(3).hidden()
-                                .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { collapsedHeight = $0 }
-                        }
-                        .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { height in
-                            growth?.wrappedValue = expanded ? max(0, height - collapsedHeight) : 0
-                        }
-                        .onChange(of: collapsedHeight) { _, collapsed in
-                            if !expanded { growth?.wrappedValue = 0 }
-                        }
-                    if let toggleMore {
-                        Button(L(expanded ? "Show less" : "Read more"), action: toggleMore)
-                            .font(HeroFont.overview.weight(.semibold)).foregroundStyle(.white)
-                            .buttonStyle(.plain)
+        // In the way of the Apple TV app: a modest title, one line of kind and
+        // genres, the description, then year, length and rating, then buttons;
+        // the credits on the right on larger screens.
+        HStack(alignment: .bottom, spacing: 40) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(title).font(HeroFont.title(regular: sizeClass == .regular))
+                    .lineLimit(2).minimumScaleFactor(0.7).tightTitleLines(size: HeroFont.titleSize(regular: sizeClass == .regular))
+                    .frame(maxWidth: 760, alignment: .leading)
+                HStack(spacing: 8) {
+                    Text(BannerText.subtitle(kind: kind, details: details)).lineLimit(1)
+                    if let certification = details?.certification, !certification.isEmpty {
+                        Text(certification).font(HeroFont.facts.weight(.bold))
+                            .padding(.horizontal, 5).padding(.vertical, 1)
+                            .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(.white.opacity(0.6), lineWidth: 1))
                     }
                 }
-                .frame(maxWidth: 640, alignment: .leading)
+                .font(HeroFont.facts).foregroundStyle(.white.opacity(0.85)).padding(.top, 6)
+                if (tagline ?? "").isEmpty == false || (overview ?? "").isEmpty == false {
+                    VStack(alignment: .leading, spacing: 4) {
+                        if let tagline, !tagline.isEmpty {
+                            Text(tagline).font(HeroFont.overview.weight(.semibold)).foregroundStyle(.white.opacity(0.9)).lineLimit(2)
+                        }
+                        if let overview, !overview.isEmpty { description(overview) }
+                    }
+                    .frame(maxWidth: 560, alignment: .leading).padding(.top, 12)
+                }
+                HStack(spacing: 10) {
+                    let facts = BannerText.facts(details: details)
+                    if !facts.isEmpty { Text(facts) }
+                    if let rating = item.rating, rating > 0 {
+                        Label { Text(String(format: "%.1f", rating)) } icon: { Image(systemName: "star.fill").foregroundStyle(MobileStyle.gold) }
+                            .labelStyle(.titleAndIcon)
+                    }
+                }
+                .font(HeroFont.facts).foregroundStyle(.white.opacity(0.7)).padding(.top, 10)
+                HStack(spacing: 10) { actions() }.padding(.top, 18)
             }
-            HStack(spacing: 10) { actions() }.padding(.top, 6)
+            if showsCredits, sizeClass == .regular {
+                Spacer(minLength: 0)
+                let credits = BannerText.credits(details: details)
+                if !credits.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(credits, id: \.label) { line in
+                            (Text(line.label + " ").foregroundStyle(.white.opacity(0.55)) + Text(line.names).foregroundStyle(.white.opacity(0.9)))
+                                .lineLimit(2)
+                        }
+                    }
+                    .font(HeroFont.facts).frame(maxWidth: 320, alignment: .leading)
+                }
+            }
+        }
+    }
+
+    private func description(_ overview: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(overview).font(HeroFont.overview).foregroundStyle(.white.opacity(0.75))
+                .lineLimit(expanded ? nil : 3)
+                .fixedSize(horizontal: false, vertical: expanded)
+                // The three-line height, from a hidden copy of the current text.
+                .background(alignment: .topLeading) {
+                    Text(overview).font(HeroFont.overview).lineLimit(3).hidden()
+                        .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { collapsedHeight = $0 }
+                }
+                .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { height in
+                    growth?.wrappedValue = expanded ? max(0, height - collapsedHeight) : 0
+                }
+                .onChange(of: collapsedHeight) { _, _ in
+                    if !expanded { growth?.wrappedValue = 0 }
+                }
+            if let toggleMore {
+                Button(L(expanded ? "Show less" : "Read more"), action: toggleMore)
+                    .font(HeroFont.overview.weight(.semibold)).foregroundStyle(.white)
+                    .buttonStyle(.plain)
+            }
         }
     }
 }

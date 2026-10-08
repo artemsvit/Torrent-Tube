@@ -79,3 +79,31 @@ struct LibrarySearchResults {
         return normalized(text)
     }
 }
+
+/// The banner's small lines, the same on every platform (in the way of the
+/// Apple TV app): "Фільм · Драма · Комедія", "2023 · 2 год 19 хв", and the
+/// credits beside the buttons.
+enum BannerText {
+    static func subtitle(kind: String?, details: Details?) -> String {
+        ([kind].compactMap { $0 } + (details?.genres ?? []).prefix(2)).joined(separator: " · ")
+    }
+    static func facts(details: Details?) -> String {
+        var list: [String] = []
+        if let year = details?.year, !year.isEmpty { list.append(year) }
+        if let runtime = details?.runtime, runtime > 0 { list.append(runtime >= 60 ? L("%ld h %ld min", runtime / 60, runtime % 60) : L("%ld min", runtime)) }
+        return list.joined(separator: " · ")
+    }
+    /// "Режисер …" or "Автор …", then "У ролях …" (three names).
+    static func credits(details: Details?) -> [(label: String, names: String)] {
+        let people = details?.people ?? []
+        let jobs: Set<String> = ["Director", "Creator", "Writer", "Screenplay", "Producer", "Novel", "Author"]
+        var lines: [(String, String)] = []
+        let cast = people.filter { !jobs.contains($0.role ?? "") }.prefix(3).map(\.name)
+        if !cast.isEmpty { lines.append((L("Starring"), cast.joined(separator: ", "))) }
+        for job in ["Director", "Creator"] {
+            let names = people.filter { $0.role == job }.prefix(2).map(\.name)
+            if !names.isEmpty { lines.append((L(job), names.joined(separator: ", "))); break }
+        }
+        return lines
+    }
+}

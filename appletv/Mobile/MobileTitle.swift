@@ -95,7 +95,7 @@ struct MobileTitle: View {
                      overview: details?.overview ?? value.overview, tagline: details?.tagline, expanded: expanded,
                      // No animation: the text opens downward at once.
                      toggleMore: (details?.overview ?? value.overview ?? "").count > 160 ? { expanded.toggle() } : nil,
-                     growth: $heroGrowth) {
+                     showsCredits: true, growth: $heroGrowth) {
                 Button { episode = nil; play(source: item.source) } label: {
                     Label(L("Play"), systemImage: "play.fill").font(HeroFont.button).frame(maxWidth: regular ? 220 : .infinity, minHeight: HeroFont.buttonHeight)
                 }

@@ -362,6 +362,8 @@ struct CinemaHero<Actions: View>: View {
     var showsOverview = true
     /// Home shows three lines of the description; a title page more.
     var overviewLines = 3
+    /// Title pages show the credits at the right.
+    var showsCredits = false
     var preview: EmbeddedPlayer? = nil
     var nextArtwork: String? = nil
     @ViewBuilder let actions: () -> Actions
@@ -378,8 +380,7 @@ struct CinemaHero<Actions: View>: View {
         var list: [String] = []
         if let year = details?.year, !year.isEmpty { list.append(year) }
         if let runtime = details?.runtime, runtime > 0 { list.append(runtime >= 60 ? L("%ld h %ld min", runtime / 60, runtime % 60) : L("%ld min", runtime)) }
-        if let genres = details?.genres, !genres.isEmpty { list.append(genres.prefix(2).joined(separator: ", ")) }
-        return list
+        return list  // genres are in the line under the title
     }
     var body: some View {
         ZStack(alignment: .bottomLeading) {
@@ -406,42 +407,64 @@ struct CinemaHero<Actions: View>: View {
                     .init(color: .clear, location: 1.0)
                 ], startPoint: .top, endPoint: .bottom)
             )
-            VStack(alignment: .leading, spacing: 18) {
-                if let kind {
-                    Text(kind.uppercased()).font(.system(size: 20, weight: .bold)).tracking(3).foregroundStyle(.white.opacity(0.65))
-                }
-                Text(details?.title ?? item.displayTitle).font(.system(size: 80, weight: .heavy)).lineLimit(2).tightTitleLines(size: 80)
-                    .accessibilityIdentifier("hero-title")
-                    .minimumScaleFactor(0.7).shadow(color: .black.opacity(0.5), radius: 12, y: 4)
-                    .frame(maxWidth: 1000, alignment: .leading)
-                HStack(spacing: 14) {
-                    if let rating = item.rating, rating > 0 {
-                        // A golden star, like a rating; the number stays white.
-                        Label { Text(String(format: "%.1f", rating)).accessibilityIdentifier("hero-rating") } icon: {
-                            Image(systemName: "star.fill").foregroundStyle(Color(red: 1.0, green: 0.78, blue: 0.2))
+            // In the way of the Apple TV app: a modest title, kind and genres,
+            // the description, year and length with the rating, the buttons,
+            // and the credits on the right - the same order as on iPhone, iPad and Mac.
+            HStack(alignment: .bottom, spacing: 60) {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(details?.title ?? item.displayTitle).font(.system(size: 64, weight: .bold)).lineLimit(2).tightTitleLines(size: 64)
+                        .accessibilityIdentifier("hero-title")
+                        .minimumScaleFactor(0.7).shadow(color: .black.opacity(0.5), radius: 12, y: 4)
+                        .frame(maxWidth: 1000, alignment: .leading)
+                    HStack(spacing: 12) {
+                        Text(BannerText.subtitle(kind: kind, details: details)).lineLimit(1)
+                        if let certification = details?.certification, !certification.isEmpty {
+                            Text(certification).font(.system(size: 19, weight: .bold))
+                                .padding(.horizontal, 8).padding(.vertical, 2)
+                                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.white.opacity(0.6), lineWidth: 2))
                         }
-                            .labelStyle(.titleAndIcon).font(.system(size: 21, weight: .bold))
-                            .padding(.horizontal, 14).padding(.vertical, 6)
-                            .background(.white.opacity(0.16), in: Capsule())
                     }
-                    if let certification = details?.certification, !certification.isEmpty {
-                        Text(certification).font(.system(size: 19, weight: .bold))
-                            .padding(.horizontal, 10).padding(.vertical, 4)
-                            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.white.opacity(0.6), lineWidth: 2))
+                    .font(.system(size: 24, weight: .medium)).foregroundStyle(.white.opacity(0.85)).padding(.top, 8)
+                    if showsOverview, (details?.tagline ?? "").isEmpty == false || (details?.overview ?? item.overview ?? "").isEmpty == false {
+                        VStack(alignment: .leading, spacing: 6) {
+                            // The tagline heads the description.
+                            if let tagline = details?.tagline, !tagline.isEmpty {
+                                Text(tagline).font(.system(size: 24, weight: .semibold)).foregroundStyle(.white.opacity(0.9)).lineLimit(2)
+                            }
+                            if let overview = details?.overview ?? item.overview, !overview.isEmpty {
+                                Text(overview).font(.system(size: 24)).foregroundStyle(.white.opacity(0.78)).lineSpacing(3)
+                                    .lineLimit(overviewLines)
+                            }
+                        }
+                        .frame(maxWidth: 820, alignment: .leading).padding(.top, 16)
                     }
-                    Text(facts.joined(separator: "  ·  ")).font(.system(size: 23, weight: .medium))
-                }.foregroundStyle(.white.opacity(0.85))
-                // The tagline heads the description, as on iPhone, iPad and Mac.
-                if showsOverview, let tagline = details?.tagline, !tagline.isEmpty {
-                    Text(tagline).font(.system(size: 25, weight: .semibold)).foregroundStyle(.white.opacity(0.9))
-                        .lineLimit(2).frame(maxWidth: 860, alignment: .leading)
+                    HStack(spacing: 14) {
+                        if !facts.isEmpty { Text(facts.joined(separator: " · ")) }
+                        if let rating = item.rating, rating > 0 {
+                            // A golden star, like a rating; the number stays white.
+                            Label { Text(String(format: "%.1f", rating)).accessibilityIdentifier("hero-rating") } icon: {
+                                Image(systemName: "star.fill").foregroundStyle(Color(red: 1.0, green: 0.78, blue: 0.2))
+                            }.labelStyle(.titleAndIcon)
+                        }
+                    }
+                    .font(.system(size: 22, weight: .medium)).foregroundStyle(.white.opacity(0.7)).padding(.top, 14)
+                    actions().padding(.top, 28).focusSection()
                 }
-                if showsOverview, let overview = details?.overview ?? item.overview, !overview.isEmpty {
-                    Text(overview).font(.system(size: 25)).foregroundStyle(.white.opacity(0.78)).lineSpacing(4)
-                        .lineLimit(overviewLines).frame(maxWidth: 860, alignment: .leading)
+                if showsCredits {
+                    Spacer(minLength: 0)
+                    let credits = BannerText.credits(details: details)
+                    if !credits.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            ForEach(credits, id: \.label) { line in
+                                (Text(line.label + " ").foregroundStyle(.white.opacity(0.55)) + Text(line.names).foregroundStyle(.white.opacity(0.9)))
+                                    .lineLimit(2)
+                            }
+                        }
+                        .font(.system(size: 22)).frame(maxWidth: 520, alignment: .leading)
+                    }
                 }
-                actions().padding(.top, 12).focusSection()
             }
+            .padding(.trailing, showsCredits ? TVLayout.edge : 0)
             .padding(.leading, TVLayout.edge).padding(.bottom, bottomInset)
         }
         .frame(maxWidth: .infinity).frame(height: height).clipped()

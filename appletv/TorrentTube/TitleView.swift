@@ -54,7 +54,7 @@ struct TitleView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 38) {
-                CinemaHero(item: value, details: details, height: 960, overviewLines: 6) {
+                CinemaHero(item: value, details: details, height: 960, overviewLines: 6, showsCredits: true) {
                     HStack(spacing: 28) {
                         Button { play() } label: { Label(L("Play"), systemImage: "play.fill") }
                             .buttonStyle(.borderedProminent).tint(.white).foregroundStyle(.black).accessibilityIdentifier("title-play")
