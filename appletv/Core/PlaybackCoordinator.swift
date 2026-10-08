@@ -135,6 +135,26 @@ final class PlaybackCoordinator {
         }
     }
 
+    /// After a season's last episode: the first episode of the next season,
+    /// from the title's other folders on the server. False when there is none.
+    private func continueWithNextSeason(after playing: EpisodeIdentity) async -> Bool {
+        let current = (selectedSource ?? request.source).path
+        var best: (source: PlaybackSource, prepared: PreparedPlayback, file: Int, episode: EpisodeIdentity)?
+        for source in request.seasonSources where source.path != current {
+            guard !closed, let result: PreparedPlayback = try? await api.post("api/playback/prepare", body: source) else { continue }
+            for file in result.files {
+                guard let found = file.episodeIdentity, found.season > playing.season else { continue }
+                if let best, (best.episode.season, best.episode.episode) <= (found.season, found.episode) { continue }
+                best = (source, result, file.index, found)
+            }
+        }
+        guard let best, !closed, !suspended else { return false }
+        selectedSource = best.source
+        prepared = best.prepared
+        await start(file: best.file, continuing: true)
+        return true
+    }
+
     func openPlayer(at seconds: Double) {
         guard let session, !closed, !suspended else { return }
         do {
@@ -151,9 +171,14 @@ final class PlaybackCoordinator {
                         self.savePosition(completed: true)
                         let finished = self.session?.file
                         self.release()
-                        if let finished, let files = self.prepared?.files, let next = Self.nextFile(after: finished, in: files) {
+                        let files = self.prepared?.files ?? []
+                        if let finished, let next = Self.nextFile(after: finished, in: files) {
                             // A new task: this one was cancelled by release().
                             Task { await self.start(file: next, continuing: true) }
+                        } else if let finished, let playing = files.first(where: { $0.index == finished })?.episodeIdentity,
+                                  !self.request.seasonSources.isEmpty {
+                            // The last episode of this folder: the next season may be in another.
+                            Task { if await !self.continueWithNextSeason(after: playing) { self.completed = true } }
                         } else {
                             self.completed = true
                         }

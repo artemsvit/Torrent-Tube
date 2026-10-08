@@ -383,7 +383,8 @@ struct MobileHome: View {
                 Button {
                     if config.supportsPlayback {
                         playback = PlaybackRequest(source: item.source, title: item.displayTitle,
-                                                   artwork: details?.backdrop ?? item.poster, tmdbID: details?.tmdbId ?? item.tmdbId)
+                                                   artwork: details?.backdrop ?? item.poster, tmdbID: details?.tmdbId ?? item.tmdbId,
+                                                   seasonSources: item.librarySources)
                     } else { serverNotice = true }
                 } label: {
                     Label(L("Play"), systemImage: "play.fill").font(HeroFont.button)

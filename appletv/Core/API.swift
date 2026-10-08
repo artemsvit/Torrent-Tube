@@ -35,6 +35,11 @@ struct MediaItem: Codable, Identifiable, Hashable, Sendable {
     var id: String { sourceOverride?.id ?? sourceOverride?.path ?? downloadLink ?? magnet ?? title }
     var displayTitle: String { cleanTitle ?? title }
     var source: PlaybackSource { sourceOverride ?? PlaybackSource(magnet: magnet, downloadLink: downloadLink) }
+    /// A library title's folders on the server (its versions), for playing on into the next season.
+    var librarySources: [PlaybackSource] {
+        guard sourceOverride != nil else { return [] }
+        return (releases ?? []).compactMap { $0.path.map { PlaybackSource(path: $0) } }
+    }
 }
 struct Release: Codable, Identifiable, Hashable, Sendable {
     let title: String

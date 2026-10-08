@@ -436,7 +436,8 @@ struct MobileTitle: View {
     }
     private func makeRequest(_ source: PlaybackSource) -> PlaybackRequest {
         PlaybackRequest(source: source, title: value.displayTitle, artwork: details?.backdrop ?? value.poster,
-                        tmdbID: details?.tmdbId ?? value.tmdbId, season: episode == nil ? nil : season, episode: episode)
+                        tmdbID: details?.tmdbId ?? value.tmdbId, season: episode == nil ? nil : season, episode: episode,
+                        seasonSources: item.librarySources)
     }
     private func play(source: PlaybackSource) {
         guard config.supportsPlayback else { error = L("Update Torrent Tube on your server to stream on this device."); return }

@@ -219,7 +219,8 @@ struct TitleView: View {
     }
     private func request(source: PlaybackSource) -> PlaybackRequest {
         PlaybackRequest(source: source, title: value.displayTitle, artwork: details?.backdrop ?? value.poster,
-                        tmdbID: details?.tmdbId ?? value.tmdbId, season: selectedEpisode == nil ? nil : season, episode: selectedEpisode)
+                        tmdbID: details?.tmdbId ?? value.tmdbId, season: selectedEpisode == nil ? nil : season, episode: selectedEpisode,
+                        seasonSources: item.librarySources)
     }
     private func loadVersions() async {
         if let provided = item.releases, selectedEpisode == nil { versions = provided; return }

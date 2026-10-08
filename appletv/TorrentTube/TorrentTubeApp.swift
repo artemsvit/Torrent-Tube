@@ -40,7 +40,7 @@ struct TorrentTubeApp: App {
                 if let api = store.api, let config = store.config {
                     MainView(store: store, api: api, config: config)
                 } else if launching {
-                    SplashView(host: URL(string: store.address)?.host)
+                    SplashView()
                 } else {
                     ConnectionView(store: store)
                 }

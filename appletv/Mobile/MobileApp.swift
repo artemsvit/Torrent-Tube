@@ -25,7 +25,7 @@ struct TorrentTubeMobileApp: App {
                     MobileRoot(store: store, api: api, config: config)
                         .id(api.baseURL)
                 } else if launching {
-                    SplashView(host: URL(string: store.address)?.host)
+                    SplashView()
                 } else {
                     MobileConnection(store: store)
                 }
@@ -140,10 +140,10 @@ struct MobileConnection: View {
             field = nil
             Task { await scanNetwork() }
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 if scanning { ProgressView().tint(.white) }
-                Text(scanning ? L("Scanning Network…") : L("Scan Network")).font(.subheadline.weight(.semibold))
-                if !scanning { Image(systemName: "antenna.radiowaves.left.and.right").font(.subheadline) }
+                Text(scanning ? L("Scanning Network…") : L("Scan Network")).font(HeroFont.button)
+                if !scanning { Image(systemName: "antenna.radiowaves.left.and.right").font(HeroFont.button) }
             }
             .frame(maxWidth: .infinity, minHeight: 50)
             .foregroundStyle(.white)
@@ -159,8 +159,8 @@ struct MobileConnection: View {
         Button { field = nil; Task { await store.connect() } } label: {
             HStack(spacing: 10) {
                 if store.connecting { ProgressView().tint(.black) }
-                Text(store.connecting ? L("Connecting…") : L("Connect")).font(.headline)
-                if !store.connecting { Image(systemName: "arrow.right").font(.headline) }
+                Text(store.connecting ? L("Connecting…") : L("Connect")).font(HeroFont.button)
+                if !store.connecting { Image(systemName: "arrow.right").font(HeroFont.button) }
             }
             .frame(maxWidth: .infinity, minHeight: 50)
             .foregroundStyle(.black)

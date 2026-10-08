@@ -307,7 +307,8 @@ struct HomeView: View {
     }
     private func playRequest(_ item: MediaItem) -> PlaybackRequest {
         let resolved = catalog.resolved(item)
-        return PlaybackRequest(source: item.source, title: resolved.displayTitle, artwork: catalog.details[item.title]?.backdrop ?? resolved.poster, tmdbID: resolved.tmdbId)
+        return PlaybackRequest(source: item.source, title: resolved.displayTitle, artwork: catalog.details[item.title]?.backdrop ?? resolved.poster, tmdbID: resolved.tmdbId,
+                               seasonSources: item.librarySources)
     }
 }
 

@@ -168,10 +168,9 @@ struct BrandBackground: View {
 }
 
 /// While the app connects to the saved server at launch: the brand mark
-/// breathing on the welcome screen's glow, a ripple, and the server's name.
+/// breathing on the welcome screen's glow, a ripple, and "Connecting…".
 /// The connection screen appears only when connecting fails.
 struct SplashView: View {
-    let host: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var breathe = false
     @State private var ripple = false
@@ -201,7 +200,7 @@ struct SplashView: View {
                 Text("Torrent Tube").font(.system(size: title, weight: .heavy)).foregroundStyle(.white)
                 HStack(spacing: 10) {
                     ProgressView().tint(.white.opacity(0.7))
-                    Text(host.map { L("Connecting to %@…", $0) } ?? L("Connecting…"))
+                    Text(L("Connecting…"))
                         .font(.system(size: caption, weight: .medium)).foregroundStyle(.white.opacity(0.6))
                 }
             }

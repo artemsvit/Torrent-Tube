@@ -16,6 +16,9 @@ struct PlaybackRequest: Identifiable {
     var tmdbID: Int? = nil
     var season: Int? = nil
     var episode: Int? = nil
+    /// The title's other folders on the server (a season each, usually):
+    /// where the next season is found when the last episode here ends.
+    var seasonSources: [PlaybackSource] = []
 }
 
 @MainActor @Observable
