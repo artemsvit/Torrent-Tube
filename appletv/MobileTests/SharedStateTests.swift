@@ -93,6 +93,26 @@ final class SharedStateTests: XCTestCase {
         XCTAssertTrue(LibrarySearchResults(query: "nothing", library: [movie], torrents: [tv]).library.isEmpty)
         XCTAssertEqual(LibrarySearchResults(query: "nothing", library: [movie], torrents: [tv]).torrents.count, 1)
     }
+    func testNextSeasonComesFromAnotherFolder() {
+        let playing = EpisodeIdentity(season: 1, episode: 10)
+        func folder(_ path: String, _ names: [String]) -> (PlaybackSource, PreparedPlayback) {
+            (PlaybackSource(path: path), PreparedPlayback(id: "lib:" + path, selected: 0,
+                files: names.enumerated().map { VideoFile(index: $0.offset, name: $0.element, size: 100) }))
+        }
+        let copyOfSeason1 = folder("TV/Show S01 4K", ["Show.S01E01.mkv", "Show.S01E10.mkv"])
+        let season3 = folder("TV/Show S03", ["Show.S03E02.mkv", "Show.S03E01.mkv"])
+        let season2 = folder("TV/Show S02", ["Show.S02E02.mkv", "Show.S02E01.mkv", "Sample.mkv"])
+        // Season 2's first episode, wherever the folders and files are listed.
+        let next = PlaybackCoordinator.nextSeasonStart(after: playing, in: [copyOfSeason1, season3, season2])
+        XCTAssertEqual(next?.folder, 2)
+        XCTAssertEqual(next?.file, 1)
+        // A gap in the seasons: the next one there is.
+        XCTAssertEqual(PlaybackCoordinator.nextSeasonStart(after: playing, in: [copyOfSeason1, season3])?.file, 1)
+        // Only copies of the season just watched: nothing to play on.
+        XCTAssertNil(PlaybackCoordinator.nextSeasonStart(after: playing, in: [copyOfSeason1]))
+        XCTAssertNil(PlaybackCoordinator.nextSeasonStart(after: EpisodeIdentity(season: 3, episode: 2), in: [season2, season3]))
+    }
+
     func testFavoritesPersistAndStayScopedToServer() throws {
         let server = URL(string: "http://nas/tube/")!
         let other = URL(string: "http://other/")!

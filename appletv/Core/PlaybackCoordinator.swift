@@ -139,20 +139,30 @@ final class PlaybackCoordinator {
     /// from the title's other folders on the server. False when there is none.
     private func continueWithNextSeason(after playing: EpisodeIdentity) async -> Bool {
         let current = (selectedSource ?? request.source).path
-        var best: (source: PlaybackSource, prepared: PreparedPlayback, file: Int, episode: EpisodeIdentity)?
+        var folders: [(PlaybackSource, PreparedPlayback)] = []
         for source in request.seasonSources where source.path != current {
             guard !closed, let result: PreparedPlayback = try? await api.post("api/playback/prepare", body: source) else { continue }
-            for file in result.files {
+            folders.append((source, result))
+        }
+        guard let next = Self.nextSeasonStart(after: playing, in: folders), !closed, !suspended else { return false }
+        selectedSource = folders[next.folder].0
+        prepared = folders[next.folder].1
+        await start(file: next.file, continuing: true)
+        return true
+    }
+
+    /// In the title's other folders: the earliest episode of a later season
+    /// (a copy of the season just watched never counts). Nil when there is none.
+    static func nextSeasonStart(after playing: EpisodeIdentity, in folders: [(PlaybackSource, PreparedPlayback)]) -> (folder: Int, file: Int)? {
+        var best: (folder: Int, file: Int, episode: EpisodeIdentity)?
+        for (index, folder) in folders.enumerated() {
+            for file in folder.1.files {
                 guard let found = file.episodeIdentity, found.season > playing.season else { continue }
                 if let best, (best.episode.season, best.episode.episode) <= (found.season, found.episode) { continue }
-                best = (source, result, file.index, found)
+                best = (index, file.index, found)
             }
         }
-        guard let best, !closed, !suspended else { return false }
-        selectedSource = best.source
-        prepared = best.prepared
-        await start(file: best.file, continuing: true)
-        return true
+        return best.map { ($0.folder, $0.file) }
     }
 
     func openPlayer(at seconds: Double) {

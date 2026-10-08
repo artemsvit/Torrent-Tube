@@ -388,6 +388,17 @@ struct MobileHome: View {
         }
         .fullScreenCover(item: $playback) { MobilePlayback(request: $0, api: api) }
         .fullScreenCover(item: $trailer) { MobileTrailer(trailer: $0, api: api) }
+        #if DEBUG
+        // Screenshots of the player without clicking: -macOpen play
+        .task {
+            guard UserDefaults.standard.string(forKey: "macOpen") == "play" else { return }
+            for _ in 0..<40 where catalog.library.isEmpty { try? await Task.sleep(for: .milliseconds(250)) }
+            if let first = catalog.library.first(where: { !$0.isTorrent }) {
+                let item = libraryItem(first)
+                playback = PlaybackRequest(source: item.source, title: item.displayTitle, artwork: item.poster)
+            }
+        }
+        #endif
         .alert(L("Streaming unavailable"), isPresented: $serverNotice) { Button(L("OK"), role: .cancel) {} } message: {
             Text(L("Update Torrent Tube on your server to stream on this device."))
         }

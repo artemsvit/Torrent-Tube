@@ -132,14 +132,26 @@ final class EmbeddedPlayer {
 #if os(macOS)
 struct VideoSurface: NSViewRepresentable {
     let controller: EmbeddedPlayer
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        view.wantsLayer = true
-        view.layer?.backgroundColor = NSColor.black.cgColor
-        controller.attach(to: view)
-        return view
-    }
+    func makeNSView(context: Context) -> NSView { Surface(controller: controller) }
     func updateNSView(_ nsView: NSView, context: Context) {}
+    /// VLC's own video view, handed to the player only once it is in the
+    /// window - given a view outside one, VLC opens a separate window.
+    final class Surface: VLCVideoView {
+        let controller: EmbeddedPlayer
+        private var attached = false
+        init(controller: EmbeddedPlayer) {
+            self.controller = controller
+            super.init(frame: .zero)
+            backColor = .black
+        }
+        required init?(coder: NSCoder) { fatalError("not used") }
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard window != nil, !attached else { return }
+            attached = true
+            MainActor.assumeIsolated { controller.attach(to: self) }
+        }
+    }
 }
 #else
 struct VideoSurface: UIViewRepresentable {
