@@ -60,6 +60,19 @@ class TrailerStreamTests(unittest.TestCase):
 
     @patch("trailer_streams.subprocess.run")
     @patch("trailer_streams.shutil.which", return_value="/tools/yt-dlp")
+    def test_a_verification_request_is_retried_with_the_embedded_client(self, which, run):
+        ok = json.dumps({"requested_formats": [
+            {"url": "https://rr1---sn-test.googlevideo.com/v", "vcodec": "avc1", "acodec": "none", "ext": "mp4", "protocol": "https"},
+            {"url": "https://rr1---sn-test.googlevideo.com/a", "vcodec": "none", "acodec": "mp4a.40.2", "ext": "m4a", "protocol": "https"}]})
+        run.side_effect = [subprocess.CompletedProcess([], 1, "", "Sign in to confirm you are not a bot"),
+                           subprocess.CompletedProcess([], 0, ok, "")]
+        TrailerStreams().resolve("abcdefghijk")
+        self.assertEqual(run.call_count, 2)
+        self.assertIn("youtube:player_client=web_embedded", run.call_args_list[1].args[0])
+        self.assertNotIn("youtube:player_client=web_embedded", run.call_args_list[0].args[0])
+
+    @patch("trailer_streams.subprocess.run")
+    @patch("trailer_streams.shutil.which", return_value="/tools/yt-dlp")
     def test_ukrainian_subtitles_prefer_own_then_auto_translated(self, which, run):
         timedtext = "https://www.youtube.com/api/timedtext?v=abcdefghijk&lang=en&tlang=uk&fmt=vtt"
         info = {"title": "Trailer", "requested_formats": [{"url": "https://rr1.googlevideo.com/video", "vcodec": "avc1", "acodec": "aac"}],

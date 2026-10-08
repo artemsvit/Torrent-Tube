@@ -111,12 +111,21 @@ class TrailerStreams:
         video_format = ("b[ext=mp4][vcodec^=avc1][acodec^=mp4a][height<=1080]"
                         "/bv*[protocol=m3u8_native][vcodec^=avc1][height<=1080]+ba[protocol=m3u8_native]"
                         if preview else "b[height>=720][height<=1080]/bv[height<=1080]+ba/b/bv+ba")
-        try:
-            result = subprocess.run([
+        def run_tool(*extra):
+            return subprocess.run([
                 executable, "--ignore-config", "--no-plugin-dirs", "--no-cache-dir", "--js-runtimes", "node",
                 "--socket-timeout", "12", "--retries", "1", "--extractor-retries", "1", "--skip-download", "--no-playlist",
-                "--dump-single-json", "--format", video_format, "--format-sort", "vcodec:h264,acodec:m4a",
+                "--dump-single-json", "--format", video_format, "--format-sort", "vcodec:h264,acodec:m4a", *extra,
                 "--", f"https://www.youtube.com/watch?v={key}"], capture_output=True, text=True, timeout=60)
+
+        try:
+            result = run_tool()
+            # YouTube sometimes asks the default client to prove it is not a bot. The embedded
+            # player client is not asked, and still gives H.264 picture with AAC sound.
+            if result.returncode and ("Sign in" in result.stderr or "confirm" in result.stderr):
+                retry = run_tool("--extractor-args", "youtube:player_client=web_embedded")
+                if not retry.returncode:
+                    result = retry
         except (OSError, subprocess.TimeoutExpired):
             raise TrailerError("The trailer source did not respond. Try another trailer.")
         finally:
