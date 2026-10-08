@@ -62,12 +62,14 @@ class TrailerStreams:
         self.clock = clock
         self.ttl = ttl
         self._items = {}
+        self._previews = {}
         self._lock = threading.Lock()
         self._resolvers = threading.BoundedSemaphore(2)
 
     def _expire(self):
         now = self.clock()
         self._items = {k: v for k, v in self._items.items() if v["expires"] > now}
+        self._previews = {k: v for k, v in self._previews.items() if v["expires"] > now}
 
     def fetch_subtitles(self, url, headers):
         """The subtitle file itself - small, kept in memory with the token.
@@ -92,7 +94,7 @@ class TrailerStreams:
                 raise TrailerError("This trailer has no subtitles", 404)
             return item["subtitles"]
 
-    def resolve(self, key, subtitles=None):
+    def resolve(self, key, subtitles=None, preview=False):
         if not isinstance(key, str) or not re.fullmatch(r"[A-Za-z0-9_-]{11}", key):
             raise TrailerError("Invalid trailer identifier", 400)
         executable = os.environ.get("TORRENTTUBE_YTDLP") or shutil.which("yt-dlp")
@@ -100,11 +102,13 @@ class TrailerStreams:
             raise TrailerError("Update your server to enable trailer playback", 503)
         if not self._resolvers.acquire(blocking=False):
             raise TrailerError("Another trailer is preparing. Try again in a moment.", 429)
+        video_format = ("b[ext=mp4][vcodec^=avc1][acodec^=mp4a][height<=1080]/b[ext=mp4][vcodec^=h264][height<=1080]"
+                        if preview else "b[height>=720][height<=1080]/bv[height<=1080]+ba/b/bv+ba")
         try:
             result = subprocess.run([
                 executable, "--ignore-config", "--no-plugin-dirs", "--no-cache-dir", "--js-runtimes", "node",
                 "--socket-timeout", "12", "--retries", "1", "--extractor-retries", "1", "--skip-download", "--no-playlist",
-                "--dump-single-json", "--format", "b[height>=720][height<=1080]/bv[height<=1080]+ba/b/bv+ba", "--format-sort", "vcodec:h264,acodec:m4a",
+                "--dump-single-json", "--format", video_format, "--format-sort", "vcodec:h264,acodec:m4a",
                 "--", f"https://www.youtube.com/watch?v={key}"], capture_output=True, text=True, timeout=60)
         except (OSError, subprocess.TimeoutExpired):
             raise TrailerError("The trailer source did not respond. Try another trailer.")
@@ -122,6 +126,10 @@ class TrailerStreams:
             audio = next((track for track in tracks if track.get("vcodec") == "none" and track.get("acodec") not in (None, "none")), None)
             headers = {k: str(v) for k, v in info.get("http_headers", {}).items()
                        if k.lower() in ("user-agent", "referer", "origin", "accept", "accept-language")}
+            if preview and (audio is not None or video.get("ext") != "mp4"
+                            or not str(video.get("vcodec", "")).startswith(("avc1", "h264"))
+                            or not str(video.get("acodec", "")).startswith(("mp4a", "aac"))):
+                raise TrailerError("A compatible trailer preview is not available.")
             token = self.register(video["url"], headers)
             audio_resource = self.resource(token, audio["url"]) if audio else None
             # "uk,en": the first language whose subtitles can actually be had.
@@ -146,6 +154,26 @@ class TrailerStreams:
                     "title": info.get("title") or "Trailer", "expires_after": self.ttl}
         except (ValueError, TypeError, StopIteration, KeyError):
             raise TrailerError("The trailer source returned no playable video")
+
+    def preview(self, key):
+        """Stable Top Shelf address: renew expiring provider links when requested.
+
+        Native tvOS requires one H.264/AAC MP4, rather than VLC's separate tracks.
+        Cache resolutions only; no video files are downloaded or saved here.
+        """
+        if not isinstance(key, str) or not re.fullmatch(r"[A-Za-z0-9_-]{11}", key):
+            raise TrailerError("Invalid trailer identifier", 400)
+        with self._lock:
+            self._expire()
+            cached = self._previews.get(key)
+            if cached:
+                return cached["url"]
+        result = self.resolve(key, preview=True)
+        with self._lock:
+            if len(self._previews) >= 128:
+                self._previews.pop(next(iter(self._previews)))
+            self._previews[key] = {"url": result["url"], "expires": self.clock() + self.ttl - min(30, self.ttl / 5)}
+        return result["url"]
 
     def register(self, url, headers=None):
         if not allowed_url(url):

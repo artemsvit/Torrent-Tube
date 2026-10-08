@@ -1,10 +1,12 @@
 import email.utils
+import hashlib
 import json
 import mimetypes
 import os
 import re
 import shutil
 import socket
+import sqlite3
 import threading
 import time
 import urllib.parse
@@ -70,9 +72,101 @@ RESUME_FILE = STATE_DIR / "torrents.json"
 # load the Jackett/TMDB config immediately below too.
 SETTINGS_FILE = STATE_DIR / "settings.json"
 
-TORZNAB_NS = {"torznab": "http://torznab.com/schemas/2015/feed"}
-TMDB_CACHE = {}
-TMDB_CACHE_TTL = 6 * 3600
+class PersistentCache:
+    """Thread-safe SQLite persistent cache with an in-memory hot layer.
+    Persists TMDB metadata, negative lookups, details, episodes, and YouTube results."""
+
+    def __init__(self, db_path: Path):
+        self.db_path = db_path
+        self._ram = {}
+        self._lock = threading.Lock()
+        self._init_db()
+
+    def _init_db(self):
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute("PRAGMA journal_mode=WAL")
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS cache (
+                        key TEXT PRIMARY KEY,
+                        value TEXT,
+                        expires_at REAL,
+                        is_hit INTEGER
+                    )
+                """)
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_cache_expires ON cache(expires_at)")
+        except Exception:
+            pass
+
+    def get(self, key: str):
+        """Returns (found: bool, value: Any). Note: value can be None for negative hits."""
+        now = time.time()
+        with self._lock:
+            ram_hit = self._ram.get(key)
+            if ram_hit:
+                expires_at, val = ram_hit
+                if now < expires_at:
+                    return True, val
+                else:
+                    self._ram.pop(key, None)
+
+        try:
+            with sqlite3.connect(self.db_path, timeout=5) as conn:
+                row = conn.execute("SELECT value, expires_at FROM cache WHERE key = ?", (key,)).fetchone()
+                if row:
+                    val_str, expires_at = row
+                    if now < expires_at:
+                        val = json.loads(val_str) if val_str is not None else None
+                        with self._lock:
+                            self._ram[key] = (expires_at, val)
+                        return True, val
+                    else:
+                        conn.execute("DELETE FROM cache WHERE key = ?", (key,))
+        except Exception:
+            pass
+        return False, None
+
+    def set(self, key: str, value, ttl: float, is_hit: bool = True):
+        expires_at = time.time() + ttl
+        with self._lock:
+            self._ram[key] = (expires_at, value)
+        try:
+            val_str = json.dumps(value, ensure_ascii=False) if value is not None else None
+            with sqlite3.connect(self.db_path, timeout=5) as conn:
+                conn.execute(
+                    "INSERT OR REPLACE INTO cache (key, value, expires_at, is_hit) VALUES (?, ?, ?, ?)",
+                    (key, val_str, expires_at, 1 if is_hit else 0),
+                )
+        except Exception:
+            pass
+
+    def clear(self):
+        with self._lock:
+            self._ram.clear()
+        try:
+            with sqlite3.connect(self.db_path, timeout=5) as conn:
+                conn.execute("DELETE FROM cache")
+        except Exception:
+            pass
+
+
+def make_etag_response(data, max_age: int = 180, stale_revalidate: int = 600):
+    payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    etag = hashlib.sha1(payload).hexdigest()
+    client_etag = request.headers.get("If-None-Match", "").strip('"')
+    headers = {
+        "ETag": f'"{etag}"',
+        "Cache-Control": f"public, max-age={max_age}, stale-while-revalidate={stale_revalidate}",
+    }
+    if client_etag == etag:
+        return Response(status=304, headers=headers)
+    return Response(payload, mimetype="application/json", headers=headers)
+
+
+TMDB_CACHE_DB = STATE_DIR / "tmdb_cache.db"
+TMDB_CACHE = PersistentCache(TMDB_CACHE_DB)
+TMDB_CACHE_TTL = 30 * 24 * 3600  # 30 days for matched titles and details
+TMDB_NEGATIVE_TTL = 7 * 24 * 3600  # 7 days for titles not found on TMDB
 TMDB_EXECUTOR = ThreadPoolExecutor(max_workers=8)
 
 app = Flask(__name__)
@@ -378,7 +472,7 @@ def config():
     return jsonify({
         "server": "torrenttube",
         "api_version": 1,
-        "capabilities": {"file_selection": True, "playback_sessions": True, "library": True},
+        "capabilities": {"file_selection": True, "playback_sessions": True, "library": True, "top_shelf_previews": True},
         "download_dir": str(DOWNLOAD_DIR),
         # The same folder as the server's own path (None when it isn't
         # known) - what Settings shows, as /downloads means little.
@@ -605,18 +699,18 @@ def tmdb_lookup(title: str, base: str, year: str, hint: str = None):
     """hint: "movie" or "tv" when the files say which it is."""
     if not TMDB_API_KEY or not title:
         return None
-    cache_key = (title.lower(), base.lower(), year, hint)
-    cached = TMDB_CACHE.get(cache_key)
-    if cached and time.time() - cached[0] < TMDB_CACHE_TTL:
-        return cached[1]
+    cache_key = f"lookup:{title.lower()}:{base.lower()}:{year}:{hint or ''}"
+    hit, val = TMDB_CACHE.get(cache_key)
+    if hit:
+        return val
 
-    item, confident = None, False
+    item, confident, failed = None, False, False
     try:
         item, confident = _tmdb_pick(_tmdb_candidates(title), title, year, hint)
         if not item and base and base.lower() != title.lower():
             item, confident = _tmdb_pick(_tmdb_candidates(base), base, year, hint)
     except Exception:
-        item = None
+        item, failed = None, True
 
     result = None
     if item:
@@ -633,7 +727,10 @@ def tmdb_lookup(title: str, base: str, year: str, hint: str = None):
             "confident": confident,
             "votes": item.get("vote_count") or 0,
         }
-    TMDB_CACHE[cache_key] = (time.time(), result)
+        TMDB_CACHE.set(cache_key, result, ttl=TMDB_CACHE_TTL, is_hit=True)
+    else:
+        # A TMDB outage is not "not found": retry it soon, not in a week.
+        TMDB_CACHE.set(cache_key, None, ttl=600 if failed else TMDB_NEGATIVE_TTL, is_hit=False)
     return result
 
 
@@ -674,10 +771,10 @@ def tmdb_details(media_type: str, tmdb_id: int) -> dict:
     """Everything the details popup shows, in one TMDB round-trip (plus an
     English fallback when there's no overview/trailer in the configured
     language)."""
-    cache_key = ("details", media_type, tmdb_id)
-    cached = TMDB_CACHE.get(cache_key)
-    if cached and time.time() - cached[0] < TMDB_CACHE_TTL:
-        return cached[1]
+    cache_key = f"details:{media_type}:{tmdb_id}:{TMDB_LANGUAGE}"
+    hit, val = TMDB_CACHE.get(cache_key)
+    if hit:
+        return val
 
     lang, _, region = TMDB_LANGUAGE.partition("-")
     extra = "credits,videos,external_ids,recommendations," + ("release_dates" if media_type == "movie" else "content_ratings")
@@ -758,7 +855,7 @@ def tmdb_details(media_type: str, tmdb_id: int) -> dict:
             if r.get("poster_path") and r.get("media_type", media_type) in ("movie", "tv")
         ][:14],
     }
-    TMDB_CACHE[cache_key] = (time.time(), result)
+    TMDB_CACHE.set(cache_key, result, ttl=TMDB_CACHE_TTL, is_hit=True)
     return result
 
 
@@ -767,13 +864,13 @@ def tmdb_details(media_type: str, tmdb_id: int) -> dict:
 # (the markup can change under us) is fine: the popup still links out to
 # a plain YouTube search either way.
 YT_RESULT_RE = re.compile(r'"videoRenderer":\{"videoId":"([\w-]{11})".{0,3000}?"title":\{"runs":\[\{"text":"((?:[^"\\]|\\.)*)"', re.S)
-YT_CACHE = {}
 
 
 def youtube_search(query: str, limit: int = 6) -> list:
-    hit = YT_CACHE.get(query)
-    if hit and time.time() - hit[0] < TMDB_CACHE_TTL:
-        return hit[1]
+    cache_key = f"yt:{query.strip().lower()}:{TMDB_LANGUAGE}"
+    hit, val = TMDB_CACHE.get(cache_key)
+    if hit:
+        return val
     url = f"https://www.youtube.com/results?{urllib.parse.urlencode({'search_query': query})}"
     req = urllib.request.Request(url, headers={
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
@@ -795,7 +892,7 @@ def youtube_search(query: str, limit: int = 6) -> list:
         videos.append({"key": key, "name": name, "lang": None})
         if len(videos) >= limit:
             break
-    YT_CACHE[query] = (time.time(), videos)
+    TMDB_CACHE.set(cache_key, videos, ttl=7 * 24 * 3600, is_hit=True)
     return videos
 
 # Keyword-based fallback for when there's no TMDB match (or TMDB is unused,
@@ -803,7 +900,7 @@ def youtube_search(query: str, limit: int = 6) -> list:
 # round-trip). None of this needs the categories to be named exactly
 # "Cartoon"/"Movies"/"TV Shows" - it just looks for one whose own name hints
 # at the right bucket, so it still works if the user renames them.
-CARTOON_KEYWORDS = ("cartoon", "anime", "animat", "мультфільм", "мультсеріал")
+CARTOON_KEYWORDS = ("cartoon", "anime", "animat", "мультфільм", "мультсеріал", "мультик", "мультики")
 TV_KEYWORDS = ("season", "episode", "series", "сезон", "серії", "серія", "епізод")
 
 
@@ -1210,7 +1307,7 @@ def discover_torrents():
         results.sort(key=lambda r: r["seeders"], reverse=True)
     else:
         results.sort(key=lambda r: pub_timestamp(r["pub_date"]), reverse=True)
-    return jsonify({"results": results})
+    return make_etag_response({"results": results}, max_age=180, stale_revalidate=900)
 
 
 def pub_timestamp(pub_date: str) -> float:
@@ -1268,7 +1365,7 @@ def item_details():
             return jsonify({"error": "Couldn't find this title on TMDB"}), 404
         media_type, tmdb_id = meta["media_type"], meta["id"]
     try:
-        return jsonify(tmdb_details(media_type, int(tmdb_id)))
+        return make_etag_response(tmdb_details(media_type, int(tmdb_id)), max_age=86400, stale_revalidate=604800)
     except Exception:
         return jsonify({"error": "Couldn't reach TMDB"}), 502
 
@@ -1282,18 +1379,18 @@ def season_episodes():
     season = request.args.get("season", "")
     if not series.isdigit() or not season.isdigit() or not 0 <= int(season) <= 999:
         return jsonify({"error": "Invalid series or season"}), 400
-    key = ("episodes", int(series), int(season), TMDB_LANGUAGE)
-    cached = TMDB_CACHE.get(key)
-    if cached and time.time() - cached[0] < TMDB_CACHE_TTL:
-        return jsonify(cached[1])
+    key = f"episodes:{int(series)}:{int(season)}:{TMDB_LANGUAGE}"
+    hit, val = TMDB_CACHE.get(key)
+    if hit:
+        return make_etag_response(val, max_age=86400, stale_revalidate=604800)
     try:
         data = _tmdb_get(f"/tv/{int(series)}/season/{int(season)}", language=TMDB_LANGUAGE)
         result = {"episodes": [{"number": e["episode_number"], "name": e.get("name") or f"Episode {e['episode_number']}",
                                  "overview": e.get("overview"), "runtime": e.get("runtime"),
                                  "still": _tmdb_image(e.get("still_path"), "w780")}
                                 for e in data.get("episodes", []) if isinstance(e.get("episode_number"), int)]}
-        TMDB_CACHE[key] = (time.time(), result)
-        return jsonify(result)
+        TMDB_CACHE.set(key, result, ttl=TMDB_CACHE_TTL, is_hit=True)
+        return make_etag_response(result, max_age=86400, stale_revalidate=604800)
     except Exception:
         return jsonify({"error": "Couldn't reach episode information"}), 502
 
@@ -1321,6 +1418,19 @@ def find_trailer():
         return jsonify({"videos": youtube_search(query), "query": query})
     except Exception:
         return jsonify({"error": "Couldn't reach YouTube", "videos": [], "query": query}), 502
+
+
+@app.route("/api/trailer/preview/<key>")
+def trailer_preview(key):
+    """A stable, native-player-compatible URL for Apple TV Top Shelf previews."""
+    try:
+        # Keep reverse-proxy mount prefixes and byte-range requests on redirect.
+        path = TRAILER_STREAMS.preview(key)
+        response = redirect(request.script_root.rstrip("/") + path, code=307)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except TrailerError as error:
+        return jsonify({"error": str(error)}), error.status
 
 
 @app.route("/api/trailer/stream", methods=["POST"])
@@ -2353,7 +2463,9 @@ def list_library():
     """Everything already in the category folders, newest first, with each
     title's TMDB match and the tab it belongs in."""
     items, pending = _library_with_metadata(LIBRARY.items(refresh=request.args.get("refresh") == "1"))
-    return jsonify({"items": items, "metadata_pending": pending})
+    # max-age=0: the apps poll this while matches are pending and after a
+    # rescan, so their URL cache must ask every time (a 304 when unchanged).
+    return make_etag_response({"items": items, "metadata_pending": pending}, max_age=0, stale_revalidate=0)
 
 
 @app.route("/api/library/metadata", methods=["DELETE"])

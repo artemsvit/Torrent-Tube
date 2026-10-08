@@ -94,6 +94,29 @@ class TrailerStreamTests(unittest.TestCase):
         self.assertEqual(result["subtitle_language"], "en")
         self.assertIsNotNone(result["subtitle_url"])
 
+    @patch("trailer_streams.subprocess.run")
+    @patch("trailer_streams.shutil.which", return_value="/tools/yt-dlp")
+    def test_native_preview_uses_combined_mp4_and_renews_expired_links(self, which, run):
+        run.return_value = subprocess.CompletedProcess([], 0, json.dumps({
+            "title": "Trailer", "url": "https://rr1.googlevideo.com/preview", "ext": "mp4",
+            "vcodec": "avc1.64001f", "acodec": "mp4a.40.2"}), "")
+        now = [0]
+        streams = TrailerStreams(clock=lambda: now[0], ttl=10)
+        first = streams.preview("abcdefghijk")
+        self.assertEqual(streams.preview("abcdefghijk"), first)
+        self.assertEqual(run.call_count, 1)
+        options = run.call_args.args[0]
+        selected_format = options[options.index("--format") + 1]
+        self.assertIn("ext=mp4", selected_format)
+        self.assertNotIn("+ba", selected_format)
+        now[0] = 9
+        self.assertNotEqual(streams.preview("abcdefghijk"), first)
+        self.assertEqual(run.call_count, 2)
+        run.return_value = subprocess.CompletedProcess([], 0, json.dumps({
+            "url": "https://rr1.googlevideo.com/video", "ext": "mp4", "vcodec": "avc1", "acodec": "none"}), "")
+        with self.assertRaises(TrailerError):
+            streams.resolve("abcdefghijk", preview=True)
+
     def test_relay_forwards_range_to_provider(self):
         streams = TrailerStreams()
         token = streams.register("https://rr1.googlevideo.com/file", {"User-Agent": "TrailerPlayer"})

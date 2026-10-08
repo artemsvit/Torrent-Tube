@@ -42,6 +42,16 @@ class PlaybackAPITests(unittest.TestCase):
         server.ses.apply_settings({"enable_dht": False, "enable_lsd": False,
                                    "enable_upnp": False, "enable_natpmp": False})
 
+    def test_top_shelf_preview_redirect_keeps_proxy_prefix(self):
+        client = server.app.test_client()
+        with patch.object(server.TRAILER_STREAMS, "preview", return_value="/trailer-stream/test-token/0") as preview:
+            response = client.get("/api/trailer/preview/abcdefghijk", environ_overrides={"SCRIPT_NAME": "/tube"}, headers={"Range": "bytes=0-1023"})
+            self.assertEqual(response.status_code, 307)
+            self.assertEqual(response.headers["Location"], "/tube/trailer-stream/test-token/0")
+            self.assertEqual(response.headers["Cache-Control"], "no-store")
+            preview.assert_called_once_with("abcdefghijk")
+        self.assertTrue(client.get("/api/config").json["capabilities"]["top_shelf_previews"])
+
     def setUp(self):
         self.client = server.app.test_client()
         self.folder = tempfile.TemporaryDirectory(dir=_sandbox.name)
