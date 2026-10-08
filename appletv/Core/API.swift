@@ -321,7 +321,8 @@ struct TorrentTubeAPI: Sendable {
         }
         guard (200..<300).contains(http.statusCode) else {
             let message = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
-            throw APIError(message: message ?? L("Server request failed (HTTP %ld).", http.statusCode))
+            // Server messages are English; show the app's translation when there is one.
+            throw APIError(message: message.map { L($0) } ?? L("Server request failed (HTTP %ld).", http.statusCode))
         }
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase

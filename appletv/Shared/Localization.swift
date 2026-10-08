@@ -263,6 +263,8 @@ private let ukrainian: [String: String] = [
     "Match all titles again on the server and update details.": "Перевірити всі фільми на сервері та оновити дані.",
     "Skip": "Перемотування",
     "Skip Intro": "Пропустити заставку",
+    "Full Screen": "На весь екран",
+    "The tracker didn't hand over this release: it was probably removed or replaced. Choose another version. If no release opens at all, log this tracker in again in Jackett (port 9117).": "Трекер не віддав цей реліз: імовірно, його видалили або замінили. Виберіть іншу версію. Якщо не відкривається жоден реліз, увійдіть у цей трекер у Jackett ще раз (порт 9117).",
     "Connecting to %@…": "Підключення до %@…",
     "The server is not responding": "Сервер не відповідає",
     "Check that the server is on and this device is on the same Wi-Fi network.": "Перевірте, що сервер увімкнений, а цей пристрій у тій самій мережі Wi‑Fi.",

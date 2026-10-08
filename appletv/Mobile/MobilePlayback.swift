@@ -157,7 +157,7 @@ struct MobilePlayback: View {
     private func close() { model.close(); if let closeCover { closeCover() } else { dismiss() } }
 }
 
-private struct MobilePlaybackBackdrop: View {
+struct MobilePlaybackBackdrop: View {
     let artwork: String?
     var body: some View {
         ZStack {
@@ -200,6 +200,14 @@ struct MobilePlayer: View {
     @State private var tracks: TrackMenu?
     private enum TrackMenu: String, Identifiable { case audio, subtitles; var id: String { rawValue } }
     var body: some View {
+        #if os(macOS)
+        // The Mac has its own player, in the way of QuickTime.
+        MacPlayer(controller: controller, title: title, streamStatus: streamStatus, artwork: artwork, intro: intro, retry: retry, close: close)
+        #else
+        touchPlayer
+        #endif
+    }
+    private var touchPlayer: some View {
         ZStack {
             Color.black.ignoresSafeArea()
             if !audioReady || (controller.buffering && controller.seconds == 0) {

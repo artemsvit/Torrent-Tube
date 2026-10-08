@@ -1864,11 +1864,12 @@ def cached_streams() -> list:
     return out
 
 
-# What a tracker's (Jackett's) download link failing usually means - say
-# so, since a player only shows "can't open".
-TRACKER_FETCH_ERROR = ("The tracker didn't hand over this torrent - its login in Jackett has probably "
-                       "expired: open Jackett (port 9117) and log that indexer in again, or pick a "
-                       "release with a magnet link")
+# What a tracker's (Jackett's) download link failing usually means: the
+# release was removed or replaced (Toloka: "attachment no longer exists"),
+# less often an expired tracker login. The apps translate this text.
+TRACKER_FETCH_ERROR = ("The tracker didn't hand over this release: it was probably removed or replaced. "
+                       "Choose another version. If no release opens at all, log this tracker in again "
+                       "in Jackett (port 9117).")
 
 
 class StreamError(Exception):
