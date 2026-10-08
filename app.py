@@ -163,6 +163,7 @@ def make_etag_response(data, max_age: int = 180, stale_revalidate: int = 600):
     return Response(payload, mimetype="application/json", headers=headers)
 
 
+TORZNAB_NS = {"torznab": "http://torznab.com/schemas/2015/feed"}
 TMDB_CACHE_DB = STATE_DIR / "tmdb_cache.db"
 TMDB_CACHE = PersistentCache(TMDB_CACHE_DB)
 TMDB_CACHE_TTL = 30 * 24 * 3600  # 30 days for matched titles and details
