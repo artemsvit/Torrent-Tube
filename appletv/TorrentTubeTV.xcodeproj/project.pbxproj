@@ -1,0 +1,1292 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		00A1E7E897134AE39DB9036D /* ResumeHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = C84FE74D0A8474C123177914 /* ResumeHistory.swift */; };
+		096C3C96156F962B8C1BD4B0 /* TopShelfTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92F1E306DBCD228480B8E96A /* TopShelfTests.swift */; };
+		0A1794D93B97BC4CF861C088 /* FavoritesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F956844B578C2F00A954EDBB /* FavoritesStore.swift */; };
+		0A498985EFD86EDF03FB4F1E /* CoreMedia.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 580AF1B4162D3DF3593A41EE /* CoreMedia.framework */; };
+		0C7681734E695F7DC69B33B1 /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65AEA873AD84D482EFC17C51 /* AppStore.swift */; };
+		143D7BB6BA3DB1BDC9F858B5 /* TVVLCKit.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = E71CED4D681555C8015927C7 /* TVVLCKit.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		152612C6A700F1021010436B /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2B9966E9A2835CCA97E7923D /* QuartzCore.framework */; };
+		162ADE6088779FE0381A00BF /* API.swift in Sources */ = {isa = PBXBuildFile; fileRef = 028903FFFBA7CFDFFA42DF5D /* API.swift */; };
+		1A2044FE6C16CA2B4B86D4CB /* MobileVLCKit.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1F0D5CC0D58366F7D6697DCA /* MobileVLCKit.xcframework */; };
+		1CDFE07BD21784225BE302A5 /* OpenGLES.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A768DEA33ECADC410BB71AA2 /* OpenGLES.framework */; };
+		22C926E56607AFB4C4136817 /* libc++.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = A3326A31C705AB4555B128F2 /* libc++.tbd */; };
+		248BD28A00DBC71ADB538747 /* MediaHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEF172EB5DE966BDE80D244F /* MediaHelpers.swift */; };
+		25AC935DA28548C39CDBCA6C /* TrailerChoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1A420622CDC82C5A5D4000 /* TrailerChoice.swift */; };
+		25B5E391728FDF42F4488E51 /* libc++.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = A3326A31C705AB4555B128F2 /* libc++.tbd */; };
+		2656EBB5A1FC1D087464D7E1 /* MobileTitle.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3114F54CC33BEF74FB2C7A2 /* MobileTitle.swift */; };
+		2926C012AC60AB5DD767678B /* TopShelfStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 006834D25D057E7CEF632AF5 /* TopShelfStore.swift */; };
+		29B183D7149B93256B6D5B6B /* SharedStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF33E9B20178916671575B95 /* SharedStateTests.swift */; };
+		2E9CB4AA6986E9AE99CB383B /* VLCKit-COPYING.txt in Resources */ = {isa = PBXBuildFile; fileRef = 04104384BA4B7C1A10E138AC /* VLCKit-COPYING.txt */; };
+		34F43FF882C8365A0538FD00 /* MobileCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57C41546CB617412BF68F45C /* MobileCatalog.swift */; };
+		367503E0A16B1B5258072BB1 /* CatalogStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7D399EFBC635C13EC86E670 /* CatalogStore.swift */; };
+		3708419332A0A57B0615F565 /* ContentProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B4E2EC276B1D4238FF6702C /* ContentProvider.swift */; };
+		3881A22B50F33AF895EECAEE /* FavoritesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F956844B578C2F00A954EDBB /* FavoritesStore.swift */; };
+		3C4FEB9E9CFD4AB728F55BD2 /* EpisodeIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF424FB4D2A5E5001039589F /* EpisodeIdentity.swift */; };
+		4585FA4C8416A2800D05747C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 59101DC399EE9A3775F74388 /* Assets.xcassets */; };
+		48DDF6504FF131ED51B14313 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 81876DEA5AAB9417BA2E345C /* InfoPlist.strings */; };
+		49B1148503E394993BA62D3A /* ContentProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B4E2EC276B1D4238FF6702C /* ContentProvider.swift */; };
+		4BAEA417E3A15EAD72FE14E3 /* libbz2.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = F38F92ED4922DDE605547A98 /* libbz2.tbd */; };
+		4D1E8966B7F9E0F5C5AC2370 /* MobileFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FB3EBF5F031BA03D6F254CB /* MobileFlowTests.swift */; };
+		5069E57F372227DD253458D6 /* libiconv.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 5DD87A287240BB5C016C83D2 /* libiconv.tbd */; };
+		589032664FCE9F56F51EBA3C /* PlaybackViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24F1034A68189995321FDEC2 /* PlaybackViews.swift */; };
+		59211C13A0E14A28FF47BCFD /* CatalogStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7D399EFBC635C13EC86E670 /* CatalogStore.swift */; };
+		60E49B61454BA436E89D553A /* TorrentTubeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6678DF7D498601C48AD29A18 /* TorrentTubeApp.swift */; };
+		620A6B04D108DDCB0363C1BE /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 840516573A7D129F34EB2464 /* Security.framework */; };
+		63FC10592846095602F6BFCE /* AudioToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 73FAD0F0DF6007CEE3CB2D89 /* AudioToolbox.framework */; };
+		66908A259D040A02B827D75B /* libiconv.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 5DD87A287240BB5C016C83D2 /* libiconv.tbd */; };
+		6A95C217F96360BD0522448F /* CatalogViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E95F8319A3E3FD5506290BEF /* CatalogViews.swift */; };
+		6B96EF23A7B60A1A864CE7B2 /* MobilePlayback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F3DF0F11AC1F113D5C1F47C /* MobilePlayback.swift */; };
+		6BE8F287D00720D98499FB50 /* TopShelfStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 006834D25D057E7CEF632AF5 /* TopShelfStore.swift */; };
+		6F25E7B6C199E64E9792E2DE /* TrailerChoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1A420622CDC82C5A5D4000 /* TrailerChoice.swift */; };
+		6FDA256FDFE57E37CB2434DE /* libxml2.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = E2EC10C54A3D2E46A8DDB4D4 /* libxml2.tbd */; };
+		7041B26AC852E6436D9BCE1B /* TVServices.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A29B62872FA4CE7AE756E592 /* TVServices.framework */; };
+		7120E2A3DB3C73C9236CD9A8 /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBEBD6015146BF295DE3D97C /* Localization.swift */; };
+		71E035767AFB433B827FF6A8 /* VideoToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0125DE2134A4F83FEE6B047C /* VideoToolbox.framework */; };
+		720219F38946410D2D1A512F /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 93B6416135A1054336A63724 /* AVFoundation.framework */; };
+		75EFE359530F74462644E026 /* VLCKit-COPYING.txt in Resources */ = {isa = PBXBuildFile; fileRef = 04104384BA4B7C1A10E138AC /* VLCKit-COPYING.txt */; };
+		78CF393B1D919F2C28EE9783 /* libxml2.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = E2EC10C54A3D2E46A8DDB4D4 /* libxml2.tbd */; };
+		7C1141F028DF122216CAD9D3 /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 93B6416135A1054336A63724 /* AVFoundation.framework */; };
+		7C305F6D44022F0D3F3C4381 /* APITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7AC9F77000ACEB310DDE3F0 /* APITests.swift */; };
+		7D08DE3FDDB1A2DE2CC4F2F3 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 580AE62DD1926BA0B41A1DD3 /* Assets.xcassets */; };
+		8526CA0250195EDE913E1019 /* LibrarySections.swift in Sources */ = {isa = PBXBuildFile; fileRef = C76538026EAF172676674FCD /* LibrarySections.swift */; };
+		8782147E995DE9DED90EBC1D /* CFNetwork.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 19FCD6E903115D42F79948D4 /* CFNetwork.framework */; };
+		94BCA4DB6B950E9EDD7441B2 /* EmbeddedPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9505B15A8E246BFEAC5A0C14 /* EmbeddedPlayer.swift */; };
+		94FC8DF5B42638596F6D13B4 /* CFNetwork.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 19FCD6E903115D42F79948D4 /* CFNetwork.framework */; };
+		9503688A3E9CA4213C463C31 /* MobileVLCKit.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 1F0D5CC0D58366F7D6697DCA /* MobileVLCKit.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		A1F16DE83B1161E0577D1F39 /* EpisodeIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF424FB4D2A5E5001039589F /* EpisodeIdentity.swift */; };
+		A1F19E2AEC5D59451DEA23FD /* APITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7AC9F77000ACEB310DDE3F0 /* APITests.swift */; };
+		A4223460D92B5FE266FC034B /* TVFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8BAB5F7C3828DD11D693895 /* TVFlowTests.swift */; };
+		A88B27F283EA2A57B095CDD2 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 671BE38B6BEAEF589E876417 /* SettingsView.swift */; };
+		A984507D733EFD32F2272ED4 /* MobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB9FF9917E06F9F8EFFAD885 /* MobileApp.swift */; };
+		B29EDEFAA7425DA97196F8DF /* TrailerBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13FC790BD3F620DA0747F88A /* TrailerBrowser.swift */; };
+		B3EAA8E6A85F41D5659CC04B /* PlaybackCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9313F054C34514F89BDA2676 /* PlaybackCoordinator.swift */; };
+		B4BDD40CBF08D5884F8AC54D /* EmbeddedPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9505B15A8E246BFEAC5A0C14 /* EmbeddedPlayer.swift */; };
+		B4E3D949305E87C110D27CC5 /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBEBD6015146BF295DE3D97C /* Localization.swift */; };
+		B5E47874F9B77272E425AF8C /* TitleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 049886025499167CAFC12234 /* TitleView.swift */; };
+		B8F931A1F301BE1A3AD10C9E /* AudioToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 73FAD0F0DF6007CEE3CB2D89 /* AudioToolbox.framework */; };
+		BA29CD631ACBDF1F04D74600 /* MetadataCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 479640FFBB304485A7A278C6 /* MetadataCache.swift */; };
+		BD20A8EF5F60EE025F3B5B31 /* CoreVideo.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1723EC0449D7755442600C23 /* CoreVideo.framework */; };
+		BFB205BBA21360CA57DC7BC8 /* TorrentTubeTopShelf.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B294FEA73C459906CA7F221A /* TorrentTubeTopShelf.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		C099A4A1FCAE6EB307B04B20 /* API.swift in Sources */ = {isa = PBXBuildFile; fileRef = 028903FFFBA7CFDFFA42DF5D /* API.swift */; };
+		C2CA8CBAF5128E0DC0E63257 /* CoreVideo.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1723EC0449D7755442600C23 /* CoreVideo.framework */; };
+		C32B153CF2DA8FF7234D05B1 /* OpenGLES.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A768DEA33ECADC410BB71AA2 /* OpenGLES.framework */; };
+		C941BE31A0CCDE3017C43841 /* libbz2.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = F38F92ED4922DDE605547A98 /* libbz2.tbd */; };
+		CC2797D97D047035F76C3DF9 /* LibrarySections.swift in Sources */ = {isa = PBXBuildFile; fileRef = C76538026EAF172676674FCD /* LibrarySections.swift */; };
+		CC5D86EB443C262BC5D5F780 /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2B9966E9A2835CCA97E7923D /* QuartzCore.framework */; };
+		D089C5B7C19AFE460D98D6B5 /* MetadataCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 479640FFBB304485A7A278C6 /* MetadataCache.swift */; };
+		D2D49F839CCB0957C924197A /* ResumeHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = C84FE74D0A8474C123177914 /* ResumeHistory.swift */; };
+		D575C87AA25406315C1E1F18 /* VideoToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0125DE2134A4F83FEE6B047C /* VideoToolbox.framework */; };
+		DD4059BEC03F34385902E5E2 /* CoreText.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 243C31CE64690FC10E9962C0 /* CoreText.framework */; };
+		DE386D14A4BBB4727D05971E /* CoreText.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 243C31CE64690FC10E9962C0 /* CoreText.framework */; };
+		DF3DA50DEAC73F7561AFDE45 /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 840516573A7D129F34EB2464 /* Security.framework */; };
+		E17FC02BB151BE92A3E46135 /* Favorites.swift in Sources */ = {isa = PBXBuildFile; fileRef = 282BE353DA293719A9E0CDDA /* Favorites.swift */; };
+		E3D54993675687CD3E07C290 /* TVVLCKit.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = E71CED4D681555C8015927C7 /* TVVLCKit.xcframework */; };
+		E860CB4A6DD1BE199CE9A205 /* PlaybackCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9313F054C34514F89BDA2676 /* PlaybackCoordinator.swift */; };
+		F0A47C9553BC4F3B9531E91B /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65AEA873AD84D482EFC17C51 /* AppStore.swift */; };
+		F0E58AD1C6F455344EDC7C3F /* CoreMedia.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 580AF1B4162D3DF3593A41EE /* CoreMedia.framework */; };
+		F4F4FAD5AB0BE9DADBD96A23 /* MediaHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEF172EB5DE966BDE80D244F /* MediaHelpers.swift */; };
+		F553BB348F179EA0CBD2F925 /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBEBD6015146BF295DE3D97C /* Localization.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		1E7B2E6049521996DAF2D8DC /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 834F392B261F169CF6EECAAC /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 6013FD2D5A99E447E52D481B;
+			remoteInfo = TorrentTubeMobile;
+		};
+		2B065EFB62A5FDE6A8733E22 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 834F392B261F169CF6EECAAC /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 932652366F7A093ED160C7E6;
+			remoteInfo = TorrentTubeTV;
+		};
+		2C932BB4B7280757FE8AC1F1 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 834F392B261F169CF6EECAAC /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 6013FD2D5A99E447E52D481B;
+			remoteInfo = TorrentTubeMobile;
+		};
+		465D1BE5C0E364EFAFAE5E51 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 834F392B261F169CF6EECAAC /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BE85C4DEF43D8DB105E2EBD7;
+			remoteInfo = TorrentTubeTopShelf;
+		};
+		512D3F59ADD0A51521B90FD5 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 834F392B261F169CF6EECAAC /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 932652366F7A093ED160C7E6;
+			remoteInfo = TorrentTubeTV;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		4DCE0BFD0B3CFDA59FB77365 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				BFB205BBA21360CA57DC7BC8 /* TorrentTubeTopShelf.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		55F119A7FED06B9AC6507C30 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				143D7BB6BA3DB1BDC9F858B5 /* TVVLCKit.xcframework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		90414E878BC9570F1A0BCE92 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				9503688A3E9CA4213C463C31 /* MobileVLCKit.xcframework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		006834D25D057E7CEF632AF5 /* TopShelfStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopShelfStore.swift; sourceTree = "<group>"; };
+		0125DE2134A4F83FEE6B047C /* VideoToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = VideoToolbox.framework; path = System/Library/Frameworks/VideoToolbox.framework; sourceTree = SDKROOT; };
+		028903FFFBA7CFDFFA42DF5D /* API.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = API.swift; sourceTree = "<group>"; };
+		04104384BA4B7C1A10E138AC /* VLCKit-COPYING.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "VLCKit-COPYING.txt"; sourceTree = "<group>"; };
+		049886025499167CAFC12234 /* TitleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TitleView.swift; sourceTree = "<group>"; };
+		0E8628FD9EF9860860E6B15A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		13FC790BD3F620DA0747F88A /* TrailerBrowser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrailerBrowser.swift; sourceTree = "<group>"; };
+		1723EC0449D7755442600C23 /* CoreVideo.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreVideo.framework; path = System/Library/Frameworks/CoreVideo.framework; sourceTree = SDKROOT; };
+		19FCD6E903115D42F79948D4 /* CFNetwork.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CFNetwork.framework; path = System/Library/Frameworks/CFNetwork.framework; sourceTree = SDKROOT; };
+		1F0D5CC0D58366F7D6697DCA /* MobileVLCKit.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = MobileVLCKit.xcframework; path = Vendor/MobileVLCKit.xcframework; sourceTree = "<group>"; };
+		243C31CE64690FC10E9962C0 /* CoreText.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreText.framework; path = System/Library/Frameworks/CoreText.framework; sourceTree = SDKROOT; };
+		24F1034A68189995321FDEC2 /* PlaybackViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackViews.swift; sourceTree = "<group>"; };
+		282BE353DA293719A9E0CDDA /* Favorites.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Favorites.swift; sourceTree = "<group>"; };
+		2B9966E9A2835CCA97E7923D /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
+		328011284C31AB9FF3C1BDCA /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
+		33DFD16170511919F303734B /* TorrentTube.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TorrentTube.entitlements; sourceTree = "<group>"; };
+		3C66EF18AB2D944EB7539739 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		479640FFBB304485A7A278C6 /* MetadataCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataCache.swift; sourceTree = "<group>"; };
+		57C41546CB617412BF68F45C /* MobileCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileCatalog.swift; sourceTree = "<group>"; };
+		580AE62DD1926BA0B41A1DD3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		580AF1B4162D3DF3593A41EE /* CoreMedia.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreMedia.framework; path = System/Library/Frameworks/CoreMedia.framework; sourceTree = SDKROOT; };
+		59101DC399EE9A3775F74388 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		5DD87A287240BB5C016C83D2 /* libiconv.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libiconv.tbd; path = usr/lib/libiconv.tbd; sourceTree = SDKROOT; };
+		65AEA873AD84D482EFC17C51 /* AppStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStore.swift; sourceTree = "<group>"; };
+		6678DF7D498601C48AD29A18 /* TorrentTubeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TorrentTubeApp.swift; sourceTree = "<group>"; };
+		671BE38B6BEAEF589E876417 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		6B4E2EC276B1D4238FF6702C /* ContentProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentProvider.swift; sourceTree = "<group>"; };
+		70416E3D1D4C6ED2CED5480B /* TorrentTubeTVTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = TorrentTubeTVTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		707EB0EE06D5AFF8D6842476 /* TorrentTubeMobileUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = TorrentTubeMobileUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		70BAD8858B7465E1FA4BFA09 /* TorrentTubeTVUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = TorrentTubeTVUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		73FAD0F0DF6007CEE3CB2D89 /* AudioToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AudioToolbox.framework; path = System/Library/Frameworks/AudioToolbox.framework; sourceTree = SDKROOT; };
+		840516573A7D129F34EB2464 /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
+		8AF81EAAE61687D3F3BCA7E6 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		8FB3EBF5F031BA03D6F254CB /* MobileFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileFlowTests.swift; sourceTree = "<group>"; };
+		92F1E306DBCD228480B8E96A /* TopShelfTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopShelfTests.swift; sourceTree = "<group>"; };
+		9313F054C34514F89BDA2676 /* PlaybackCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackCoordinator.swift; sourceTree = "<group>"; };
+		93B6416135A1054336A63724 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
+		9505B15A8E246BFEAC5A0C14 /* EmbeddedPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmbeddedPlayer.swift; sourceTree = "<group>"; };
+		9E1A2F536436176E7799F2E7 /* TorrentTubeMobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = TorrentTubeMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9F3DF0F11AC1F113D5C1F47C /* MobilePlayback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobilePlayback.swift; sourceTree = "<group>"; };
+		A29B62872FA4CE7AE756E592 /* TVServices.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = TVServices.framework; path = System/Library/Frameworks/TVServices.framework; sourceTree = SDKROOT; };
+		A3326A31C705AB4555B128F2 /* libc++.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = "libc++.tbd"; path = "usr/lib/libc++.tbd"; sourceTree = SDKROOT; };
+		A768DEA33ECADC410BB71AA2 /* OpenGLES.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = OpenGLES.framework; path = System/Library/Frameworks/OpenGLES.framework; sourceTree = SDKROOT; };
+		A8BAB5F7C3828DD11D693895 /* TVFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVFlowTests.swift; sourceTree = "<group>"; };
+		AB9FF9917E06F9F8EFFAD885 /* MobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileApp.swift; sourceTree = "<group>"; };
+		AF1A420622CDC82C5A5D4000 /* TrailerChoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrailerChoice.swift; sourceTree = "<group>"; };
+		B294FEA73C459906CA7F221A /* TorrentTubeTopShelf.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = TorrentTubeTopShelf.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		C3114F54CC33BEF74FB2C7A2 /* MobileTitle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileTitle.swift; sourceTree = "<group>"; };
+		C76538026EAF172676674FCD /* LibrarySections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibrarySections.swift; sourceTree = "<group>"; };
+		C84FE74D0A8474C123177914 /* ResumeHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResumeHistory.swift; sourceTree = "<group>"; };
+		CF33E9B20178916671575B95 /* SharedStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedStateTests.swift; sourceTree = "<group>"; };
+		D41B9842174E02838D4DC3C9 /* uk */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = uk; path = uk.lproj/InfoPlist.strings; sourceTree = "<group>"; };
+		D7D399EFBC635C13EC86E670 /* CatalogStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalogStore.swift; sourceTree = "<group>"; };
+		E2EC10C54A3D2E46A8DDB4D4 /* libxml2.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libxml2.tbd; path = usr/lib/libxml2.tbd; sourceTree = SDKROOT; };
+		E71CED4D681555C8015927C7 /* TVVLCKit.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = TVVLCKit.xcframework; path = Vendor/TVVLCKit.xcframework; sourceTree = "<group>"; };
+		E7AC9F77000ACEB310DDE3F0 /* APITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APITests.swift; sourceTree = "<group>"; };
+		E95F8319A3E3FD5506290BEF /* CatalogViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalogViews.swift; sourceTree = "<group>"; };
+		EF424FB4D2A5E5001039589F /* EpisodeIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EpisodeIdentity.swift; sourceTree = "<group>"; };
+		F04622AD9C96A92C8D6EAEF1 /* TopShelf.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TopShelf.entitlements; sourceTree = "<group>"; };
+		F38F92ED4922DDE605547A98 /* libbz2.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libbz2.tbd; path = usr/lib/libbz2.tbd; sourceTree = SDKROOT; };
+		F48DC9D80CED9625493EFA0B /* TorrentTubeMobileTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = TorrentTubeMobileTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		F956844B578C2F00A954EDBB /* FavoritesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoritesStore.swift; sourceTree = "<group>"; };
+		FBEBD6015146BF295DE3D97C /* Localization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Localization.swift; sourceTree = "<group>"; };
+		FE051AEF08E359BBDC553626 /* TorrentTubeTV.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = TorrentTubeTV.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		FEF172EB5DE966BDE80D244F /* MediaHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaHelpers.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		1703CF148D2EB9CF58921E14 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7041B26AC852E6436D9BCE1B /* TVServices.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		510DF1D265930BD51B5882F0 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E3D54993675687CD3E07C290 /* TVVLCKit.xcframework in Frameworks */,
+				63FC10592846095602F6BFCE /* AudioToolbox.framework in Frameworks */,
+				7C1141F028DF122216CAD9D3 /* AVFoundation.framework in Frameworks */,
+				94FC8DF5B42638596F6D13B4 /* CFNetwork.framework in Frameworks */,
+				F0E58AD1C6F455344EDC7C3F /* CoreMedia.framework in Frameworks */,
+				DD4059BEC03F34385902E5E2 /* CoreText.framework in Frameworks */,
+				C2CA8CBAF5128E0DC0E63257 /* CoreVideo.framework in Frameworks */,
+				C32B153CF2DA8FF7234D05B1 /* OpenGLES.framework in Frameworks */,
+				CC5D86EB443C262BC5D5F780 /* QuartzCore.framework in Frameworks */,
+				620A6B04D108DDCB0363C1BE /* Security.framework in Frameworks */,
+				71E035767AFB433B827FF6A8 /* VideoToolbox.framework in Frameworks */,
+				4BAEA417E3A15EAD72FE14E3 /* libbz2.tbd in Frameworks */,
+				22C926E56607AFB4C4136817 /* libc++.tbd in Frameworks */,
+				5069E57F372227DD253458D6 /* libiconv.tbd in Frameworks */,
+				78CF393B1D919F2C28EE9783 /* libxml2.tbd in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6D7BC05720DB98989BAE9971 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1A2044FE6C16CA2B4B86D4CB /* MobileVLCKit.xcframework in Frameworks */,
+				B8F931A1F301BE1A3AD10C9E /* AudioToolbox.framework in Frameworks */,
+				720219F38946410D2D1A512F /* AVFoundation.framework in Frameworks */,
+				8782147E995DE9DED90EBC1D /* CFNetwork.framework in Frameworks */,
+				0A498985EFD86EDF03FB4F1E /* CoreMedia.framework in Frameworks */,
+				DE386D14A4BBB4727D05971E /* CoreText.framework in Frameworks */,
+				BD20A8EF5F60EE025F3B5B31 /* CoreVideo.framework in Frameworks */,
+				1CDFE07BD21784225BE302A5 /* OpenGLES.framework in Frameworks */,
+				152612C6A700F1021010436B /* QuartzCore.framework in Frameworks */,
+				DF3DA50DEAC73F7561AFDE45 /* Security.framework in Frameworks */,
+				D575C87AA25406315C1E1F18 /* VideoToolbox.framework in Frameworks */,
+				C941BE31A0CCDE3017C43841 /* libbz2.tbd in Frameworks */,
+				25B5E391728FDF42F4488E51 /* libc++.tbd in Frameworks */,
+				66908A259D040A02B827D75B /* libiconv.tbd in Frameworks */,
+				6FDA256FDFE57E37CB2434DE /* libxml2.tbd in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		033DB38160E289C05AA49EE9 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				9E1A2F536436176E7799F2E7 /* TorrentTubeMobile.app */,
+				F48DC9D80CED9625493EFA0B /* TorrentTubeMobileTests.xctest */,
+				707EB0EE06D5AFF8D6842476 /* TorrentTubeMobileUITests.xctest */,
+				B294FEA73C459906CA7F221A /* TorrentTubeTopShelf.appex */,
+				FE051AEF08E359BBDC553626 /* TorrentTubeTV.app */,
+				70416E3D1D4C6ED2CED5480B /* TorrentTubeTVTests.xctest */,
+				70BAD8858B7465E1FA4BFA09 /* TorrentTubeTVUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		1B56BBF734235594A1B742AF /* TopShelf */ = {
+			isa = PBXGroup;
+			children = (
+				0E8628FD9EF9860860E6B15A /* Info.plist */,
+				F04622AD9C96A92C8D6EAEF1 /* TopShelf.entitlements */,
+			);
+			path = TopShelf;
+			sourceTree = "<group>";
+		};
+		37C02D794205E62DE10E5054 /* MobileUITests */ = {
+			isa = PBXGroup;
+			children = (
+				8FB3EBF5F031BA03D6F254CB /* MobileFlowTests.swift */,
+			);
+			path = MobileUITests;
+			sourceTree = "<group>";
+		};
+		40DAD1C010B3ACAB8D5530F4 /* MobileTests */ = {
+			isa = PBXGroup;
+			children = (
+				CF33E9B20178916671575B95 /* SharedStateTests.swift */,
+			);
+			path = MobileTests;
+			sourceTree = "<group>";
+		};
+		7319F16785B1837ABC38716F = {
+			isa = PBXGroup;
+			children = (
+				DBA4B3CEBB4F1BF04AA1D44E /* Core */,
+				D96923B73E0FF465BC312E11 /* Mobile */,
+				40DAD1C010B3ACAB8D5530F4 /* MobileTests */,
+				37C02D794205E62DE10E5054 /* MobileUITests */,
+				FB8DD4CAD72F2DA284DDF9B4 /* Shared */,
+				1B56BBF734235594A1B742AF /* TopShelf */,
+				BA5AE0C54A4E3B52250E0F4F /* TorrentTube */,
+				EC34574CB8143B5A446540BC /* TorrentTubeTests */,
+				F13F343EDC498BE5A3010F63 /* TorrentTubeUITests */,
+				9B42BAFD2CD3616E746C1FA0 /* Frameworks */,
+				033DB38160E289C05AA49EE9 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		9B42BAFD2CD3616E746C1FA0 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				73FAD0F0DF6007CEE3CB2D89 /* AudioToolbox.framework */,
+				93B6416135A1054336A63724 /* AVFoundation.framework */,
+				19FCD6E903115D42F79948D4 /* CFNetwork.framework */,
+				580AF1B4162D3DF3593A41EE /* CoreMedia.framework */,
+				243C31CE64690FC10E9962C0 /* CoreText.framework */,
+				1723EC0449D7755442600C23 /* CoreVideo.framework */,
+				F38F92ED4922DDE605547A98 /* libbz2.tbd */,
+				A3326A31C705AB4555B128F2 /* libc++.tbd */,
+				5DD87A287240BB5C016C83D2 /* libiconv.tbd */,
+				E2EC10C54A3D2E46A8DDB4D4 /* libxml2.tbd */,
+				1F0D5CC0D58366F7D6697DCA /* MobileVLCKit.xcframework */,
+				A768DEA33ECADC410BB71AA2 /* OpenGLES.framework */,
+				2B9966E9A2835CCA97E7923D /* QuartzCore.framework */,
+				840516573A7D129F34EB2464 /* Security.framework */,
+				A29B62872FA4CE7AE756E592 /* TVServices.framework */,
+				E71CED4D681555C8015927C7 /* TVVLCKit.xcframework */,
+				0125DE2134A4F83FEE6B047C /* VideoToolbox.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		BA5AE0C54A4E3B52250E0F4F /* TorrentTube */ = {
+			isa = PBXGroup;
+			children = (
+				59101DC399EE9A3775F74388 /* Assets.xcassets */,
+				E95F8319A3E3FD5506290BEF /* CatalogViews.swift */,
+				282BE353DA293719A9E0CDDA /* Favorites.swift */,
+				3C66EF18AB2D944EB7539739 /* Info.plist */,
+				24F1034A68189995321FDEC2 /* PlaybackViews.swift */,
+				671BE38B6BEAEF589E876417 /* SettingsView.swift */,
+				049886025499167CAFC12234 /* TitleView.swift */,
+				33DFD16170511919F303734B /* TorrentTube.entitlements */,
+				6678DF7D498601C48AD29A18 /* TorrentTubeApp.swift */,
+				13FC790BD3F620DA0747F88A /* TrailerBrowser.swift */,
+				04104384BA4B7C1A10E138AC /* VLCKit-COPYING.txt */,
+			);
+			path = TorrentTube;
+			sourceTree = "<group>";
+		};
+		D96923B73E0FF465BC312E11 /* Mobile */ = {
+			isa = PBXGroup;
+			children = (
+				580AE62DD1926BA0B41A1DD3 /* Assets.xcassets */,
+				8AF81EAAE61687D3F3BCA7E6 /* Info.plist */,
+				AB9FF9917E06F9F8EFFAD885 /* MobileApp.swift */,
+				57C41546CB617412BF68F45C /* MobileCatalog.swift */,
+				9F3DF0F11AC1F113D5C1F47C /* MobilePlayback.swift */,
+				C3114F54CC33BEF74FB2C7A2 /* MobileTitle.swift */,
+				81876DEA5AAB9417BA2E345C /* InfoPlist.strings */,
+			);
+			path = Mobile;
+			sourceTree = "<group>";
+		};
+		DBA4B3CEBB4F1BF04AA1D44E /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				028903FFFBA7CFDFFA42DF5D /* API.swift */,
+				65AEA873AD84D482EFC17C51 /* AppStore.swift */,
+				D7D399EFBC635C13EC86E670 /* CatalogStore.swift */,
+				9505B15A8E246BFEAC5A0C14 /* EmbeddedPlayer.swift */,
+				EF424FB4D2A5E5001039589F /* EpisodeIdentity.swift */,
+				F956844B578C2F00A954EDBB /* FavoritesStore.swift */,
+				C76538026EAF172676674FCD /* LibrarySections.swift */,
+				FEF172EB5DE966BDE80D244F /* MediaHelpers.swift */,
+				479640FFBB304485A7A278C6 /* MetadataCache.swift */,
+				9313F054C34514F89BDA2676 /* PlaybackCoordinator.swift */,
+				C84FE74D0A8474C123177914 /* ResumeHistory.swift */,
+				AF1A420622CDC82C5A5D4000 /* TrailerChoice.swift */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
+		EC34574CB8143B5A446540BC /* TorrentTubeTests */ = {
+			isa = PBXGroup;
+			children = (
+				E7AC9F77000ACEB310DDE3F0 /* APITests.swift */,
+				92F1E306DBCD228480B8E96A /* TopShelfTests.swift */,
+			);
+			path = TorrentTubeTests;
+			sourceTree = "<group>";
+		};
+		F13F343EDC498BE5A3010F63 /* TorrentTubeUITests */ = {
+			isa = PBXGroup;
+			children = (
+				A8BAB5F7C3828DD11D693895 /* TVFlowTests.swift */,
+			);
+			path = TorrentTubeUITests;
+			sourceTree = "<group>";
+		};
+		FB8DD4CAD72F2DA284DDF9B4 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				6B4E2EC276B1D4238FF6702C /* ContentProvider.swift */,
+				FBEBD6015146BF295DE3D97C /* Localization.swift */,
+				006834D25D057E7CEF632AF5 /* TopShelfStore.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		6013FD2D5A99E447E52D481B /* TorrentTubeMobile */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2404FA5B23A04E352AF64D27 /* Build configuration list for PBXNativeTarget "TorrentTubeMobile" */;
+			buildPhases = (
+				124ECF270A667C58D82D7CCD /* Sources */,
+				F1F608A19ED40F0C5D6E049B /* Resources */,
+				6D7BC05720DB98989BAE9971 /* Frameworks */,
+				90414E878BC9570F1A0BCE92 /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = TorrentTubeMobile;
+			packageProductDependencies = (
+			);
+			productName = TorrentTubeMobile;
+			productReference = 9E1A2F536436176E7799F2E7 /* TorrentTubeMobile.app */;
+			productType = "com.apple.product-type.application";
+		};
+		649FAA70A20BAB9BFC50ABFE /* TorrentTubeMobileUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 3D6E1A8C07795582642B10A6 /* Build configuration list for PBXNativeTarget "TorrentTubeMobileUITests" */;
+			buildPhases = (
+				AF1B6CC206443B79B19C46BA /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				FFC201785E6B1F44F455E1FF /* PBXTargetDependency */,
+			);
+			name = TorrentTubeMobileUITests;
+			packageProductDependencies = (
+			);
+			productName = TorrentTubeMobileUITests;
+			productReference = 707EB0EE06D5AFF8D6842476 /* TorrentTubeMobileUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		932652366F7A093ED160C7E6 /* TorrentTubeTV */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B8912CFEC52A0C9ADF26F0E7 /* Build configuration list for PBXNativeTarget "TorrentTubeTV" */;
+			buildPhases = (
+				DD6CA958B18248068BCAAC9F /* Sources */,
+				D0DD57CC49409333105F3105 /* Resources */,
+				510DF1D265930BD51B5882F0 /* Frameworks */,
+				4DCE0BFD0B3CFDA59FB77365 /* Embed Foundation Extensions */,
+				55F119A7FED06B9AC6507C30 /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				1708C822AF74C87AD1D4C0CB /* PBXTargetDependency */,
+			);
+			name = TorrentTubeTV;
+			packageProductDependencies = (
+			);
+			productName = TorrentTubeTV;
+			productReference = FE051AEF08E359BBDC553626 /* TorrentTubeTV.app */;
+			productType = "com.apple.product-type.application";
+		};
+		B243E4A1CD11167579144220 /* TorrentTubeTVUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7836495D2D2C81350DEC34A8 /* Build configuration list for PBXNativeTarget "TorrentTubeTVUITests" */;
+			buildPhases = (
+				64A7BBB135C92BAB7E23DA4F /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				2DA9AC244488D2DDE09A0ED3 /* PBXTargetDependency */,
+			);
+			name = TorrentTubeTVUITests;
+			packageProductDependencies = (
+			);
+			productName = TorrentTubeTVUITests;
+			productReference = 70BAD8858B7465E1FA4BFA09 /* TorrentTubeTVUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		BE85C4DEF43D8DB105E2EBD7 /* TorrentTubeTopShelf */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 51AE5C107EA63A3214D693F7 /* Build configuration list for PBXNativeTarget "TorrentTubeTopShelf" */;
+			buildPhases = (
+				0E5CB97E64B54CCDEC8CFBEE /* Sources */,
+				1703CF148D2EB9CF58921E14 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = TorrentTubeTopShelf;
+			packageProductDependencies = (
+			);
+			productName = TorrentTubeTopShelf;
+			productReference = B294FEA73C459906CA7F221A /* TorrentTubeTopShelf.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		D05ED5A0B0B3D8D46BCCDC8F /* TorrentTubeTVTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 16F7309379E529A2062494D1 /* Build configuration list for PBXNativeTarget "TorrentTubeTVTests" */;
+			buildPhases = (
+				4B7B248C7ED0A6D8F1B8C93A /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				CB4544BECE99C2963B681A42 /* PBXTargetDependency */,
+			);
+			name = TorrentTubeTVTests;
+			packageProductDependencies = (
+			);
+			productName = TorrentTubeTVTests;
+			productReference = 70416E3D1D4C6ED2CED5480B /* TorrentTubeTVTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		E212D0D6ECF7E10278D46111 /* TorrentTubeMobileTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 51F648BA9057F770DBA5FF16 /* Build configuration list for PBXNativeTarget "TorrentTubeMobileTests" */;
+			buildPhases = (
+				5322A909DD6C674868DD7DAE /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				6CA3A2166DD969B3CE9DBE0D /* PBXTargetDependency */,
+			);
+			name = TorrentTubeMobileTests;
+			packageProductDependencies = (
+			);
+			productName = TorrentTubeMobileTests;
+			productReference = F48DC9D80CED9625493EFA0B /* TorrentTubeMobileTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		834F392B261F169CF6EECAAC /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					6013FD2D5A99E447E52D481B = {
+						ProvisioningStyle = Automatic;
+					};
+					649FAA70A20BAB9BFC50ABFE = {
+						ProvisioningStyle = Automatic;
+						TestTargetID = 6013FD2D5A99E447E52D481B;
+					};
+					932652366F7A093ED160C7E6 = {
+						ProvisioningStyle = Automatic;
+					};
+					B243E4A1CD11167579144220 = {
+						ProvisioningStyle = Automatic;
+						TestTargetID = 932652366F7A093ED160C7E6;
+					};
+					BE85C4DEF43D8DB105E2EBD7 = {
+						ProvisioningStyle = Automatic;
+					};
+					D05ED5A0B0B3D8D46BCCDC8F = {
+						ProvisioningStyle = Automatic;
+					};
+					E212D0D6ECF7E10278D46111 = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 77B79F9EB588BD5CF08A3F34 /* Build configuration list for PBXProject "TorrentTubeTV" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+				uk,
+			);
+			mainGroup = 7319F16785B1837ABC38716F;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 033DB38160E289C05AA49EE9 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				932652366F7A093ED160C7E6 /* TorrentTubeTV */,
+				6013FD2D5A99E447E52D481B /* TorrentTubeMobile */,
+				E212D0D6ECF7E10278D46111 /* TorrentTubeMobileTests */,
+				649FAA70A20BAB9BFC50ABFE /* TorrentTubeMobileUITests */,
+				BE85C4DEF43D8DB105E2EBD7 /* TorrentTubeTopShelf */,
+				D05ED5A0B0B3D8D46BCCDC8F /* TorrentTubeTVTests */,
+				B243E4A1CD11167579144220 /* TorrentTubeTVUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		D0DD57CC49409333105F3105 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4585FA4C8416A2800D05747C /* Assets.xcassets in Resources */,
+				2E9CB4AA6986E9AE99CB383B /* VLCKit-COPYING.txt in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F1F608A19ED40F0C5D6E049B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7D08DE3FDDB1A2DE2CC4F2F3 /* Assets.xcassets in Resources */,
+				48DDF6504FF131ED51B14313 /* InfoPlist.strings in Resources */,
+				75EFE359530F74462644E026 /* VLCKit-COPYING.txt in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		0E5CB97E64B54CCDEC8CFBEE /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3708419332A0A57B0615F565 /* ContentProvider.swift in Sources */,
+				7120E2A3DB3C73C9236CD9A8 /* Localization.swift in Sources */,
+				2926C012AC60AB5DD767678B /* TopShelfStore.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		124ECF270A667C58D82D7CCD /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C099A4A1FCAE6EB307B04B20 /* API.swift in Sources */,
+				F0A47C9553BC4F3B9531E91B /* AppStore.swift in Sources */,
+				59211C13A0E14A28FF47BCFD /* CatalogStore.swift in Sources */,
+				B4BDD40CBF08D5884F8AC54D /* EmbeddedPlayer.swift in Sources */,
+				3C4FEB9E9CFD4AB728F55BD2 /* EpisodeIdentity.swift in Sources */,
+				0A1794D93B97BC4CF861C088 /* FavoritesStore.swift in Sources */,
+				CC2797D97D047035F76C3DF9 /* LibrarySections.swift in Sources */,
+				B4E3D949305E87C110D27CC5 /* Localization.swift in Sources */,
+				F4F4FAD5AB0BE9DADBD96A23 /* MediaHelpers.swift in Sources */,
+				BA29CD631ACBDF1F04D74600 /* MetadataCache.swift in Sources */,
+				A984507D733EFD32F2272ED4 /* MobileApp.swift in Sources */,
+				34F43FF882C8365A0538FD00 /* MobileCatalog.swift in Sources */,
+				6B96EF23A7B60A1A864CE7B2 /* MobilePlayback.swift in Sources */,
+				2656EBB5A1FC1D087464D7E1 /* MobileTitle.swift in Sources */,
+				E860CB4A6DD1BE199CE9A205 /* PlaybackCoordinator.swift in Sources */,
+				D2D49F839CCB0957C924197A /* ResumeHistory.swift in Sources */,
+				25AC935DA28548C39CDBCA6C /* TrailerChoice.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		4B7B248C7ED0A6D8F1B8C93A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1F19E2AEC5D59451DEA23FD /* APITests.swift in Sources */,
+				096C3C96156F962B8C1BD4B0 /* TopShelfTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5322A909DD6C674868DD7DAE /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7C305F6D44022F0D3F3C4381 /* APITests.swift in Sources */,
+				29B183D7149B93256B6D5B6B /* SharedStateTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		64A7BBB135C92BAB7E23DA4F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A4223460D92B5FE266FC034B /* TVFlowTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AF1B6CC206443B79B19C46BA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4D1E8966B7F9E0F5C5AC2370 /* MobileFlowTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DD6CA958B18248068BCAAC9F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				162ADE6088779FE0381A00BF /* API.swift in Sources */,
+				0C7681734E695F7DC69B33B1 /* AppStore.swift in Sources */,
+				367503E0A16B1B5258072BB1 /* CatalogStore.swift in Sources */,
+				6A95C217F96360BD0522448F /* CatalogViews.swift in Sources */,
+				49B1148503E394993BA62D3A /* ContentProvider.swift in Sources */,
+				94BCA4DB6B950E9EDD7441B2 /* EmbeddedPlayer.swift in Sources */,
+				A1F16DE83B1161E0577D1F39 /* EpisodeIdentity.swift in Sources */,
+				E17FC02BB151BE92A3E46135 /* Favorites.swift in Sources */,
+				3881A22B50F33AF895EECAEE /* FavoritesStore.swift in Sources */,
+				8526CA0250195EDE913E1019 /* LibrarySections.swift in Sources */,
+				F553BB348F179EA0CBD2F925 /* Localization.swift in Sources */,
+				248BD28A00DBC71ADB538747 /* MediaHelpers.swift in Sources */,
+				D089C5B7C19AFE460D98D6B5 /* MetadataCache.swift in Sources */,
+				B3EAA8E6A85F41D5659CC04B /* PlaybackCoordinator.swift in Sources */,
+				589032664FCE9F56F51EBA3C /* PlaybackViews.swift in Sources */,
+				00A1E7E897134AE39DB9036D /* ResumeHistory.swift in Sources */,
+				A88B27F283EA2A57B095CDD2 /* SettingsView.swift in Sources */,
+				B5E47874F9B77272E425AF8C /* TitleView.swift in Sources */,
+				6BE8F287D00720D98499FB50 /* TopShelfStore.swift in Sources */,
+				60E49B61454BA436E89D553A /* TorrentTubeApp.swift in Sources */,
+				B29EDEFAA7425DA97196F8DF /* TrailerBrowser.swift in Sources */,
+				6F25E7B6C199E64E9792E2DE /* TrailerChoice.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		1708C822AF74C87AD1D4C0CB /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BE85C4DEF43D8DB105E2EBD7 /* TorrentTubeTopShelf */;
+			targetProxy = 465D1BE5C0E364EFAFAE5E51 /* PBXContainerItemProxy */;
+		};
+		2DA9AC244488D2DDE09A0ED3 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 932652366F7A093ED160C7E6 /* TorrentTubeTV */;
+			targetProxy = 512D3F59ADD0A51521B90FD5 /* PBXContainerItemProxy */;
+		};
+		6CA3A2166DD969B3CE9DBE0D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 6013FD2D5A99E447E52D481B /* TorrentTubeMobile */;
+			targetProxy = 1E7B2E6049521996DAF2D8DC /* PBXContainerItemProxy */;
+		};
+		CB4544BECE99C2963B681A42 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 932652366F7A093ED160C7E6 /* TorrentTubeTV */;
+			targetProxy = 2B065EFB62A5FDE6A8733E22 /* PBXContainerItemProxy */;
+		};
+		FFC201785E6B1F44F455E1FF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 6013FD2D5A99E447E52D481B /* TorrentTubeMobile */;
+			targetProxy = 2C932BB4B7280757FE8AC1F1 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin PBXVariantGroup section */
+		81876DEA5AAB9417BA2E345C /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				328011284C31AB9FF3C1BDCA /* en */,
+				D41B9842174E02838D4DC3C9 /* uk */,
+			);
+			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
+
+/* Begin XCBuildConfiguration section */
+		045D415D9D7C12B273E75D54 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.artsvit.torrenttube.tv;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_STRICT_CONCURRENCY = targeted;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 3;
+				TVOS_DEPLOYMENT_TARGET = 18.0;
+			};
+			name = Release;
+		};
+		0631D514B9FA356CD2051F86 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.artsvit.torrenttube.tv;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = targeted;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 3;
+				TVOS_DEPLOYMENT_TARGET = 18.0;
+			};
+			name = Debug;
+		};
+		16D646EBBE80F730D0207303 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.artsvit.torrenttube.tv.tests;
+				SDKROOT = appletvos;
+				TARGETED_DEVICE_FAMILY = 3;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TorrentTubeTV.app/TorrentTubeTV";
+			};
+			name = Debug;
+		};
+		1A922CA50A27D155C1A564D6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.artsvit.torrenttube.mobile.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TorrentTubeMobile.app/TorrentTubeMobile";
+			};
+			name = Release;
+		};
+		40701719FC5A1E3FDF79021A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"Vendor\"",
+				);
+				INFOPLIST_FILE = Mobile/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-ObjC",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.artsvit.torrenttube.mobile;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		49A2DDA79EE397E53AA9DB6D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.artsvit.torrenttube.mobile.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = TorrentTubeMobile;
+			};
+			name = Release;
+		};
+		4F5863C2EC627AA7359DADA1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"Vendor\"",
+				);
+				INFOPLIST_FILE = Mobile/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-ObjC",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.artsvit.torrenttube.mobile;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		60F010D34E88147F717283E4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.artsvit.torrenttube.mobile.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = TorrentTubeMobile;
+			};
+			name = Debug;
+		};
+		655D67A97BADE07520A3FF1A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.artsvit.torrenttube.tv.tests;
+				SDKROOT = appletvos;
+				TARGETED_DEVICE_FAMILY = 3;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TorrentTubeTV.app/TorrentTubeTV";
+			};
+			name = Release;
+		};
+		675B601AB1D4B07A03DAE579 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME = LaunchImage;
+				CODE_SIGN_ENTITLEMENTS = TorrentTube/TorrentTube.entitlements;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"Vendor\"",
+				);
+				INFOPLIST_FILE = TorrentTube/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-ObjC",
+				);
+				SDKROOT = appletvos;
+				TARGETED_DEVICE_FAMILY = 3;
+			};
+			name = Debug;
+		};
+		69A05AA8A7FB955269683675 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.artsvit.torrenttube.tv.uitests;
+				SDKROOT = appletvos;
+				TARGETED_DEVICE_FAMILY = 3;
+				TEST_TARGET_NAME = TorrentTubeTV;
+			};
+			name = Release;
+		};
+		6B792D7154B1170CFFFAE0D2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = TopShelf/TopShelf.entitlements;
+				INFOPLIST_FILE = TopShelf/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.artsvit.torrenttube.tv.topshelf;
+				SDKROOT = appletvos;
+				TARGETED_DEVICE_FAMILY = 3;
+			};
+			name = Debug;
+		};
+		A13352D975090381BF608E19 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.artsvit.torrenttube.tv.uitests;
+				SDKROOT = appletvos;
+				TARGETED_DEVICE_FAMILY = 3;
+				TEST_TARGET_NAME = TorrentTubeTV;
+			};
+			name = Debug;
+		};
+		CEBE5821623B01B035FC37D3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.artsvit.torrenttube.mobile.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TorrentTubeMobile.app/TorrentTubeMobile";
+			};
+			name = Debug;
+		};
+		D080368C7416AFFD90FFA6C2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME = LaunchImage;
+				CODE_SIGN_ENTITLEMENTS = TorrentTube/TorrentTube.entitlements;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"Vendor\"",
+				);
+				INFOPLIST_FILE = TorrentTube/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-ObjC",
+				);
+				SDKROOT = appletvos;
+				TARGETED_DEVICE_FAMILY = 3;
+			};
+			name = Release;
+		};
+		FF2F6A77A9FDC98AC229C73D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = TopShelf/TopShelf.entitlements;
+				INFOPLIST_FILE = TopShelf/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.artsvit.torrenttube.tv.topshelf;
+				SDKROOT = appletvos;
+				TARGETED_DEVICE_FAMILY = 3;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		16F7309379E529A2062494D1 /* Build configuration list for PBXNativeTarget "TorrentTubeTVTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				16D646EBBE80F730D0207303 /* Debug */,
+				655D67A97BADE07520A3FF1A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		2404FA5B23A04E352AF64D27 /* Build configuration list for PBXNativeTarget "TorrentTubeMobile" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4F5863C2EC627AA7359DADA1 /* Debug */,
+				40701719FC5A1E3FDF79021A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		3D6E1A8C07795582642B10A6 /* Build configuration list for PBXNativeTarget "TorrentTubeMobileUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				60F010D34E88147F717283E4 /* Debug */,
+				49A2DDA79EE397E53AA9DB6D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		51AE5C107EA63A3214D693F7 /* Build configuration list for PBXNativeTarget "TorrentTubeTopShelf" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6B792D7154B1170CFFFAE0D2 /* Debug */,
+				FF2F6A77A9FDC98AC229C73D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		51F648BA9057F770DBA5FF16 /* Build configuration list for PBXNativeTarget "TorrentTubeMobileTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CEBE5821623B01B035FC37D3 /* Debug */,
+				1A922CA50A27D155C1A564D6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		77B79F9EB588BD5CF08A3F34 /* Build configuration list for PBXProject "TorrentTubeTV" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0631D514B9FA356CD2051F86 /* Debug */,
+				045D415D9D7C12B273E75D54 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		7836495D2D2C81350DEC34A8 /* Build configuration list for PBXNativeTarget "TorrentTubeTVUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A13352D975090381BF608E19 /* Debug */,
+				69A05AA8A7FB955269683675 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		B8912CFEC52A0C9ADF26F0E7 /* Build configuration list for PBXNativeTarget "TorrentTubeTV" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				675B601AB1D4B07A03DAE579 /* Debug */,
+				D080368C7416AFFD90FFA6C2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 834F392B261F169CF6EECAAC /* Project object */;
+}

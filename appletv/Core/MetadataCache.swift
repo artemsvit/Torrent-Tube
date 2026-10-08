@@ -1,0 +1,88 @@
+import Foundation
+
+/// TMDB matches and title details, saved on this device for one server, so
+/// the Library shows its posters at once instead of asking again on every
+/// launch. A match is kept until refreshed in Settings; a title with no match
+/// is asked again after a week; details are renewed after a month.
+@MainActor
+final class MetadataCache {
+    struct Match: Codable { var metadata: Metadata?; var fetched: Date }
+    struct SavedDetails: Codable { var details: Details; var fetched: Date }
+    static let missRetry: TimeInterval = 7 * 24 * 3600
+    static let detailsLifetime: TimeInterval = 30 * 24 * 3600
+    private static let detailsLimit = 600
+
+    private var matches: [String: Match] = [:]
+    private var savedDetails: [String: SavedDetails] = [:]
+    private let matchesFile: URL?
+    private let detailsFile: URL?
+
+    init(server: URL) {
+        let name = server.absoluteString.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "server"
+        let folder = Self.folder
+        matchesFile = folder?.appendingPathComponent("metadata-\(name).json")
+        detailsFile = folder?.appendingPathComponent("details-\(name).json")
+        let decoder = JSONDecoder()
+        if let file = matchesFile, let data = try? Data(contentsOf: file) {
+            matches = (try? decoder.decode([String: Match].self, from: data)) ?? [:]
+        }
+        if let file = detailsFile, let data = try? Data(contentsOf: file) {
+            savedDetails = (try? decoder.decode([String: SavedDetails].self, from: data)) ?? [:]
+        }
+    }
+
+    /// tvOS keeps no permanent local files, so there it is the Caches folder.
+    private static var folder: URL? {
+        #if os(tvOS)
+        let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+        #else
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+        #endif
+        guard let folder = base?.appendingPathComponent("TorrentTube", isDirectory: true) else { return nil }
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        return folder
+    }
+
+    /// The saved answer for a title, if it is still good: a match, or a recent "no match".
+    func match(for title: String) -> Match? {
+        guard let match = matches[title] else { return nil }
+        if match.metadata == nil && Date().timeIntervalSince(match.fetched) > Self.missRetry { return nil }
+        return match
+    }
+    /// Saves what the server found for `asked` - including the titles it found nothing for.
+    func store(_ found: [String: Metadata], asked: [String]) {
+        let now = Date()
+        for title in asked { matches[title] = Match(metadata: found[title], fetched: now) }
+        write(matches, to: matchesFile)
+    }
+
+    func details(for title: String) -> Details? {
+        guard let saved = savedDetails[title], Date().timeIntervalSince(saved.fetched) < Self.detailsLifetime else { return nil }
+        return saved.details
+    }
+    func store(_ details: Details, for title: String) {
+        savedDetails[title] = SavedDetails(details: details, fetched: Date())
+        if savedDetails.count > Self.detailsLimit {  // the oldest go first
+            for (key, _) in savedDetails.sorted(by: { $0.value.fetched < $1.value.fetched }).prefix(savedDetails.count - Self.detailsLimit) {
+                savedDetails[key] = nil
+            }
+        }
+        write(savedDetails, to: detailsFile)
+    }
+
+    /// Titles saved with a match, and the space both files take.
+    var matchedCount: Int { matches.values.filter { $0.metadata != nil }.count }
+    var bytes: Int {
+        [matchesFile, detailsFile].compactMap { $0 }
+            .compactMap { try? FileManager.default.attributesOfItem(atPath: $0.path)[.size] as? Int }.reduce(0, +)
+    }
+    func clear() {
+        matches = [:]; savedDetails = [:]
+        for file in [matchesFile, detailsFile].compactMap({ $0 }) { try? FileManager.default.removeItem(at: file) }
+    }
+
+    private func write<T: Encodable>(_ value: T, to file: URL?) {
+        guard let file, let data = try? JSONEncoder().encode(value) else { return }
+        try? data.write(to: file, options: .atomic)
+    }
+}

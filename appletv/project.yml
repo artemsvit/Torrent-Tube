@@ -1,0 +1,193 @@
+name: TorrentTubeTV
+options:
+  deploymentTarget:
+    tvOS: '18.0'
+    iOS: '18.0'
+settings:
+  base:
+    SWIFT_VERSION: '5.0'
+    PRODUCT_BUNDLE_IDENTIFIER: com.artsvit.torrenttube.tv
+    MARKETING_VERSION: '0.1.0'
+    CURRENT_PROJECT_VERSION: 1
+    TARGETED_DEVICE_FAMILY: 3
+    CODE_SIGN_STYLE: Automatic
+    GENERATE_INFOPLIST_FILE: NO
+    SWIFT_STRICT_CONCURRENCY: targeted
+targets:
+  TorrentTubeTV:
+    type: application
+    platform: tvOS
+    sources: [TorrentTube, Shared, Core]
+    info:
+      path: TorrentTube/Info.plist
+      properties:
+        CFBundleDisplayName: Torrent Tube
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen: {}
+        CFBundleURLTypes:
+          - CFBundleURLName: com.artsvit.torrenttube.tv
+            CFBundleURLSchemes: [torrenttube]
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+    entitlements:
+      path: TorrentTube/TorrentTube.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.artsvit.torrenttube.tv]
+    dependencies:
+      - target: TorrentTubeTopShelf
+      - framework: Vendor/TVVLCKit.xcframework
+        embed: true
+      - sdk: AudioToolbox.framework
+      - sdk: AVFoundation.framework
+      - sdk: CFNetwork.framework
+      - sdk: CoreMedia.framework
+      - sdk: CoreText.framework
+      - sdk: CoreVideo.framework
+      - sdk: OpenGLES.framework
+      - sdk: QuartzCore.framework
+      - sdk: Security.framework
+      - sdk: VideoToolbox.framework
+      - sdk: libbz2.tbd
+      - sdk: libc++.tbd
+      - sdk: libiconv.tbd
+      - sdk: libxml2.tbd
+    settings:
+      base:
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        OTHER_LDFLAGS: ['$(inherited)', '-ObjC']
+  TorrentTubeMobile:
+    type: application
+    platform: iOS
+    sources:
+      - Mobile
+      - Core
+      - Shared/Localization.swift
+      - TorrentTube/VLCKit-COPYING.txt
+    info:
+      path: Mobile/Info.plist
+      properties:
+        CFBundleDisplayName: Torrent Tube
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen: {}
+        NSLocalNetworkUsageDescription: Torrent Tube connects to your media server to browse your library and stream videos.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+    dependencies:
+      - framework: Vendor/MobileVLCKit.xcframework
+        embed: true
+      - sdk: AudioToolbox.framework
+      - sdk: AVFoundation.framework
+      - sdk: CFNetwork.framework
+      - sdk: CoreMedia.framework
+      - sdk: CoreText.framework
+      - sdk: CoreVideo.framework
+      - sdk: OpenGLES.framework
+      - sdk: QuartzCore.framework
+      - sdk: Security.framework
+      - sdk: VideoToolbox.framework
+      - sdk: libbz2.tbd
+      - sdk: libc++.tbd
+      - sdk: libiconv.tbd
+      - sdk: libxml2.tbd
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.artsvit.torrenttube.mobile
+        TARGETED_DEVICE_FAMILY: '1,2'
+        SUPPORTS_MACCATALYST: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        OTHER_LDFLAGS: ['$(inherited)', '-ObjC']
+  TorrentTubeMobileTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [MobileTests, TorrentTubeTests/APITests.swift]
+    dependencies:
+      - target: TorrentTubeMobile
+    settings:
+      base:
+        TARGETED_DEVICE_FAMILY: '1,2'
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.artsvit.torrenttube.mobile.tests
+  TorrentTubeMobileUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [MobileUITests]
+    dependencies:
+      - target: TorrentTubeMobile
+    settings:
+      base:
+        TARGETED_DEVICE_FAMILY: '1,2'
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.artsvit.torrenttube.mobile.uitests
+  TorrentTubeTopShelf:
+    type: app-extension
+    platform: tvOS
+    sources: [TopShelf, Shared]
+    info:
+      path: TopShelf/Info.plist
+      properties:
+        CFBundleDisplayName: Torrent Tube Top Shelf
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.tv-top-shelf
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ContentProvider
+    entitlements:
+      path: TopShelf/TopShelf.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.artsvit.torrenttube.tv]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.artsvit.torrenttube.tv.topshelf
+        APPLICATION_EXTENSION_API_ONLY: YES
+    dependencies:
+      - sdk: TVServices.framework
+  TorrentTubeTVTests:
+    type: bundle.unit-test
+    platform: tvOS
+    sources: [TorrentTubeTests]
+    dependencies:
+      - target: TorrentTubeTV
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.artsvit.torrenttube.tv.tests
+  TorrentTubeTVUITests:
+    type: bundle.ui-testing
+    platform: tvOS
+    sources: [TorrentTubeUITests]
+    dependencies:
+      - target: TorrentTubeTV
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.artsvit.torrenttube.tv.uitests
+schemes:
+  TorrentTubeTV:
+    build:
+      targets:
+        TorrentTubeTV: all
+    test:
+      environmentVariables:
+        TORRENTTUBE_TEST_SERVER: http://127.0.0.1:5069
+        TORRENTTUBE_REFERENCE_SERVER: $(TORRENTTUBE_REFERENCE_SERVER)
+      targets: [TorrentTubeTVTests, TorrentTubeTVUITests]
+  TorrentTubeMobile:
+    build:
+      targets:
+        TorrentTubeMobile: all
+    test:
+      environmentVariables:
+        TORRENTTUBE_TEST_SERVER: http://127.0.0.1:5069
+        TORRENTTUBE_REFERENCE_SERVER: $(TORRENTTUBE_REFERENCE_SERVER)
+      targets: [TorrentTubeMobileTests, TorrentTubeMobileUITests]

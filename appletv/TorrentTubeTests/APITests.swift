@@ -1,0 +1,77 @@
+import XCTest
+#if os(tvOS)
+@testable import TorrentTubeTV
+#else
+@testable import TorrentTubeMobile
+#endif
+
+final class APITests: XCTestCase {
+    func testAddressNormalizationPreservesProxyPrefix() throws {
+        let base = try TorrentTubeAPI.serverURL(" 192.168.0.102:5058/tube ")
+        XCTAssertEqual(base.absoluteString, "http://192.168.0.102:5058/tube/")
+        let api = TorrentTubeAPI(baseURL: base)
+        XCTAssertEqual(try api.url("api/search", query: [.init(name: "q", value: "a & b")]).path, "/tube/api/search")
+        XCTAssertEqual(try api.mediaURL("/stream/hash/1/My%20video.mkv").absoluteString, "http://192.168.0.102:5058/tube/stream/hash/1/My%20video.mkv")
+    }
+    func testRejectsCredentialsAndForeignPlaybackURL() throws {
+        for address in ["", "ftp://nas.local", "http://user:pass@nas.local", "http://nas.local/?token=secret", "http://nas.local/#part"] {
+            XCTAssertThrowsError(try TorrentTubeAPI.serverURL(address))
+        }
+        let api = TorrentTubeAPI(baseURL: try TorrentTubeAPI.serverURL("https://nas.example/tube"))
+        XCTAssertThrowsError(try api.mediaURL("https://elsewhere.example/movie.mkv"))
+        XCTAssertThrowsError(try api.mediaURL("../movie.mkv"))
+    }
+    func testDecodesLegacyConfigButRequiresSessionCapabilitiesForPlayback() throws {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let legacy = Data(#"{"categories":["Movies"],"search_enabled":true,"tmdb_enabled":false}"#.utf8)
+        XCTAssertFalse(try decoder.decode(ServerConfig.self, from: legacy).supportsPlayback)
+        let modern = Data(#"{"server":"torrenttube","api_version":1,"categories":[],"search_enabled":false,"tmdb_enabled":false,"capabilities":{"file_selection":true,"playback_sessions":true}}"#.utf8)
+        XCTAssertTrue(try decoder.decode(ServerConfig.self, from: modern).supportsPlayback)
+    }
+    func testEpisodeSourceEncodingUsesServerKeys() throws {
+        let encoder = JSONEncoder()
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+        let data = try encoder.encode(PlaybackSource(downloadLink: "https://tracker.example/item", file: 3))
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(body["file"] as? Int, 3)
+        XCTAssertEqual(body["download_link"] as? String, "https://tracker.example/item")
+    }
+    func testDecodesRealCatalogOptionalFields() throws {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let data = Data(#"{"results":[{"title":"Example","magnet":"magnet:?xt=urn:btih:abc","download_link":null,"poster":null,"rating":null,"seeders":4,"tmdb_id":12,"media_type":"movie","releases":null}]}"#.utf8)
+        let item = try decoder.decode(CatalogResponse.self, from: data).results[0]
+        XCTAssertEqual(item.tmdbId, 12)
+        XCTAssertEqual(item.displayTitle, "Example")
+    }
+}
+
+final class EpisodeIdentityTests: XCTestCase {
+    func testMapsKnownEpisodeNamesAndRejectsAmbiguousFiles() {
+        XCTAssertEqual(EpisodeIdentity.parse("Show.S02E03.1080p.mkv"), EpisodeIdentity(season: 2, episode: 3))
+        XCTAssertEqual(EpisodeIdentity.parse("Show 1x04.mp4"), EpisodeIdentity(season: 1, episode: 4))
+        XCTAssertNil(EpisodeIdentity.parse("Episode 4.mkv"))
+        XCTAssertNil(EpisodeIdentity.parse("Show.S01E01-E02.mkv"))
+    }
+    func testExistingResumeEntriesRemainReadable() throws {
+        let data = Data(#"[{"id":"server|hash|0","server":"http://nas/","torrentID":"hash","file":0,"title":"Movie","source":{"id":"hash"},"seconds":25,"duration":100,"updatedAt":0}]"#.utf8)
+        let entry = try JSONDecoder().decode([ResumeEntry].self, from: data)[0]
+        XCTAssertEqual(entry.seconds, 25)
+        XCTAssertNil(entry.artwork)
+    }
+}
+
+final class TrailerModelTests: XCTestCase {
+    func testServerTrailerMetadataAndSeparateAudioDecode() throws {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let response = try decoder.decode(TrailerResponse.self, from: Data(#"{"videos":[{"key":"uLtkt8BonwM","name":"Official trailer","lang":"en"}]}"#.utf8))
+        XCTAssertTrue(response.videos[0].isValid)
+        XCTAssertEqual(response.videos[0].lang, "en")
+        XCTAssertNotNil(response.videos[0].thumbnailURL)
+        let source = try decoder.decode(TrailerStreamResponse.self, from: Data(#"{"url":"/trailer-stream/token/0","audio_url":"/trailer-stream/token/1"}"#.utf8))
+        XCTAssertEqual(source.audioUrl, "/trailer-stream/token/1")
+        XCTAssertFalse(Trailer(key: "invalid/link", name: "Invalid", lang: nil).isValid)
+    }
+}
