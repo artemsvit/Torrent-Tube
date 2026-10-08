@@ -60,7 +60,7 @@ struct MobileTitle: View {
             if let first = details?.seasonList?.first { season = first.number }
         }
         .task(id: "\(details?.tmdbId ?? 0):\(season)") { await loadEpisodes() }
-        .sheet(isPresented: $showVersions, onDismiss: { if let pending { playback = pending; self.pending = nil } }) { versionSheet }
+        .versionsPresentation(isPresented: $showVersions, onDismiss: { if let pending { playback = pending; self.pending = nil } }) { versionSheet }
         .fullScreenCover(item: $playback) { MobilePlayback(request: $0, api: api) }
         .fullScreenCover(item: $trailer) { MobileTrailer(trailer: $0, api: api) }
         .alert(L("Unable to play"), isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
@@ -183,8 +183,11 @@ struct MobileTitle: View {
     private func episodeButton<Label: View>(_ ep: Episode, @ViewBuilder label: () -> Label) -> some View {
         Button {
             episode = ep.number
-            // Already on the server: play that episode from its folder. Otherwise pick a release first.
-            if item.sourceOverride != nil { play(source: item.source) } else { showVersions = true }
+            // On the server: its folder. Otherwise the release chosen before for this
+            // series, or the torrent this page came from; the list only when neither.
+            if item.sourceOverride != nil { play(source: item.source) }
+            else if let release = rememberedRelease ?? (item.source.isPlayable ? item.source : nil) { play(source: release) }
+            else { showVersions = true }
         } label: { label().contentShape(Rectangle()) }
             .buttonStyle(.plain).accessibilityIdentifier("episode-\(ep.number)")
     }
@@ -359,6 +362,14 @@ struct MobileTitle: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
+                    #if os(macOS)
+                    HStack {
+                        Text(L("Choose version")).font(.system(size: 26, weight: .bold))
+                        Spacer()
+                        Button(L("Cancel")) { showVersions = false }.buttonStyle(.bordered).keyboardShortcut(.cancelAction)
+                    }
+                    .padding(.top, 24)
+                    #endif
                     VStack(alignment: .leading, spacing: 4) {
                         Text(value.displayTitle)
                             .font(.headline)
@@ -453,15 +464,21 @@ struct MobileTitle: View {
     private func selectVersion(_ source: PlaybackSource) {
         guard config.supportsPlayback else { showVersions = false; error = L("Update Torrent Tube on your server to stream on this device."); return }
         pending = makeRequest(source); showVersions = false
+        rememberedRelease = source
+    }
+    /// The release last chosen for this series: its other episodes play from it at once.
+    private var rememberedRelease: PlaybackSource? {
+        get { ReleaseChoice.remembered(for: details?.tmdbId ?? value.tmdbId) }
+        nonmutating set { if details?.mediaType == "tv" { ReleaseChoice.remember(newValue, for: details?.tmdbId ?? value.tmdbId) } }
     }
     private func loadVersions() async {
         if let releases = item.releases, episode == nil { versions = releases; return }
         loadingVersions = true; versionError = nil
         defer { loadingVersions = false }
         do {
-            let result: CatalogResponse = try await api.request("api/search", query: [.init(name: "q", value: value.displayTitle), .init(name: "enrich", value: "0")])
-            try Task.checkCancellation()
-            versions = result.results.map { Release(title: $0.title, magnet: $0.magnet, downloadLink: $0.downloadLink, sizeLabel: $0.sizeLabel, seeders: $0.seeders) }
+            // The Ukrainian and the original title; releases are often named in English.
+            versions = try await ReleaseChoice.search(title: value.displayTitle, original: details?.originalTitle,
+                                                      season: episode == nil ? nil : season, api: api)
         } catch is CancellationError {} catch { versionError = error.localizedDescription }
     }
     private func loadEpisodes() async {

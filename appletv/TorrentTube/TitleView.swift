@@ -97,9 +97,12 @@ struct TitleView: View {
                                 ForEach(episodes) { episode in
                                     Button {
                                         selectedEpisode = episode.number
-                                        // Already on the server: play that episode from its folder.
-                                        if item.sourceOverride != nil {
-                                            if config.supportsPlayback { playback = request(source: item.source) } else { showServerNotice = true }
+                                        // On the server: its folder. Otherwise the release chosen before
+                                        // for this series, or the torrent this page came from.
+                                        let release = item.sourceOverride != nil ? item.source
+                                            : ReleaseChoice.remembered(for: details?.tmdbId ?? value.tmdbId) ?? (item.source.isPlayable ? item.source : nil)
+                                        if let release {
+                                            if config.supportsPlayback { playback = request(source: release) } else { showServerNotice = true }
                                         } else { showVersions = true }
                                     } label: {
                                         VStack(alignment: .leading, spacing: 14) {
@@ -166,6 +169,7 @@ struct TitleView: View {
                                 if config.supportsPlayback {
                                     pendingPlayback = request(source: release.source)
                                     showVersions = false
+                                    if details?.mediaType == "tv" { ReleaseChoice.remember(release.source, for: details?.tmdbId ?? value.tmdbId) }
                                 } else { showServerNotice = true; showVersions = false }
                             } label: {
                                 HStack(spacing: 28) {
@@ -219,9 +223,8 @@ struct TitleView: View {
         versionsLoading = true; versionError = nil
         defer { versionsLoading = false }
         do {
-            let result: CatalogResponse = try await api.request("api/search", query: [.init(name: "q", value: value.displayTitle), .init(name: "enrich", value: "0")])
-            try Task.checkCancellation()
-            versions = result.results.map { Release(title: $0.title, magnet: $0.magnet, downloadLink: $0.downloadLink, sizeLabel: $0.sizeLabel, seeders: $0.seeders) }
+            versions = try await ReleaseChoice.search(title: value.displayTitle, original: details?.originalTitle,
+                                                      season: selectedEpisode == nil ? nil : season, api: api)
         } catch is CancellationError {} catch { versionError = error.localizedDescription }
     }
     private func loadEpisodes() async {

@@ -218,6 +218,20 @@ private struct MacPrimaryStyle: ButtonStyle {
 }
 #endif
 
+extension View {
+    /// Choosing a release: a sheet on iPhone and iPad, the whole window on the Mac.
+    @ViewBuilder func versionsPresentation<Content: View>(isPresented: Binding<Bool>, onDismiss: (() -> Void)?,
+                                                          @ViewBuilder content: @escaping () -> Content) -> some View {
+        #if os(macOS)
+        fullScreenCover(isPresented: isPresented, onDismiss: onDismiss) {
+            content().frame(maxWidth: 820).frame(maxWidth: .infinity).background(AppBackground())
+        }
+        #else
+        sheet(isPresented: isPresented, onDismiss: onDismiss, content: content)
+        #endif
+    }
+}
+
 /// Keeps the screen awake while a video plays.
 enum ScreenSleep {
     #if os(macOS)

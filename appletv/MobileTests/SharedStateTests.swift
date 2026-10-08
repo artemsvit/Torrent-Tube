@@ -113,6 +113,19 @@ final class SharedStateTests: XCTestCase {
         XCTAssertNil(PlaybackCoordinator.nextSeasonStart(after: EpisodeIdentity(season: 3, episode: 2), in: [season2, season3]))
     }
 
+    func testVersionsKeepOnlyTheTitleAndPutTheSeasonFirst() {
+        let titles = ["Deep Rising (1998) BDRip 1080p H.265 2xUkr/Eng | Sub Eng",
+                      "VA - . (1997) [MP3, Tape rip] | Ethno / Folk",
+                      "Below (S2) (2027) WEB-DL 1080p Ukr/Eng",
+                      "Below (S1) (2026) WEB-DL 1080p Ukr/Eng | Sub Ukr/Eng (S1)",
+                      "З глибини / Below (2026) Сезон 1 WEB-DL",
+                      "Відьмак: Сирени з глибин / The Witcher: Sirens of the Deep (2025)"]
+        let results = titles.map { MediaItem(title: $0, magnet: "magnet:?xt=\($0.count)", downloadLink: nil, sizeLabel: nil, seeders: nil, releases: nil) }
+        let ranked = ReleaseChoice.rank(results, names: ["З глибини", "Below"], season: 1).map(\.title)
+        XCTAssertEqual(ranked, [titles[3], titles[4], titles[2]], "only the title's releases, season 1 first")
+        XCTAssertEqual(ReleaseChoice.rank(results, names: ["Nothing like this"], season: nil).count, titles.count, "no match keeps the search")
+    }
+
     func testFavoritesPersistAndStayScopedToServer() throws {
         let server = URL(string: "http://nas/tube/")!
         let other = URL(string: "http://other/")!
