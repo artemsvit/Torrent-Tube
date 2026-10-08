@@ -11,6 +11,7 @@ struct TitleView: View {
     @State private var showVersions = false
     @State private var trailer: Trailer?
     @State private var findingTrailer = false
+    @State private var episodePlaybackError: String?
     @State private var trailerError: String?
     @State private var season = 1
     @State private var launchingEpisode: Int?
@@ -192,6 +193,9 @@ struct TitleView: View {
         }
         // Trailer: straight into the English trailer, Ukrainian subtitles.
         .fullScreenCover(item: $trailer) { trailer in TrailerPlayer(trailer: trailer, api: api) }
+        .alert(L("Unable to play"), isPresented: Binding(get: { episodePlaybackError != nil }, set: { if !$0 { episodePlaybackError = nil } })) {
+            Button(L("OK"), role: .cancel) {}
+        } message: { Text(episodePlaybackError ?? "") }
         .alert(L("No trailer"), isPresented: Binding(get: { trailerError != nil }, set: { if !$0 { trailerError = nil } })) {
             Button(L("OK"), role: .cancel) {}
         } message: { Text(trailerError ?? "") }
@@ -213,8 +217,8 @@ struct TitleView: View {
                     original: details?.originalTitle, tmdbID: details?.tmdbId ?? value.tmdbId,
                     season: season, episode: number, api: api)
                 try Task.checkCancellation()
-                if let source { playback = request(source: source) } else { showVersions = true }
-            } catch is CancellationError {} catch { versionError = error.localizedDescription; showVersions = true }
+                playback = request(source: source)
+            } catch is CancellationError {} catch { episodePlaybackError = error.localizedDescription }
         }
     }
     private func play() {

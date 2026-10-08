@@ -80,7 +80,11 @@ final class PlaybackCoordinator {
             guard !result.files.isEmpty else { throw APIError(message: L("This torrent contains no supported video files.")) }
             var selection = request
             if let selectedSource { selection = PlaybackRequest(source: selectedSource, title: request.title, artwork: request.artwork, tmdbID: request.tmdbID) }
-            if let file = Self.selectedFile(request: selection, prepared: result) { await start(file: file) }
+            if let file = Self.selectedFile(request: selection, prepared: result) {
+                await start(file: file)
+            } else if selection.episode != nil {
+                throw APIError(message: L("The selected episode could not be found in this source."))
+            }
         } catch is CancellationError {} catch {
             if current == operation { self.error = error.localizedDescription }
         }

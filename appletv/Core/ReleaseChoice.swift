@@ -85,7 +85,7 @@ enum ReleaseChoice {
     }
 
     static func resolveEpisodeSource(for item: MediaItem, title: String, original: String?, tmdbID: Int?,
-                                     season: Int, episode: Int, api: TorrentTubeAPI) async throws -> PlaybackSource? {
+                                     season: Int, episode: Int, api: TorrentTubeAPI) async throws -> PlaybackSource {
         if let source = episodeSource(for: item, tmdbID: tmdbID, season: season) {
             // A remembered individual episode must not be reused for another episode.
             let sourceTitle = remembered(for: tmdbID).flatMap { $0.source == source ? $0.title : nil } ?? item.title
@@ -93,7 +93,9 @@ enum ReleaseChoice {
         }
         let releases = try await search(title: title, original: original, season: season, api: api, allowUnmatched: false)
         try Task.checkCancellation()
-        guard let release = automaticRelease(releases, season: season, episode: episode) else { return nil }
+        guard let release = automaticRelease(releases, season: season, episode: episode) else {
+            throw APIError(message: L("No playable source was found for this episode."))
+        }
         remember(release.source, title: release.title, for: tmdbID)
         return release.source
     }

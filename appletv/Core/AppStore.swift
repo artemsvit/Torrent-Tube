@@ -68,6 +68,18 @@ final class AppStore {
         }
     }
 
+    /// At launch: a failure within a few seconds is retried - right after the
+    /// app starts, macOS can refuse the first local-network request while it
+    /// checks the app's Local Network access. A real timeout is not retried.
+    func connectAtLaunch() async {
+        for attempt in 0..<3 {
+            let started = Date()
+            await connect()
+            guard api == nil, error != nil, attempt < 2, Date().timeIntervalSince(started) < 3 else { return }
+            try? await Task.sleep(for: .seconds(1.5))
+        }
+    }
+
     func disconnect() {
         #if os(tvOS)
         TopShelfStore.defaults.removeObject(forKey: "activeServer")

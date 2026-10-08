@@ -72,7 +72,7 @@ struct MobileTitle: View {
                     original: details?.originalTitle, tmdbID: details?.tmdbId ?? value.tmdbId,
                     season: season, episode: number, api: api)
                 try Task.checkCancellation()
-                if let source { play(source: source) } else { showVersions = true }
+                play(source: source)
             } catch is CancellationError {} catch { self.error = error.localizedDescription }
         }
         .versionsPresentation(isPresented: $showVersions, onDismiss: { if let pending { playback = pending; self.pending = nil } }) { versionSheet }

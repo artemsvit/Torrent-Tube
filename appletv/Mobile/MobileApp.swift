@@ -39,7 +39,7 @@ struct TorrentTubeMobileApp: App {
                 reconnected = true
                 if !store.address.isEmpty {
                     let started = Date()
-                    await store.connect()
+                    await store.connectAtLaunch()
                     // A short, calm splash rather than a flash.
                     let shown = Date().timeIntervalSince(started)
                     if store.api != nil, shown < 0.8 { try? await Task.sleep(for: .seconds(0.8 - shown)) }
