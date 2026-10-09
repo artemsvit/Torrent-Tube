@@ -27,27 +27,37 @@ struct FavoriteEntry: Codable, Identifiable {
 
 @MainActor @Observable
 final class FavoritesStore {
-    private(set) var entries: [FavoriteEntry]
+    private(set) var entries: [FavoriteEntry] {
+        didSet { rebuildIndex() }
+    }
+    private var identifiers: Set<String> = []
+    private var byServer: [String: [FavoriteEntry]] = [:]
     private static let storageKey = "favorites"
     @ObservationIgnored private let defaults: UserDefaults
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         entries = defaults.data(forKey: Self.storageKey).flatMap { try? JSONDecoder().decode([FavoriteEntry].self, from: $0) } ?? []
+        rebuildIndex()
+    }
+    private func rebuildIndex() {
+        identifiers = Set(entries.map(\.id))
+        byServer = Dictionary(grouping: entries, by: \.server)
+            .mapValues { $0.sorted { $0.addedAt > $1.addedAt } }
     }
     static func key(server: URL, item: MediaItem) -> String { "\(server.absoluteString)|\(item.id)" }
     func contains(_ item: MediaItem, server: URL) -> Bool {
         let key = Self.key(server: server, item: item)
-        return entries.contains { $0.id == key }
+        return identifiers.contains(key)
     }
     /// Newest first.
     func entries(server: URL) -> [FavoriteEntry] {
-        entries.filter { $0.server == server.absoluteString }.sorted { $0.addedAt > $1.addedAt }
+        byServer[server.absoluteString] ?? []
     }
     /// `item` should be the resolved one (clean title, poster), `details`
     /// what is known about it - together they decide its tab.
     func toggle(_ item: MediaItem, details: Details?, server: URL) {
         let key = Self.key(server: server, item: item)
-        if entries.contains(where: { $0.id == key }) {
+        if identifiers.contains(key) {
             entries.removeAll { $0.id == key }
         } else {
             let type = details?.mediaType ?? item.mediaType
@@ -61,4 +71,3 @@ final class FavoritesStore {
         if let data = try? JSONEncoder().encode(entries) { defaults.set(data, forKey: Self.storageKey) }
     }
 }
-

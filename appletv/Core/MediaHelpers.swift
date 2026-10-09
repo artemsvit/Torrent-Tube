@@ -36,18 +36,45 @@ struct LibrarySearchResults {
 
     init(query: String, library: [MediaItem], torrents: [MediaItem]) {
         let words = Self.normalized(query).split(separator: " ")
-        var matches = library.filter { item in
+        var matches = words.isEmpty ? [] : library.filter { item in
             let names = [item.title, item.displayTitle] + (item.releases ?? []).map(\.title)
             let text = Self.normalized(names.joined(separator: " "))
-            return !words.isEmpty && words.allSatisfy { text.contains($0) }
+            return words.allSatisfy { text.contains($0) }
         }
         var remaining: [MediaItem] = []
-        // Keys are computed once per item, not once per pair.
-        let keyed = library.map { ($0, Key($0)) }
+        // Only inspect possible matches, rather than scanning the library for every result.
+        // Retain the original order when several local copies match.
+        let keys = torrents.isEmpty ? [] : library.map(Key.init)
+        var sources: [PlaybackSource: [Int]] = [:]
+        var identities: [Identity: [Int]] = [:]
+        var names: [DatedTitle: [Int]] = [:]
+        if !torrents.isEmpty {
+            for (index, item) in library.enumerated() {
+                if item.source.isPlayable { sources[item.source, default: []].append(index) }
+                if let id = item.tmdbId, let type = item.mediaType {
+                    identities[Identity(id: id, type: type), default: []].append(index)
+                }
+                if let year = keys[index].year {
+                    for title in keys[index].titles {
+                        names[DatedTitle(year: year, title: title), default: []].append(index)
+                    }
+                }
+            }
+        }
         var matchedIDs = Set(matches.map(\.id))
         for torrent in torrents {
             let key = Key(torrent)
-            if let local = keyed.first(where: { Self.sameTitle($0.0, $0.1, torrent, key) })?.0 {
+            var candidates = Set(sources[torrent.source] ?? [])
+            if let id = torrent.tmdbId, let type = torrent.mediaType {
+                candidates.formUnion(identities[Identity(id: id, type: type)] ?? [])
+            }
+            if let year = key.year {
+                for title in key.titles {
+                    candidates.formUnion(names[DatedTitle(year: year, title: title)] ?? [])
+                }
+            }
+            if let index = candidates.filter({ Self.sameTitle(library[$0], keys[$0], torrent, key) }).min() {
+                let local = library[index]
                 if matchedIDs.insert(local.id).inserted { matches.append(local) }
             } else { remaining.append(torrent) }
         }
@@ -56,8 +83,13 @@ struct LibrarySearchResults {
     }
 
     static func sameTitle(_ lhs: MediaItem, _ rhs: MediaItem) -> Bool {
-        sameTitle(lhs, Key(lhs), rhs, Key(rhs))
+        // Known sources and IDs need no title normalization or year parsing.
+        if let match = identityMatch(lhs, rhs) { return match }
+        return sameTitle(lhs, Key(lhs), rhs, Key(rhs))
     }
+
+    private struct Identity: Hashable { let id: Int; let type: String }
+    private struct DatedTitle: Hashable { let year: String; let title: String }
 
     private struct Key {
         let year: String?
@@ -68,13 +100,18 @@ struct LibrarySearchResults {
         }
     }
 
-    private static func sameTitle(_ lhs: MediaItem, _ a: Key, _ rhs: MediaItem, _ b: Key) -> Bool {
+    private static func identityMatch(_ lhs: MediaItem, _ rhs: MediaItem) -> Bool? {
         if lhs.source.isPlayable && lhs.source == rhs.source { return true }
         if let x = lhs.tmdbId, let y = rhs.tmdbId {
             // IDs can be shared by a movie and a TV series.
             return x == y && lhs.mediaType != nil && lhs.mediaType == rhs.mediaType
         }
         if let x = lhs.mediaType, let y = rhs.mediaType, x != y { return false }
+        return nil
+    }
+
+    private static func sameTitle(_ lhs: MediaItem, _ a: Key, _ rhs: MediaItem, _ b: Key) -> Bool {
+        if let match = identityMatch(lhs, rhs) { return match }
         // Without a reliable ID, require a year on both sides. Do not hide remakes
         // or guess that an unmatched title is the same film.
         guard let year = a.year, year == b.year else { return false }

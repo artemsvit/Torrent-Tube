@@ -3,20 +3,38 @@ import ImageIO
 
 /// Small artwork uses screen pixels, never points, and decodes outside the UI thread.
 actor PosterArtworkCache {
-    static let shared = PosterArtworkCache()
+    static let shared: PosterArtworkCache = {
+        let store = PosterArtworkCache()
+        #if !os(macOS)
+        NotificationCenter.default.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification,
+                                               object: nil, queue: nil) { _ in
+            Task { await store.clear() }
+        }
+        #endif
+        return store
+    }()
     private static let queue = DispatchQueue(label: "TorrentTube.poster-decode", qos: .userInitiated)
     private let images = NSCache<NSString, PlatformImage>()
     private var loading: [String: Task<PlatformImage?, Error>] = [:]
-    init() {
+    private var generation = 0
+    private let session: URLSession
+    init(session: URLSession = .shared) {
+        self.session = session
         images.countLimit = 120
         images.totalCostLimit = 48 * 1024 * 1024
+    }
+    func clear() {
+        generation += 1
+        images.removeAllObjects()
     }
     func image(url: URL, width: Int, height: Int, fit: Bool) async throws -> PlatformImage? {
         let key = "\(url.absoluteString)|\(width)x\(height)|\(fit)"
         if let image = images.object(forKey: key as NSString) { return image }
         if let pending = loading[key] { return try await pending.value }
+        let epoch = generation
+        let session = session
         let task = Task<PlatformImage?, Error> {
-            let (data, response) = try await URLSession.shared.data(for: URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad))
+            let (data, response) = try await session.data(for: URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad))
             if let response = response as? HTTPURLResponse, !(200..<300).contains(response.statusCode) { return nil }
             return await withCheckedContinuation { continuation in
                 Self.queue.async { continuation.resume(returning: Self.decode(data, width: width, height: height, fit: fit)) }
@@ -25,7 +43,7 @@ actor PosterArtworkCache {
         loading[key] = task
         defer { loading[key] = nil }
         let image = try await task.value
-        if let image, let cgImage = image.cgImage {
+        if epoch == generation, let image, let cgImage = image.cgImage {
             images.setObject(image, forKey: key as NSString, cost: cgImage.bytesPerRow * cgImage.height)
         }
         return image

@@ -4,6 +4,63 @@ import UIKit
 
 @MainActor
 final class SharedStateTests: XCTestCase {
+    func testIndexedSearchPreservesFirstMatchAndIdentityRules() {
+        var library: [MediaItem] = []
+        for index in 0..<80 {
+            var item = MediaItem(title: "Film \(index % 20) (\(2000 + index % 3))", magnet: nil,
+                                 downloadLink: nil, sizeLabel: nil, seeders: nil, releases: nil)
+            item.sourceOverride = PlaybackSource(path: "library/\(index)")
+            item.cleanTitle = "Localized \(index % 20)"
+            if index % 3 != 0 { item.tmdbId = index % 20 }
+            if index % 4 != 0 { item.mediaType = index % 2 == 0 ? "movie" : "tv" }
+            library.append(item)
+        }
+        var torrents = library.enumerated().map { index, local in
+            var item = local
+            item.sourceOverride = PlaybackSource(magnet: "magnet:\(index)")
+            if index % 5 == 0 { item.tmdbId = nil }
+            if index % 7 == 0 { item.mediaType = nil }
+            return item
+        }
+        // An exact playable source wins even when title and metadata disagree.
+        var sameSource = torrents[0]
+        sameSource.sourceOverride = library[0].source
+        sameSource.tmdbId = 999; sameSource.cleanTitle = "Different title"
+        torrents.append(sameSource)
+        var expected: [MediaItem] = []
+        var remaining: [MediaItem] = []
+        var seen: Set<String> = []
+        for item in torrents {
+            if let match = library.first(where: { LibrarySearchResults.sameTitle($0, item) }) {
+                if seen.insert(match.id).inserted { expected.append(match) }
+            } else { remaining.append(item) }
+        }
+        let result = LibrarySearchResults(query: "", library: library, torrents: torrents)
+        XCTAssertEqual(result.library, expected)
+        XCTAssertEqual(result.torrents, remaining)
+        XCTAssertTrue(LibrarySearchResults(query: "", library: library, torrents: []).library.isEmpty)
+    }
+
+    func testPosterArtworkSharesRequestsAndReleasesCachedImages() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [HeroImageProtocol.self]
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+        let cache = PosterArtworkCache(session: session)
+        let url = URL(string: "https://hero-test/\(UUID()).png")!
+        async let first = cache.image(url: url, width: 64, height: 128, fit: false)
+        async let second = cache.image(url: url, width: 64, height: 128, fit: false)
+        let (a, b) = try await (first, second)
+        let original = try XCTUnwrap(a)
+        XCTAssertTrue(original === b)
+        XCTAssertEqual(HeroImageProtocol.requests(for: url), 1)
+        await cache.clear()
+        let reloaded = try await cache.image(url: url, width: 64, height: 128, fit: false)
+        XCTAssertNotNil(reloaded)
+        XCTAssertFalse(original === reloaded)
+        XCTAssertEqual(HeroImageProtocol.requests(for: url), 2)
+    }
+
     func testClearDuringInitialLoadDoesNotRestoreOldData() async {
         let server = URL(string: "http://cache-race-\(UUID())/")!
         let item = MediaItem(title: "Old movie", magnet: nil, downloadLink: nil, sizeLabel: nil, seeders: nil, releases: nil)
@@ -212,6 +269,8 @@ final class SharedStateTests: XCTestCase {
         XCTAssertEqual(store.entries(server: server).first?.item.source, item.source)
         store.toggle(item, details: nil, server: server)
         XCTAssertTrue(FavoritesStore(defaults: defaults).entries.isEmpty)
+        XCTAssertFalse(store.contains(item, server: server))
+        XCTAssertTrue(store.entries(server: server).isEmpty)
     }
     func testHistoryRetainsFileAndRemovesCompletedTitle() {
         let server = URL(string: "http://nas/")!
