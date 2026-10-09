@@ -38,6 +38,18 @@ jobs:
           docker run --rm --entrypoint python3
           -v "$PWD/tests:/app/tests:ro" -w /app torrenttube:test
           -m unittest discover -s tests
+      # The container as the NAS runs it: starts, serves the page and its
+      # script, and answers the API.
+      - name: Container starts and serves the page
+        run: |
+          docker run -d --name smoke -p 5058:5058 -v "$RUNNER_TEMP/downloads:/downloads" torrenttube:test
+          for i in $(seq 1 30); do curl -fs http://127.0.0.1:5058/ > page.html && break; sleep 2; done
+          docker logs smoke | tail -20
+          grep -q 'static/app.js?v=' page.html
+          curl -fs "http://127.0.0.1:5058$(grep -o '/static/app.js?v=[0-9a-f]*' page.html)" > /dev/null
+          curl -fs http://127.0.0.1:5058/api/torrents
+          curl -fs http://127.0.0.1:5058/api/library > /dev/null
+          docker rm -f smoke
       - uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
