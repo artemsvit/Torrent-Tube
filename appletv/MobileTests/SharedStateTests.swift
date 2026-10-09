@@ -193,7 +193,10 @@ final class SharedStateTests: XCTestCase {
     func testServerEpisodeFieldsWinAndDoubleFilesPlayForBothEpisodes() throws {
         // The server's reading (episodes.py) is used as sent, even where the name alone says nothing.
         let data = Data(#"{"id":"library:Cartoon/Bluey","selected":0,"files":[{"index":0,"name":"1-1-2 Ксилофон & Лікарня.mp4","path":"Cartoon/Bluey/1-1-2 Ксилофон & Лікарня.mp4","size":100,"season":1,"episode":1,"last_episode":2},{"index":1,"name":"Untitled.mp4","path":"Cartoon/Bluey/Untitled.mp4","size":100,"season":1,"episode":3,"last_episode":4}]}"#.utf8)
-        let prepared = try JSONDecoder().decode(PreparedPlayback.self, from: data)
+        // Decoded the way TorrentTubeAPI decodes every answer.
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let prepared = try decoder.decode(PreparedPlayback.self, from: data)
         let source = PlaybackSource(path: "Cartoon/Bluey")
         XCTAssertEqual(prepared.files[1].episodeIdentity, EpisodeIdentity(season: 1, episode: 3, lastEpisode: 4))
         XCTAssertEqual(PlaybackCoordinator.selectedFile(request: PlaybackRequest(source: source, title: "Bluey", season: 1, episode: 2), prepared: prepared), 0)
@@ -242,6 +245,71 @@ final class SharedStateTests: XCTestCase {
         XCTAssertNil(model.controller, "Resume requires a user choice")
         model.close()
     }
+}
+
+/// A library title's episode plays from the folder that has it - not from
+/// whichever folder the title opens with.
+final class LibraryEpisodeSourceTests: XCTestCase {
+    private func api() -> TorrentTubeAPI {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [LibraryFoldersProtocol.self]
+        return TorrentTubeAPI(baseURL: URL(string: "http://library-test/")!, session: URLSession(configuration: config))
+    }
+    private let season1 = PlaybackSource(path: "Cartoon/Bluey (2018)")
+    private let season2 = PlaybackSource(path: "Cartoon/Bluey S02")
+
+    func testTheFolderWithTheEpisodeIsChosen() async throws {
+        let folder = try await ReleaseChoice.libraryFolder(holding: 2, episode: 3, in: [season1, season2], api: api())
+        XCTAssertEqual(folder, season2)
+        let double = try await ReleaseChoice.libraryFolder(holding: 1, episode: 2, in: [season1, season2], api: api())
+        XCTAssertEqual(double, season1, "1-1-2 holds episode 2 as well")
+    }
+
+    func testAnEpisodeNoFolderHasIsNotSentToTheLibrary() async throws {
+        let folder = try await ReleaseChoice.libraryFolder(holding: 3, episode: 1, in: [season1, season2], api: api())
+        XCTAssertNil(folder)
+    }
+
+    func testAnUnreadableFolderIsReportedNotSkipped() async {
+        do {
+            _ = try await ReleaseChoice.libraryFolder(holding: 3, episode: 1, in: [PlaybackSource(path: "Cartoon/Broken")], api: api())
+            XCTFail("expected the server error")
+        } catch {}
+    }
+
+    func testFoldersStartWithTheOneTheTitleOpensWith() {
+        let item = MediaItem(title: "Bluey", magnet: nil, downloadLink: nil, sizeLabel: nil, seeders: nil,
+                             releases: [Release(title: "Bluey S02", magnet: nil, downloadLink: nil, sizeLabel: nil, seeders: nil, path: season2.path),
+                                        Release(title: "Bluey", magnet: nil, downloadLink: nil, sizeLabel: nil, seeders: nil, path: season1.path)],
+                             sourceOverride: season1)
+        XCTAssertEqual(ReleaseChoice.libraryFolders(of: item), [season1, season2])
+    }
+}
+
+private final class LibraryFoldersProtocol: URLProtocol {
+    override class func canInit(with request: URLRequest) -> Bool { request.url?.host == "library-test" }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        let body = request.httpBody ?? request.httpBodyStream.map { stream -> Data in
+            stream.open(); defer { stream.close() }
+            var data = Data(); var buffer = [UInt8](repeating: 0, count: 4096)
+            while stream.hasBytesAvailable { let n = stream.read(&buffer, maxLength: buffer.count); if n <= 0 { break }; data.append(buffer, count: n) }
+            return data
+        } ?? Data()
+        let text = String(decoding: body, as: UTF8.self)
+        let status: Int, json: String
+        if text.contains("Bluey S02") {
+            status = 200; json = #"{"id":"library:Cartoon/Bluey S02","selected":0,"files":[{"index":0,"name":"Bluey S02E03.mp4","size":1,"season":2,"episode":3,"last_episode":3}]}"#
+        } else if text.contains("Bluey (2018)") {
+            status = 200; json = #"{"id":"library:Cartoon/Bluey (2018)","selected":0,"files":[{"index":0,"name":"1-1-2 Name.mp4","size":1,"season":1,"episode":1,"last_episode":2}]}"#
+        } else {
+            status = 500; json = #"{"error":"Could not read the folder"}"#
+        }
+        client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(json.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
 }
 
 private final class PlaybackProtocol: URLProtocol {

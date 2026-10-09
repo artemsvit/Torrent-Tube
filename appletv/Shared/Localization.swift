@@ -71,6 +71,7 @@ private let ukrainian: [String: String] = [
     "Skip interval": "Крок перемотування",
     "Tap the heart on a title to save it here.": "Натисніть серце на сторінці фільму або серіалу, щоб додати його сюди.",
     "Titles on your server will appear here.": "Тут з’являться фільми та серіали з вашого сервера.",
+    "This episode is not in your library, and no release was found for it.": "Цієї серії немає у вашій бібліотеці, і реліз для неї не знайдено.",
     "No playable source was found for this episode.": "Не знайдено джерела для перегляду цієї серії.",
     "The selected episode could not be found in this source.": "У цьому джерелі не знайдено вибрану серію.",
     "Unable to play": "Не вдалося почати перегляд",

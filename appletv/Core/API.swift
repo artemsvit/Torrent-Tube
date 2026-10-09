@@ -238,7 +238,8 @@ struct VideoFile: Decodable, Identifiable {
         self.index = index; self.name = name; self.size = size; self.path = path
     }
 
-    private enum CodingKeys: String, CodingKey { case index, name, size, path, season, episode, lastEpisode = "last_episode" }
+    // The API decodes with .convertFromSnakeCase: "last_episode" arrives as lastEpisode.
+    private enum CodingKeys: String, CodingKey { case index, name, size, path, season, episode, lastEpisode }
 }
 /// Skip intro: where a library episode's opening is ("pending" while the
 /// server compares its sound with the next episode).

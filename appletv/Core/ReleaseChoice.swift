@@ -86,10 +86,35 @@ enum ReleaseChoice {
 
     static func resolveEpisodeSource(for item: MediaItem, title: String, original: String?, tmdbID: Int?,
                                      season: Int, episode: Int, api: TorrentTubeAPI) async throws -> PlaybackSource {
+        // A library title: the folder (of all its copies) that really has this
+        // episode - a folder named without a season is not proof it has them all.
+        if item.sourceOverride?.path != nil {
+            if let folder = try await libraryFolder(holding: season, episode: episode, in: libraryFolders(of: item), api: api) {
+                return folder
+            }
+            // Not downloaded: stream it from a release, as for any title not in the library.
+            do {
+                return try await releaseSource(title: title, original: original, tmdbID: tmdbID, season: season, episode: episode, api: api)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                throw APIError(message: L("This episode is not in your library, and no release was found for it."))
+            }
+        }
         if let source = episodeSource(for: item, tmdbID: tmdbID, season: season) {
             // A remembered individual episode must not be reused for another episode.
             let sourceTitle = remembered(for: tmdbID).flatMap { $0.source == source ? $0.title : nil } ?? item.title
             if item.sourceOverride != nil || EpisodeIdentity.parse(sourceTitle).map({ $0.covers(season: season, episode: episode) }) != false { return source }
+        }
+        return try await releaseSource(title: title, original: original, tmdbID: tmdbID, season: season, episode: episode, api: api)
+    }
+
+    /// The release chosen before when it has this episode, else the best search result.
+    private static func releaseSource(title: String, original: String?, tmdbID: Int?, season: Int, episode: Int,
+                                      api: TorrentTubeAPI) async throws -> PlaybackSource {
+        if let saved = remembered(for: tmdbID), covers(saved.title, season: season),
+           EpisodeIdentity.parse(saved.title).map({ $0.covers(season: season, episode: episode) }) != false {
+            return saved.source
         }
         let releases = try await search(title: title, original: original, season: season, api: api, allowUnmatched: false)
         try Task.checkCancellation()
@@ -98,6 +123,37 @@ enum ReleaseChoice {
         }
         remember(release.source, title: release.title, for: tmdbID)
         return release.source
+    }
+
+    /// A library title's folders: the one it opens with first, then its other copies.
+    static func libraryFolders(of item: MediaItem) -> [PlaybackSource] {
+        var folders = [item.source]
+        for source in item.librarySources where !folders.contains(source) { folders.append(source) }
+        return folders
+    }
+
+    /// The first folder whose files hold the episode (the server reads each
+    /// file's season and episode), or nil when none has it.
+    static func libraryFolder(holding season: Int, episode: Int, in folders: [PlaybackSource], api: TorrentTubeAPI) async throws -> PlaybackSource? {
+        var failure: Error?
+        for folder in folders {
+            do {
+                let prepared: PreparedPlayback = try await api.post("api/playback/prepare", body: folder)
+                try Task.checkCancellation()
+                if holds(prepared, season: season, episode: episode, in: folder) { return folder }
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                failure = error
+            }
+        }
+        // A folder could not be read (server unreachable): say so, rather than look elsewhere.
+        if let failure { throw failure }
+        return nil
+    }
+
+    static func holds(_ prepared: PreparedPlayback, season: Int, episode: Int, in folder: PlaybackSource) -> Bool {
+        prepared.files.contains { PlaybackCoordinator.identity(of: $0, in: folder)?.covers(season: season, episode: episode) == true }
     }
 
     /// Search by the Ukrainian and the original title, then rank.

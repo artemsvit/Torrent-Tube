@@ -64,7 +64,7 @@ final class PlaybackCoordinator {
 
     /// The server's season and episode for the file, else read from its name
     /// and the folders above it.
-    static func identity(of file: VideoFile, in source: PlaybackSource) -> EpisodeIdentity? {
+    nonisolated static func identity(of file: VideoFile, in source: PlaybackSource) -> EpisodeIdentity? {
         if let season = file.season, let episode = file.episode {
             return EpisodeIdentity(season: season, episode: episode, lastEpisode: file.lastEpisode)
         }
