@@ -425,15 +425,21 @@
   }
   @media (max-width: 700px) {
     /* The title and count on one line, the tabs below in one sideways row. */
-    .library-panel .library-chips { flex-basis: 100%; margin-left: 0; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
-    .library-panel .library-chips::-webkit-scrollbar { display: none; }
+    /* The search on its own line, the tabs below in one sideways row. */
+    .library-panel .library-chips { flex-wrap: wrap; }
+    .library-panel .library-chips .library-filter { order: -1; flex-basis: 100%; margin-left: 0; }
+    .library-filter input { width: 100%; }
+    .library-panel .library-kinds { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; flex-basis: 100%; }
+    .library-panel .library-kinds::-webkit-scrollbar { display: none; }
     .library-panel .library-chip { flex: none; }
     .library-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 16px 10px; }
     .dt-episode-still { width: 96px; }
   }
   .library-panel .panel-header { flex-wrap: wrap; gap: 10px; }
-  .library-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; align-items: center; }
-  .library-kinds { display: contents; }
+  /* Tabs on the left, the library's search on the right. */
+  .library-chips { display: flex; gap: 6px; align-items: center; flex: 1; min-width: 0; }
+  .library-kinds { display: flex; gap: 6px; flex-wrap: wrap; min-width: 0; }
+  .library-chips .library-filter { margin-left: auto; flex: none; }
   /* Search inside the library, a chip like the tabs beside it. */
   .library-chip.library-filter { display: inline-flex; align-items: center; gap: 6px; cursor: text; font-weight: 500; }
   .library-filter svg { flex: none; color: var(--text-secondary); }
@@ -2040,11 +2046,9 @@
        the same library, tabs and metadata as the Apple apps. -->
   <section class="panel library-panel" id="libraryPanel" hidden>
     <div class="panel-header">
-      <div class="section-label">My library</div>
-      <span class="count-badge" id="libraryCount">0</span>
       <div class="library-chips" id="libraryChips">
-        <label class="library-chip library-filter"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input type="search" id="libraryFilter" placeholder="Search" autocomplete="off" aria-label="Search the library"></label>
         <span class="library-kinds" id="libraryKinds"></span>
+        <label class="library-chip library-filter"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input type="search" id="libraryFilter" placeholder="Search" autocomplete="off" aria-label="Search the library"></label>
       </div>
     </div>
     <p class="library-note" id="libraryNote" hidden></p>
@@ -4737,7 +4741,6 @@ const libraryKinds = document.getElementById("libraryKinds");
 const libraryFilter = document.getElementById("libraryFilter");
 const libraryGrid = document.getElementById("libraryGrid");
 const libraryNote = document.getElementById("libraryNote");
-const libraryCount = document.getElementById("libraryCount");
 const layoutEl = document.getElementById("layout");
 const LIBRARY_KINDS = [["movie", "Movies"], ["tv", "TV Shows"], ["cartoon", "Cartoons"]];
 let libraryItems = [], libraryPending = 0, librarySection = null, libraryTimer = null, libraryLoaded = false;
@@ -4774,7 +4777,6 @@ function renderLibrary() {
   }) : libraryItems;
   const counts = Object.fromEntries(LIBRARY_KINDS.map(([k]) => [k, items.filter(i => i.kind === k).length]));
   if (!librarySection || !counts[librarySection]) librarySection = (LIBRARY_KINDS.find(([k]) => counts[k]) || [librarySection || "movie"])[0];
-  libraryCount.textContent = items.length;
   libraryKinds.innerHTML = LIBRARY_KINDS.filter(([k]) => counts[k]).map(([k, label]) =>
     `<button type="button" class="library-chip${k === librarySection ? " is-active" : ""}" data-kind="${k}">${label} · ${counts[k]}</button>`).join("");
   libraryNote.hidden = !libraryPending;
