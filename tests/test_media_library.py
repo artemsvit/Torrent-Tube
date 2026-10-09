@@ -25,6 +25,9 @@ class MediaLibraryTests(unittest.TestCase):
         for n in (10, 2, 1):
             (show / f"Chernobyl.S01E{n:02d}.mkv").write_bytes(bytes([n]) * 100)
         (root / "TV Shows" / "Empty").mkdir()
+        (root / "Cartoon" / "Bluey (2018)").mkdir(parents=True)
+        for name in ("1-1-2 Чарівний ксилофон & Лікарня.mp4", "1-3-4 Підкидайки.mp4", "2-1-2 Танці.mp4"):
+            (root / "Cartoon" / "Bluey (2018)" / name).write_bytes(b"b" * 100)
         (root / ".stream-cache").mkdir()
         (root / ".stream-cache" / "partial.mkv").write_bytes(b"p")
         self.library = MediaLibrary(root, ["Cartoon", "Movies", "TV Shows"], server.VIDEO_EXTS)
@@ -34,7 +37,7 @@ class MediaLibraryTests(unittest.TestCase):
 
     def test_lists_one_title_per_file_or_folder_and_skips_the_rest(self):
         items = {item["id"]: item for item in self.library.items()}
-        self.assertEqual(set(items), {"Movies/Heat (1995).mkv", "TV Shows/Chernobyl"})
+        self.assertEqual(set(items), {"Movies/Heat (1995).mkv", "TV Shows/Chernobyl", "Cartoon/Bluey (2018)"})
         self.assertEqual(items["Movies/Heat (1995).mkv"]["name"], "Heat (1995)")
         self.assertEqual(items["Movies/Heat (1995).mkv"]["kind"], "movie")
         self.assertEqual(items["TV Shows/Chernobyl"]["kind"], "tv")
@@ -44,6 +47,8 @@ class MediaLibraryTests(unittest.TestCase):
         items = {item["id"]: item for item in self.library.items()}
         self.assertEqual(items["TV Shows/Chernobyl"]["seasons"], 1)
         self.assertEqual(items["Movies/Heat (1995).mkv"]["seasons"], 0)
+        # "1-1-2 Name": season 1, episodes 1 and 2 in one file.
+        self.assertEqual(items["Cartoon/Bluey (2018)"]["seasons"], 2)
 
     def test_episodes_play_in_natural_order(self):
         names = [f["name"] for f in self.library.files("TV Shows/Chernobyl")]

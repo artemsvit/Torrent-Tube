@@ -54,7 +54,9 @@ final class EpisodeIdentityTests: XCTestCase {
         }
         XCTAssertEqual(EpisodeIdentity.parse(name: "E03 Title.mkv", path: #"Show\Season 2\E03 Title.mkv"#), EpisodeIdentity(season: 2, episode: 3))
         XCTAssertEqual(EpisodeIdentity.parse(name: "Show.S02E03.mkv", path: "Show/Season 1/Show.S02E03.mkv"), EpisodeIdentity(season: 2, episode: 3))
-        for name in ["03-04 Combined.m4v", "E03-E04 Combined.mkv", "1080p Episode.mkv", "Unknown.mkv"] {
+        XCTAssertEqual(EpisodeIdentity.parse(name: "03-04 Combined.m4v", path: "Show/Season 12/03-04 Combined.m4v"), EpisodeIdentity(season: 12, episode: 3, lastEpisode: 4))
+        XCTAssertEqual(EpisodeIdentity.parse(name: "E03-E04 Combined.mkv", path: "Show/Season 12/E03-E04 Combined.mkv"), EpisodeIdentity(season: 12, episode: 3, lastEpisode: 4))
+        for name in ["03-10 Not a range.m4v", "1080p Episode.mkv", "Unknown.mkv"] {
             XCTAssertNil(EpisodeIdentity.parse(name: name, path: "Show/Season 12/\(name)"))
         }
         XCTAssertNil(EpisodeIdentity.parse(name: "03 Title.m4v", path: "Show/03 Title.m4v"))
@@ -63,7 +65,17 @@ final class EpisodeIdentityTests: XCTestCase {
         XCTAssertEqual(EpisodeIdentity.parse("Show.S02E03.1080p.mkv"), EpisodeIdentity(season: 2, episode: 3))
         XCTAssertEqual(EpisodeIdentity.parse("Show 1x04.mp4"), EpisodeIdentity(season: 1, episode: 4))
         XCTAssertNil(EpisodeIdentity.parse("Episode 4.mkv"))
-        XCTAssertNil(EpisodeIdentity.parse("Show.S01E01-E02.mkv"))
+        XCTAssertEqual(EpisodeIdentity.parse("Show.S01E01-E02.mkv"), EpisodeIdentity(season: 1, episode: 1, lastEpisode: 2))
+        XCTAssertEqual(EpisodeIdentity.parse("Show.S01E01E02.mkv"), EpisodeIdentity(season: 1, episode: 1, lastEpisode: 2))
+        XCTAssertEqual(EpisodeIdentity.parse("Show S01E05 720p.mkv"), EpisodeIdentity(season: 1, episode: 5))
+        XCTAssertNil(EpisodeIdentity.parse("2019-01-02 Vlog.mp4"))
+    }
+    func testDoubleEpisodeFilesPlayForEitherEpisode() {
+        let bluey = EpisodeIdentity.parse("1-1-2 Чарівний ксилофон & Лікарня.mp4")
+        XCTAssertEqual(bluey, EpisodeIdentity(season: 1, episode: 1, lastEpisode: 2))
+        XCTAssertEqual(bluey?.covers(season: 1, episode: 2), true)
+        XCTAssertEqual(bluey?.covers(season: 1, episode: 3), false)
+        XCTAssertEqual(EpisodeIdentity.parse("1-51-52 Татків вечір.mp4"), EpisodeIdentity(season: 1, episode: 51, lastEpisode: 52))
     }
     func testExistingResumeEntriesRemainReadable() throws {
         let data = Data(#"[{"id":"server|hash|0","server":"http://nas/","torrentID":"hash","file":0,"title":"Movie","source":{"id":"hash"},"seconds":25,"duration":100,"updatedAt":0}]"#.utf8)

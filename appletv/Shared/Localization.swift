@@ -163,6 +163,7 @@ private let ukrainian: [String: String] = [
     "Episodes": "Серії",
     "Season %ld": "Сезон %ld",
     "Season %ld · Episode %ld": "Сезон %ld · Серія %ld",
+    "Season %ld · Episodes %ld–%ld": "Сезон %ld · Серії %ld–%ld",
     "Loading episodes…": "Завантаження серій…",
     "Choose a version to see the episodes available to stream.": "Виберіть версію, щоб побачити серії, доступні для перегляду.",
     "Cast & Crew": "Актори та знімальна група",

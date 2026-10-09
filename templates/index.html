@@ -4613,10 +4613,15 @@ function renderDetailsBody() {
         `<button type="button" class="library-chip${n === s.librarySeason ? " is-active" : ""}" data-act="lib-season" data-season="${n}">Season ${n}</button>`).join("")}</div>` : ""}
       <div class="dt-files">${episodes.map((e, i) => e.season !== s.librarySeason ? "" : (() => {
         const info = known[e.episode] || {};
-        const sub = [info.runtime ? `${info.runtime} min` : "", info.overview || ""].filter(Boolean).join(" · ") || e.file.name;
+        // Two episodes in one file: both names, both run times.
+        const second = e.last > e.episode ? known[e.last] || {} : null;
+        const number = second ? `${e.episode}–${e.last}` : `${e.episode}`;
+        const title = second ? [info.name, second.name].filter(Boolean).join(" & ") : info.name;
+        const runtime = (info.runtime || 0) + (second && second.runtime || 0);
+        const sub = [runtime ? `${runtime} min` : "", info.overview || ""].filter(Boolean).join(" · ") || e.file.name;
         return `<button type="button" class="dt-episode" data-act="play-episode" data-index="${i}" title="Play from here in ${escapeHtml(PLAYERS[playerId].name)} - the next episodes follow">
           ${info.still ? `<img class="dt-episode-still" src="${escapeHtml(info.still)}" alt="" loading="lazy">` : `<div class="dt-episode-still"></div>`}
-          <div class="dt-episode-text"><div class="dt-episode-title">${e.episode}. ${escapeHtml(info.name || `Episode ${e.episode}`)}</div><div class="dt-episode-sub">${escapeHtml(sub)}</div></div>
+          <div class="dt-episode-text"><div class="dt-episode-title">${number}. ${escapeHtml(title || `Episode ${number}`)}</div><div class="dt-episode-sub">${escapeHtml(sub)}</div></div>
           <span class="action-btn">${ICONS.play}</span></button>`; })()).join("")}</div>`;
   } else if (s.library) {
     const files = libraryFileList();
@@ -4855,15 +4860,22 @@ function libraryMediaUrl(file) {
 
 // Season and episode of a library file, as the apps read it: S01E02 or
 // 1x02 in the name, else a "Season 1" / "Сезон 1" folder and a leading number.
+// A file with two episodes in it ("1-1-2 Name", "S01E01-E02") also has `last`.
 function episodeOf(file) {
-  const name = file.name, m = name.match(/(?:^|[^a-z0-9])s(\d{1,2})[ ._-]*e(\d{1,3})(?!\d)/i) || name.match(/(?:^|[^a-z0-9])(\d{1,2})x(\d{1,3})(?!\d)/i);
-  if (m) return { season: +m[1], episode: +m[2] };
+  const name = file.name;
+  const range = (first, second) => second && +second > first && +second - first <= 4 ? +second : first;
+  let m = name.match(/(?:^|[^a-z0-9])s(\d{1,2})[ ._-]*e(\d{1,3})(?:[ ._]*-?[ ._]*e?(\d{1,3}))?(?!\d)/i);
+  if (m) return { season: +m[1], episode: +m[2], last: range(+m[2], m[3]) };
+  m = name.match(/(?:^|[^a-z0-9])(\d{1,2})x(\d{1,3})(?!\d)/i);
+  if (m) return { season: +m[1], episode: +m[2], last: +m[2] };
+  m = name.match(/^(\d{1,2})-(\d{1,3})-(\d{1,3})(?=[ ._])/);
+  if (m && range(+m[2], m[3]) > +m[2]) return { season: +m[1], episode: +m[2], last: +m[3] };
   const folders = file.path.split("/").slice(0, -1).reverse();
   for (const folder of folders) {
     const s = folder.match(/(?:^|[^\p{L}\d])(?:season|сезон|s)[ ._-]*(\d{1,2})(?!\d)/iu) || folder.match(/(?:^|[^\p{L}\d])(\d{1,2})[ ._-]+(?:season|сезон)/iu);
     if (s) {
       const e = name.match(/^(?:(?:episode|ep|e)[ ._-]*)?(\d{1,3})(?=[ ._-])/i);
-      return e ? { season: +s[1], episode: +e[1] } : null;
+      return e ? { season: +s[1], episode: +e[1], last: +e[1] } : null;
     }
   }
   return null;

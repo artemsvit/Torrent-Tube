@@ -75,7 +75,7 @@ enum ReleaseChoice {
         releases.enumerated().filter { _, release in
             guard release.source.isPlayable, seasons(in: release.title).contains(season) else { return false }
             if let identity = EpisodeIdentity.parse(release.title) {
-                return identity == EpisodeIdentity(season: season, episode: episode)
+                return identity.covers(season: season, episode: episode)
             }
             return true
         }.sorted { lhs, rhs in
@@ -89,7 +89,7 @@ enum ReleaseChoice {
         if let source = episodeSource(for: item, tmdbID: tmdbID, season: season) {
             // A remembered individual episode must not be reused for another episode.
             let sourceTitle = remembered(for: tmdbID).flatMap { $0.source == source ? $0.title : nil } ?? item.title
-            if item.sourceOverride != nil || EpisodeIdentity.parse(sourceTitle).map({ $0.episode == episode }) != false { return source }
+            if item.sourceOverride != nil || EpisodeIdentity.parse(sourceTitle).map({ $0.covers(season: season, episode: episode) }) != false { return source }
         }
         let releases = try await search(title: title, original: original, season: season, api: api, allowUnmatched: false)
         try Task.checkCancellation()

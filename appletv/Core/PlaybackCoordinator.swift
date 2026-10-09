@@ -45,7 +45,7 @@ final class PlaybackCoordinator {
         } else {
             identity = nil
         }
-        if let identity { return L("Season %ld · Episode %ld", identity.season, identity.episode) }
+        if let identity { return identity.label }
         if let season = request.season, let episode = request.episode {
             return L("Season %ld · Episode %ld", season, episode)
         }
@@ -54,9 +54,10 @@ final class PlaybackCoordinator {
 
     static func selectedFile(request: PlaybackRequest, prepared: PreparedPlayback) -> Int? {
         if let season = request.season, let episode = request.episode {
+            // A file with two episodes in it plays for either of them.
             let matches = prepared.files.filter { file in
                 let path = file.path ?? request.source.path.map { $0 + "/" + file.name }
-                return EpisodeIdentity.parse(name: file.name, path: path) == EpisodeIdentity(season: season, episode: episode)
+                return EpisodeIdentity.parse(name: file.name, path: path)?.covers(season: season, episode: episode) == true
             }
             return matches.count == 1 ? matches.first?.index : nil
         }
@@ -76,7 +77,7 @@ final class PlaybackCoordinator {
         guard files.count > 1 else { return nil }
         let episodes = files.compactMap { file in file.episodeIdentity.map { (file.index, $0) } }
         if episodes.count > 1, let playing = episodes.first(where: { $0.0 == current })?.1 {
-            return episodes.filter { ($0.1.season, $0.1.episode) > (playing.season, playing.episode) }
+            return episodes.filter { ($0.1.season, $0.1.episode) > (playing.season, playing.lastEpisode) }
                 .min { ($0.1.season, $0.1.episode) < ($1.1.season, $1.1.episode) }?.0
         }
         guard let position = files.firstIndex(where: { $0.index == current }), position + 1 < files.count else { return nil }
