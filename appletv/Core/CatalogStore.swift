@@ -49,6 +49,8 @@ final class CatalogStore {
     func loadFeed(_ feed: String, api: TorrentTubeAPI, config: ServerConfig, refresh: Bool = false) async {
         guard config.searchEnabled, !loading.contains(feed) else { return }
         let cache = metadataCache(api.baseURL)
+        await cache.load()
+        guard !Task.isCancelled, !loading.contains(feed) else { return }
 
         // Show cached feed snapshot immediately (instant UI on cold start & tab switch):
         if rows[feed] == nil, let cached = cache.feed(for: feed) {
@@ -84,7 +86,8 @@ final class CatalogStore {
     private var publishingShelf: Set<URL> = []
     private var shelfPreviewWarmup: Task<Void, Never>?
     private func publishTopShelf(_ items: [MediaItem], api: TorrentTubeAPI, config: ServerConfig) async {
-        guard !publishingShelf.contains(api.baseURL), !Task.isCancelled, TopShelfStore.defaults.string(forKey: "activeServer") == api.baseURL.absoluteString else { return }
+        guard TopShelfStore.defaults.bool(forKey: "showNewInTopShelf"),
+              !publishingShelf.contains(api.baseURL), !Task.isCancelled, TopShelfStore.defaults.string(forKey: "activeServer") == api.baseURL.absoluteString else { return }
         publishingShelf.insert(api.baseURL)
         defer { publishingShelf.remove(api.baseURL) }
         var titles: [ShelfTitle] = []
@@ -177,6 +180,8 @@ final class CatalogStore {
         syncing = true
         defer { syncing = false }
         let cache = metadataCache(api.baseURL)
+        await cache.load()
+        guard !Task.isCancelled else { return }
         let items = library.filter { !$0.isTorrent && $0.tmdbId != nil }.map(libraryItem)
         let missing = items.filter { !cache.hasDetails($0.title) }
         syncDone = 0
@@ -225,6 +230,8 @@ final class CatalogStore {
     func enrich(_ items: [MediaItem], api: TorrentTubeAPI, config: ServerConfig) async {
         guard config.tmdbEnabled else { return }
         let cache = metadataCache(api.baseURL)
+        await cache.load()
+        guard !Task.isCancelled else { return }
         var titles: [String] = []
         for item in items where metadata[item.title] == nil && !enriching.contains(item.title) && !titles.contains(item.title) {
             if item.sourceOverride?.path != nil && (!Self.libraryMetadataEnabled || libraryMatchedByServer) { continue }
@@ -247,6 +254,8 @@ final class CatalogStore {
         guard config.tmdbEnabled, refresh || details[item.title] == nil, !fetchingDetails.contains(item.title) else { return }
         if item.sourceOverride?.path != nil && !Self.libraryMetadataEnabled { return }
         let cache = metadataCache(api.baseURL)
+        await cache.load()
+        guard !Task.isCancelled, !fetchingDetails.contains(item.title), refresh || details[item.title] == nil else { return }
         // A copy saved before cast photos opened a person's page has no ids: fetch it again.
         if !refresh, let saved = cache.details(for: item.title), !(saved.people ?? []).contains(where: { $0.id == nil }) {
             details[item.title] = saved; return
@@ -266,6 +275,8 @@ final class CatalogStore {
     func loadLibrary(api: TorrentTubeAPI) async {
         guard !libraryLoading else { return }
         let cache = metadataCache(api.baseURL)
+        await cache.load()
+        guard !Task.isCancelled, !libraryLoading else { return }
         // The list saved at the last sync shows at once; the server's answer replaces it.
         if library.isEmpty, let saved = cache.library {
             library = saved.titles

@@ -11,7 +11,6 @@ struct SettingsView: View {
     @AppStorage("showContinueWatching") private var showContinue = true
     @AppStorage("previewFocusedTitle") private var previewTitle = true
     @AppStorage("seekInterval") private var seekInterval = 10
-    @AppStorage("recentSearches") private var recentSearches = ""
     @AppStorage("libraryMetadata") private var libraryMetadata = true
     @State private var refreshingMetadata = false
     @State private var section: Section = .home
@@ -69,9 +68,11 @@ struct SettingsView: View {
                     case .home:
                         setting("Top Shelf", value: showNew ? L("New titles") : L("Brand artwork"), subtitle: "Shown above the app on your Apple TV Home screen.") {
                             showNew.toggle()
+                            if !showNew { TopShelfStore.clear() }
                             TVTopShelfContentProvider.topShelfContentDidChange()
                             if showNew { Task { await catalog.loadFeed("new", api: api, config: config, refresh: true) } }
                         }
+                        Text("Shelf file: " + TopShelfStore.status).font(.system(size: 22)).foregroundStyle(.white.opacity(0.5)).padding(.horizontal, 34)
                         Text(config.searchEnabled ? L("New titles update when you open the app or refresh the catalog. If no artwork is available, the brand banner is shown.") : L("New titles need a server with catalog search enabled. The brand banner is shown until then."))
                             .font(.system(size: 25)).foregroundStyle(.white.opacity(0.7)).lineSpacing(4).padding(.horizontal, 34).padding(.vertical, 8)
                         setting("Continue Watching", value: showContinue ? L("Show") : L("Hide"), subtitle: "Display your unfinished titles on Home.") { showContinue.toggle() }
@@ -130,10 +131,9 @@ struct SettingsView: View {
                                 .padding(.horizontal, 34).padding(.top, 8)
                         }
                         setting("Clear viewing history", value: nil, subtitle: "Remove saved positions for this server on this Apple TV.") { clearingHistory = true }
-                        setting("Clear recent searches", value: recentSearches.isEmpty ? L("None") : nil, subtitle: "Forget the terms shown on the Search screen.") { recentSearches = "" }
                     }
                 }.padding(12)
-            }.frame(maxWidth: .infinity).focusSection()
+            }.tvBackScroll().frame(maxWidth: .infinity).focusSection()
         }
         }
         .padding(.horizontal, 58).padding(.top, ScreenLayout.top).padding(.bottom, 40)

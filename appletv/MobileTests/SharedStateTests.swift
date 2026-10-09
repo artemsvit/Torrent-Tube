@@ -4,6 +4,46 @@ import UIKit
 
 @MainActor
 final class SharedStateTests: XCTestCase {
+    func testClearDuringInitialLoadDoesNotRestoreOldData() async {
+        let server = URL(string: "http://cache-race-\(UUID())/")!
+        let item = MediaItem(title: "Old movie", magnet: nil, downloadLink: nil, sizeLabel: nil, seeders: nil, releases: nil)
+        let original = MetadataCache(server: server)
+        original.storeFeed([item], for: "old")
+        await original.flush()
+        let restored = MetadataCache(server: server)
+        restored.clear()
+        restored.storeFeed([item], for: "new")
+        await restored.load()
+        XCTAssertNil(restored.feed(for: "old"))
+        XCTAssertEqual(restored.feed(for: "new")?.first?.title, item.title)
+        await restored.flush()
+        let next = MetadataCache(server: server)
+        await next.load()
+        XCTAssertNil(next.feed(for: "old"))
+        XCTAssertNotNil(next.feed(for: "new"))
+        next.clear()
+        await next.flush()
+    }
+
+    func testPosterDecodePreservesPixelsForFillAndRetina() throws {
+        let format = UIGraphicsImageRendererFormat(); format.scale = 1
+        let source = UIGraphicsImageRenderer(size: CGSize(width: 1200, height: 1800), format: format).image { _ in
+            UIColor.systemBlue.setFill(); UIRectFill(CGRect(x: 0, y: 0, width: 1200, height: 1800))
+        }
+        let data = try XCTUnwrap(source.pngData())
+        let retina = try XCTUnwrap(PosterArtworkCache.decode(data, width: 400, height: 600, fit: false)?.cgImage)
+        XCTAssertGreaterThanOrEqual(retina.width, 400)
+        XCTAssertGreaterThanOrEqual(retina.height, 600)
+        XCTAssertLessThanOrEqual(retina.height, 601)
+        // A square crop must retain enough width, rather than downsample only to its height.
+        let crop = try XCTUnwrap(PosterArtworkCache.decode(data, width: 400, height: 400, fit: false)?.cgImage)
+        XCTAssertGreaterThanOrEqual(crop.width, 400)
+        XCTAssertGreaterThanOrEqual(crop.height, 400)
+        let full = try XCTUnwrap(PosterArtworkCache.decode(data, width: 2400, height: 3600, fit: false)?.cgImage)
+        XCTAssertEqual(full.width, 1200)
+        XCTAssertEqual(full.height, 1800)
+    }
+
     func testCacheWritesClearAndReloadRemainOrdered() async throws {
         let server = URL(string: "http://cache-test-\(UUID())/")!
         let cache = MetadataCache(server: server)
@@ -13,19 +53,23 @@ final class SharedStateTests: XCTestCase {
         cache.storeFeed([item], for: "new")
         await cache.flush()
         let restored = MetadataCache(server: server)
+        await restored.load()
         XCTAssertEqual(restored.details(for: item.title)?.overview, "Cached details")
         XCTAssertEqual(restored.feed(for: "new")?.first?.title, item.title)
         XCTAssertTrue(restored.isFeedFresh(for: "new"))
         cache.clear()
         await cache.flush()
-        XCTAssertNil(MetadataCache(server: server).details(for: item.title))
-        XCTAssertNil(MetadataCache(server: server).feed(for: "new"))
+        let empty = MetadataCache(server: server)
+        await empty.load()
+        XCTAssertNil(empty.details(for: item.title))
+        XCTAssertNil(empty.feed(for: "new"))
         // A write queued after Clear Cache must survive; older snapshots must not.
         cache.storeFeed([item], for: "movies")
         cache.clear()
         cache.storeFeed([item], for: "tv")
         await cache.flush()
         let afterClear = MetadataCache(server: server)
+        await afterClear.load()
         XCTAssertNil(afterClear.feed(for: "movies"))
         XCTAssertEqual(afterClear.feed(for: "tv")?.first?.title, item.title)
         cache.clear()

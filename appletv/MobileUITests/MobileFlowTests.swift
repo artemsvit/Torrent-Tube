@@ -2,6 +2,30 @@ import XCTest
 import UIKit
 
 final class MobileFlowTests: XCTestCase {
+    func testIPadPersonNameBesideBack() throws {
+        guard UIDevice.current.userInterfaceIdiom == .pad else { throw XCTSkip("iPad header layout") }
+        guard let server = ProcessInfo.processInfo.environment["TORRENTTUBE_REFERENCE_SERVER"] else { throw XCTSkip("Set reference server") }
+        XCUIDevice.shared.orientation = .landscapeLeft
+        defer { XCUIDevice.shared.orientation = .portrait }
+        let app = launch(server: server, language: "uk")
+        let details = app.buttons["featured-details"]
+        XCTAssertTrue(details.waitForExistence(timeout: 60))
+        details.tap()
+        let person = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "person-")).firstMatch
+        for _ in 0..<8 {
+            if person.exists && person.isHittable { break }
+            app.scrollViews.firstMatch.swipeUp()
+        }
+        XCTAssertTrue(person.isHittable)
+        person.tap()
+        app.scrollViews.firstMatch.swipeUp()
+        let name = app.staticTexts["person-floating-name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 15))
+        XCTAssertLessThan(name.frame.midX, app.frame.width / 2)
+        XCTAssertLessThan(name.frame.maxY, 150)
+        capture("iPad actor name beside Back")
+    }
+
     func testInformationUsesAvailableWidth() throws {
         guard let server = ProcessInfo.processInfo.environment["TORRENTTUBE_REFERENCE_SERVER"], !server.isEmpty else { throw XCTSkip("Set reference server") }
         if UIDevice.current.userInterfaceIdiom == .pad { XCUIDevice.shared.orientation = .landscapeLeft }

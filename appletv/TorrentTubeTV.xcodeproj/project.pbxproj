@@ -236,7 +236,7 @@
 		049886025499167CAFC12234 /* TitleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TitleView.swift; sourceTree = "<group>"; };
 		0E8628FD9EF9860860E6B15A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		13FC790BD3F620DA0747F88A /* TrailerBrowser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrailerBrowser.swift; sourceTree = "<group>"; };
-		14831A815E2400B599EAB813 /* TorrentTubeMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TorrentTubeMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		14831A815E2400B599EAB813 /* TorrentTubeMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = TorrentTubeMac.app; path = "Torrent Tube.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		1723EC0449D7755442600C23 /* CoreVideo.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreVideo.framework; path = System/Library/Frameworks/CoreVideo.framework; sourceTree = SDKROOT; };
 		19FCD6E903115D42F79948D4 /* CFNetwork.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CFNetwork.framework; path = System/Library/Frameworks/CFNetwork.framework; sourceTree = SDKROOT; };
 		1F0D5CC0D58366F7D6697DCA /* MobileVLCKit.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = MobileVLCKit.xcframework; path = Vendor/MobileVLCKit.xcframework; sourceTree = "<group>"; };
@@ -283,7 +283,7 @@
 		A8BAB5F7C3828DD11D693895 /* TVFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVFlowTests.swift; sourceTree = "<group>"; };
 		AB9FF9917E06F9F8EFFAD885 /* MobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileApp.swift; sourceTree = "<group>"; };
 		AF1A420622CDC82C5A5D4000 /* TrailerChoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrailerChoice.swift; sourceTree = "<group>"; };
-		B294FEA73C459906CA7F221A /* TorrentTubeTopShelf.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = TorrentTubeTopShelf.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		B294FEA73C459906CA7F221A /* TorrentTubeTopShelf.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TorrentTubeTopShelf.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		BE3249EDCDCC63FBE2E0C1B0 /* ReleaseChoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleaseChoice.swift; sourceTree = "<group>"; };
 		C3114F54CC33BEF74FB2C7A2 /* MobileTitle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileTitle.swift; sourceTree = "<group>"; };
 		C76538026EAF172676674FCD /* LibrarySections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibrarySections.swift; sourceTree = "<group>"; };
@@ -306,7 +306,7 @@
 		F48DC9D80CED9625493EFA0B /* TorrentTubeMobileTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = TorrentTubeMobileTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F956844B578C2F00A954EDBB /* FavoritesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoritesStore.swift; sourceTree = "<group>"; };
 		FBEBD6015146BF295DE3D97C /* Localization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Localization.swift; sourceTree = "<group>"; };
-		FE051AEF08E359BBDC553626 /* TorrentTubeTV.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = TorrentTubeTV.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		FE051AEF08E359BBDC553626 /* TorrentTubeTV.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TorrentTubeTV.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FEF172EB5DE966BDE80D244F /* MediaHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaHelpers.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -1309,6 +1309,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME = LaunchImage;
 				CODE_SIGN_ENTITLEMENTS = TorrentTube/TorrentTube.entitlements;
+				DEVELOPMENT_TEAM = 8KK8V96Q6B;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"\"Vendor\"",
@@ -1349,6 +1350,7 @@
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = TopShelf/TopShelf.entitlements;
+				DEVELOPMENT_TEAM = 8KK8V96Q6B;
 				INFOPLIST_FILE = TopShelf/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1423,6 +1425,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME = LaunchImage;
 				CODE_SIGN_ENTITLEMENTS = TorrentTube/TorrentTube.entitlements;
+				DEVELOPMENT_TEAM = 8KK8V96Q6B;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"\"Vendor\"",
@@ -1446,6 +1449,7 @@
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = TopShelf/TopShelf.entitlements;
+				DEVELOPMENT_TEAM = 8KK8V96Q6B;
 				INFOPLIST_FILE = TopShelf/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

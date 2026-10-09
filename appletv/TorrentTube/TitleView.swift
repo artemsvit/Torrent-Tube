@@ -36,7 +36,6 @@ struct TitleView: View {
             } catch { trailerError = error.localizedDescription }
         }
     }
-    @Environment(\.backToTop) private var backToTop
     /// Information: what isn't already in the hero's facts line.
     private var infoRows: [(String, String)] {
         guard let details else { return [] }
@@ -56,17 +55,22 @@ struct TitleView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 38) {
-                CinemaHero(item: value, details: details, height: 960, overviewLines: 6, showsCredits: true) {
+                CinemaHero(item: value, details: details, height: 960, overviewLines: 6) {
                     HStack(spacing: 28) {
                         Button { play() } label: { Label(L("Play"), systemImage: "play.fill") }
                             .buttonStyle(.borderedProminent).tint(.white).foregroundStyle(.black).accessibilityIdentifier("title-play")
                         Button { playTrailer() } label: { Label(findingTrailer ? L("Finding trailer…") : L("Trailer"), systemImage: "play.rectangle") }
                             .disabled(findingTrailer)
                             .buttonStyle(.bordered).tint(.white).accessibilityIdentifier("show-trailers")
-                        FavoriteButton(item: value, details: details, server: api.baseURL)
                         if item.sourceOverride == nil || (item.releases?.count ?? 0) > 1 {  // a library title saved twice has versions too
-                            Button(L("Choose version")) { selectedEpisode = nil; showVersions = true }.buttonStyle(.bordered).tint(.white)
+                            Button { selectedEpisode = nil; showVersions = true } label: {
+                                Image(systemName: "list.bullet")
+                            }
+                            .buttonStyle(.bordered).tint(.white)
+                            .accessibilityLabel(L("Choose version"))
+                            .accessibilityIdentifier("choose-version")
                         }
+                        FavoriteButton(item: value, details: details, server: api.baseURL)
                     }
                 }
                 if details?.mediaType == "tv", let seasons = details?.seasonList, !seasons.isEmpty {
@@ -139,8 +143,6 @@ struct TitleView: View {
         .tvScrollEdge()  // before ignoresSafeArea, so the fade spans the whole screen
         .ignoresSafeArea(edges: [.top, .horizontal])
         .background(AppBackground())
-        // Menu/Back: straight to the tab's top level.
-        .onExitCommand { backToTop() }
         .alert(L("Streaming unavailable"), isPresented: $showServerNotice) {
             Button(L("OK"), role: .cancel) {}
         } message: { Text(L("Update Torrent Tube on your server to stream on this Apple TV.")) }

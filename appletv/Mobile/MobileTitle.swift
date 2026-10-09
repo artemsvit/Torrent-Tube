@@ -134,7 +134,7 @@ struct MobileTitle: View {
                      overview: details?.overview ?? value.overview, tagline: details?.tagline, expanded: expanded,
                      // No animation: the text opens downward at once.
                      toggleMore: (details?.overview ?? value.overview ?? "").count > 160 ? { expanded.toggle() } : nil,
-                     showsCredits: true, growth: $heroGrowth) {
+                     growth: $heroGrowth) {
                 Button { episode = nil; play(source: item.source) } label: {
                     Label(L("Play"), systemImage: "play.fill").font(HeroFont.button).frame(maxWidth: regular ? 220 : .infinity, minHeight: HeroFont.buttonHeight)
                 }
@@ -190,7 +190,7 @@ struct MobileTitle: View {
                             episodeButton(ep) {
                                 VStack(alignment: .leading, spacing: 8) {
                                     MobileArtwork(url: ep.still, ratio: 16 / 9).clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                    Text("\(ep.number). \(ep.name)").font(.headline).lineLimit(1)
+                                    Text("\(ep.number). \(ep.name)").font(MobileStyle.itemTitle(.headline, weight: .semibold)).lineLimit(1)
                                     if let overview = ep.overview { Text(overview).font(.subheadline).foregroundStyle(.secondary).lineLimit(3) }
                                 }.frame(width: 300)
                             }
@@ -205,7 +205,7 @@ struct MobileTitle: View {
                             HStack(alignment: .top, spacing: 12) {
                                 MobileArtwork(url: ep.still, ratio: 16 / 9).frame(width: 150).clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text("\(ep.number). \(ep.name)").font(.subheadline.weight(.semibold)).lineLimit(2)
+                                    Text("\(ep.number). \(ep.name)").font(MobileStyle.itemTitle(.subheadline.weight(.semibold), weight: .semibold)).lineLimit(2)
                                     if let runtime = ep.runtime { Text(L("%ld min", runtime)).font(.caption).foregroundStyle(.secondary) }
                                     if let overview = ep.overview { Text(overview).font(.caption).foregroundStyle(.secondary).lineLimit(3) }
                                 }

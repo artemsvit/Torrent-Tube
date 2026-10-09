@@ -244,6 +244,7 @@ struct MobileRoot: View {
         if new != tab { Haptics.tap() }
         if new == tab { paths[tab] = NavigationPath() }
         tab = new
+        searchFocused = false
         searchText = ""
         settingsDepth = nil
     }
@@ -257,8 +258,9 @@ struct MobileRoot: View {
         let searching = !searchText.trimmingCharacters(in: .whitespaces).isEmpty
         let canGoBack = !(paths[tab]?.isEmpty ?? true) || searching
         let inSettings = settingsDepth.map { (paths[tab]?.count ?? 0) >= $0 } ?? false
-        return page(tab)
+        return ZStack { page(tab) }
             .id(tab)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             #if DEBUG
             // Screenshots without clicking: -macOpen settings | search
             .task {
@@ -308,6 +310,7 @@ struct MobileRoot: View {
                     .allowsHitTesting(!(macSearchCompact && macSearchExpanded))
                     HStack(spacing: 10) {
                         MacBarButton(symbol: "gearshape", label: L("Settings")) {
+                            searchFocused = false
                             searchText = ""
                             if !inSettings { open(SettingsRoute()); settingsDepth = paths[tab]?.count }
                         }
@@ -456,7 +459,6 @@ struct MobileSettings: View {
     @AppStorage("previewFocusedTitle") private var previewTitle = true
     @AppStorage(Haptics.key) private var haptics = true
     @AppStorage("seekInterval") private var seekInterval = 10
-    @AppStorage("recentSearches") private var recent = ""
     @AppStorage("libraryMetadata") private var libraryMetadata = true
     @State private var refreshingMetadata = false
     @State private var clearHistory = false
@@ -596,7 +598,6 @@ struct MobileSettings: View {
             }
             .disabled(refreshing)
             Button(L("Clear viewing history"), role: .destructive) { clearHistory = true }
-            Button(L("Clear recent searches"), role: .destructive) { recent = "" }.disabled(recent.isEmpty)
         } header: { header("Server & Storage", "externaldrive") } footer: {
             Text(L("Favorites and viewing history stay on this device.")).font(settingsFooterFont).foregroundStyle(.white.opacity(0.6))
         }

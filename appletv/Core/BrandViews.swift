@@ -1,6 +1,96 @@
 import SwiftUI
 import ImageIO
 
+/// Small artwork uses screen pixels, never points, and decodes outside the UI thread.
+actor PosterArtworkCache {
+    static let shared = PosterArtworkCache()
+    private static let queue = DispatchQueue(label: "TorrentTube.poster-decode", qos: .userInitiated)
+    private let images = NSCache<NSString, PlatformImage>()
+    private var loading: [String: Task<PlatformImage?, Error>] = [:]
+    init() {
+        images.countLimit = 120
+        images.totalCostLimit = 48 * 1024 * 1024
+    }
+    func image(url: URL, width: Int, height: Int, fit: Bool) async throws -> PlatformImage? {
+        let key = "\(url.absoluteString)|\(width)x\(height)|\(fit)"
+        if let image = images.object(forKey: key as NSString) { return image }
+        if let pending = loading[key] { return try await pending.value }
+        let task = Task<PlatformImage?, Error> {
+            let (data, response) = try await URLSession.shared.data(for: URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad))
+            if let response = response as? HTTPURLResponse, !(200..<300).contains(response.statusCode) { return nil }
+            return await withCheckedContinuation { continuation in
+                Self.queue.async { continuation.resume(returning: Self.decode(data, width: width, height: height, fit: fit)) }
+            }
+        }
+        loading[key] = task
+        defer { loading[key] = nil }
+        let image = try await task.value
+        if let image, let cgImage = image.cgImage {
+            images.setObject(image, forKey: key as NSString, cost: cgImage.bytesPerRow * cgImage.height)
+        }
+        return image
+    }
+    nonisolated static func decode(_ data: Data, width: Int, height: Int, fit: Bool) -> PlatformImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let sourceWidth = properties[kCGImagePropertyPixelWidth] as? Double,
+              let sourceHeight = properties[kCGImagePropertyPixelHeight] as? Double,
+              sourceWidth > 0, sourceHeight > 0 else { return nil }
+        let x = Double(width) / sourceWidth, y = Double(height) / sourceHeight
+        let scale = min(1, fit ? min(x, y) : max(x, y))
+        let pixels = ceil(max(sourceWidth, sourceHeight) * scale)
+        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: pixels,
+            kCGImageSourceShouldCacheImmediately: true
+        ] as CFDictionary) else { return nil }
+        return PlatformImage(cgImage: image)
+    }
+}
+
+struct PosterArtwork: View {
+    let url: URL?
+    var fit = false
+    @Environment(\.displayScale) private var displayScale
+    @State private var image: PlatformImage?
+    @State private var loadedURL: URL?
+    private struct Request: Hashable {
+        let url: URL?
+        let width: Int
+        let height: Int
+        let fit: Bool
+    }
+    var body: some View {
+        GeometryReader { geometry in
+            // Round up to reduce duplicate work during small layout changes; allow focus enlargement.
+            let request = Request(url: url,
+                                  width: Int(ceil(geometry.size.width * displayScale * 1.12 / 64)) * 64,
+                                  height: Int(ceil(geometry.size.height * displayScale * 1.12 / 64)) * 64, fit: fit)
+            ZStack {
+                if let image {
+                    Image(platformImage: image).resizable().aspectRatio(contentMode: fit ? .fit : .fill)
+                } else {
+                    Image(systemName: "film").font(.largeTitle).foregroundStyle(.secondary)
+                }
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height)
+            .clipped()
+            .task(id: request) {
+                guard let url = request.url, request.width > 0, request.height > 0 else { image = nil; return }
+                if loadedURL != url { image = nil }
+                do {
+                    let decoded = try await PosterArtworkCache.shared.image(url: url, width: request.width, height: request.height, fit: fit)
+                    try Task.checkCancellation()
+                    image = decoded
+                    loadedURL = url
+                } catch { if !Task.isCancelled { image = nil } }
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
 /// Reuse a few decoded banners; compressed URLCache responses alone still need decoding.
 actor HeroArtworkCache {
     static let shared: HeroArtworkCache = {

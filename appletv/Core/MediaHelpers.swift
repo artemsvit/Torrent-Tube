@@ -42,9 +42,13 @@ struct LibrarySearchResults {
             return !words.isEmpty && words.allSatisfy { text.contains($0) }
         }
         var remaining: [MediaItem] = []
+        // Keys are computed once per item, not once per pair.
+        let keyed = library.map { ($0, Key($0)) }
+        var matchedIDs = Set(matches.map(\.id))
         for torrent in torrents {
-            if let local = library.first(where: { Self.sameTitle($0, torrent) }) {
-                if !matches.contains(where: { $0.id == local.id }) { matches.append(local) }
+            let key = Key(torrent)
+            if let local = keyed.first(where: { Self.sameTitle($0.0, $0.1, torrent, key) })?.0 {
+                if matchedIDs.insert(local.id).inserted { matches.append(local) }
             } else { remaining.append(torrent) }
         }
         self.library = matches
@@ -52,30 +56,58 @@ struct LibrarySearchResults {
     }
 
     static func sameTitle(_ lhs: MediaItem, _ rhs: MediaItem) -> Bool {
-        if lhs.source.isPlayable && lhs.source == rhs.source { return true }
-        if let a = lhs.tmdbId, let b = rhs.tmdbId {
-            // IDs can be shared by a movie and a TV series.
-            return a == b && lhs.mediaType != nil && lhs.mediaType == rhs.mediaType
+        sameTitle(lhs, Key(lhs), rhs, Key(rhs))
+    }
+
+    private struct Key {
+        let year: String?
+        let titles: Set<String>
+        init(_ item: MediaItem) {
+            year = LibrarySearchResults.year(item.title)
+            titles = Set([item.title, item.displayTitle].map(LibrarySearchResults.titleKey).filter { !$0.isEmpty })
         }
-        if let a = lhs.mediaType, let b = rhs.mediaType, a != b { return false }
+    }
+
+    private static func sameTitle(_ lhs: MediaItem, _ a: Key, _ rhs: MediaItem, _ b: Key) -> Bool {
+        if lhs.source.isPlayable && lhs.source == rhs.source { return true }
+        if let x = lhs.tmdbId, let y = rhs.tmdbId {
+            // IDs can be shared by a movie and a TV series.
+            return x == y && lhs.mediaType != nil && lhs.mediaType == rhs.mediaType
+        }
+        if let x = lhs.mediaType, let y = rhs.mediaType, x != y { return false }
         // Without a reliable ID, require a year on both sides. Do not hide remakes
         // or guess that an unmatched title is the same film.
-        guard let year = Self.year(lhs.title), year == Self.year(rhs.title) else { return false }
-        let a = Set([lhs.title, lhs.displayTitle].map(Self.titleKey).filter { !$0.isEmpty })
-        let b = Set([rhs.title, rhs.displayTitle].map(Self.titleKey).filter { !$0.isEmpty })
-        return !a.isDisjoint(with: b)
+        guard let year = a.year, year == b.year else { return false }
+        return !a.titles.isDisjoint(with: b.titles)
     }
 
     private static func normalized(_ text: String) -> String {
         text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX"))
             .components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }.joined(separator: " ")
     }
+    /// The first standalone 19xx/20xx in the title, without a regex.
+    private static func yearRange(_ title: String) -> Range<String.Index>? {
+        let chars = Array(title.indices)
+        var i = 0
+        while i + 4 <= chars.count {
+            let start = chars[i]
+            let end = i + 4 < chars.count ? chars[i + 4] : title.endIndex
+            let word = title[start..<end]
+            let digits = word.allSatisfy { $0.isASCII && $0.isNumber }
+            let prefix = word.hasPrefix("19") || word.hasPrefix("20")
+            let leftOK = i == 0 || !isWordChar(title[chars[i - 1]])
+            let rightOK = i + 4 >= chars.count || !isWordChar(title[chars[i + 4]])
+            if digits && prefix && leftOK && rightOK { return start..<end }
+            i += 1
+        }
+        return nil
+    }
+    private static func isWordChar(_ c: Character) -> Bool { c.isLetter || c.isNumber || c == "_" }
     private static func year(_ title: String) -> String? {
-        guard let range = title.range(of: #"\b(?:19|20)\d{2}\b"#, options: .regularExpression) else { return nil }
-        return String(title[range])
+        yearRange(title).map { String(title[$0]) }
     }
     private static func titleKey(_ title: String) -> String {
-        let text = title.replacingOccurrences(of: #"\b(?:19|20)\d{2}\b.*$"#, with: "", options: .regularExpression)
+        let text = yearRange(title).map { String(title[..<$0.lowerBound]) } ?? title
         return normalized(text)
     }
 }

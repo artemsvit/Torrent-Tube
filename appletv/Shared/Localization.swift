@@ -50,7 +50,6 @@ private let ukrainian: [String: String] = [
     "About": "Про застосунок",
     "Appearance": "Вигляд",
     "Choose a file": "Виберіть файл",
-    "Clear recent searches": "Очистити нещодавні пошуки",
     "Done": "Готово",
     "Enable search on your server to discover more titles.": "Увімкніть пошук на сервері, щоб знаходити більше фільмів і серіалів.",
     "Favorites and viewing history stay on this device.": "Обране та історія перегляду зберігаються на цьому пристрої.",
@@ -71,8 +70,8 @@ private let ukrainian: [String: String] = [
     "Skip interval": "Крок перемотування",
     "Tap the heart on a title to save it here.": "Натисніть серце на сторінці фільму або серіалу, щоб додати його сюди.",
     "Titles on your server will appear here.": "Тут з’являться фільми та серіали з вашого сервера.",
-    "This episode is not in your library, and no release was found for it.": "Цієї серії немає у вашій бібліотеці, і реліз для неї не знайдено.",
     "No playable source was found for this episode.": "Не знайдено джерела для перегляду цієї серії.",
+    "This episode is not in your library, and no release was found for it.": "Цієї серії немає у вашій бібліотеці, і реліз для неї не знайдено.",
     "The selected episode could not be found in this source.": "У цьому джерелі не знайдено вибрану серію.",
     "Unable to play": "Не вдалося почати перегляд",
     "Update Torrent Tube on your server to stream on this device.": "Оновіть Torrent Tube на сервері, щоб дивитися на цьому пристрої.",
@@ -182,7 +181,6 @@ private let ukrainian: [String: String] = [
 
     // Search
     "Movies, TV shows, cartoons": "Фільми, серіали, мультфільми",
-    "Recent searches": "Нещодавні пошуки",
     "Clear": "Очистити",
     "Space": "Пробіл",
     "Delete": "Видалити",
@@ -297,7 +295,6 @@ private let ukrainian: [String: String] = [
     "Clear viewing history": "Очистити історію переглядів",
     "Remove saved positions for this server on this Apple TV.": "Видалити збережені позиції для цього сервера на цьому Apple TV.",
     "Clear viewing history?": "Очистити історію переглядів?",
-    "Forget the terms shown on the Search screen.": "Забути запити, показані на екрані пошуку.",
     "None": "Немає",
     "Clear history": "Очистити історію",
     "Saved playback positions for this server will be removed from this Apple TV. Your server files stay untouched.": "Збережені позиції для цього сервера буде видалено з цього Apple TV. Файли на сервері не зміняться.",

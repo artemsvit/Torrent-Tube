@@ -1,9 +1,13 @@
 import TVServices
+import os
 
 final class ContentProvider: TVTopShelfContentProvider {
+    private let log = Logger(subsystem: "com.artsvit.torrenttube.tv.topshelf", category: "shelf")
     override func loadTopShelfContent(completionHandler: @escaping (TVTopShelfContent?) -> Void) {
-        guard TopShelfStore.defaults.bool(forKey: "showNewInTopShelf"),
-              let snapshot = TopShelfStore.snapshot, snapshot.server == TopShelfStore.defaults.string(forKey: "activeServer"), !snapshot.titles.isEmpty else {
+        log.notice("load: \(TopShelfStore.status, privacy: .public)")
+        // The extension reads only the shared file. The app removes it when the setting is off or the server changes.
+        // Shared UserDefaults are not reliable in the extension on a real device.
+        guard let snapshot = TopShelfStore.snapshot, !snapshot.titles.isEmpty else {
             completionHandler(nil)
             return
         }

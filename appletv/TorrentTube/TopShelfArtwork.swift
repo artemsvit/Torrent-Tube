@@ -1,19 +1,26 @@
 import UIKit
 import ImageIO
+import os
 
 /// Prepare lightweight cached banners in the app, outside the Top Shelf extension.
 enum TopShelfArtwork {
+    private static let log = Logger(subsystem: "com.artsvit.torrenttube.tv", category: "shelf-artwork")
     static func prepare(_ snapshot: ShelfSnapshot) async -> ShelfSnapshot {
         guard let directory = TopShelfStore.artworkDirectory else { return snapshot }
         let worker = Task.detached(priority: .utility) {
-            try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            do {
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            } catch {
+                log.error("Cannot create shelf artwork directory: \(error.localizedDescription, privacy: .public)")
+                return snapshot
+            }
             var titles = Array(snapshot.titles.prefix(10))
             let previous = TopShelfStore.snapshot
             for index in titles.indices {
                 if Task.isCancelled { return snapshot }
                 guard let backdrop = titles[index].backdrop else { continue }
                 // The kind and name are drawn on the image, so they are part of the key.
-                let key = ShelfTitle.identifier("banner-v4|" + backdrop + "|" + (titles[index].kind ?? "") + "|" + titles[index].title)
+                let key = ShelfTitle.identifier("banner-v5|" + backdrop + "|" + (titles[index].kind ?? "") + "|" + titles[index].title)
                 let file = directory.appendingPathComponent(key + ".jpg")
                 if !FileManager.default.fileExists(atPath: file.path),
                    let url = URL(string: backdrop), ["https", "http"].contains(url.scheme),
@@ -26,7 +33,11 @@ enum TopShelfArtwork {
                      kCGImageSourceThumbnailMaxPixelSize: 1920
                    ] as CFDictionary) {
                     autoreleasepool {
-                        try? render(banner: UIImage(cgImage: image), kind: titles[index].kind, title: titles[index].title).jpegData(compressionQuality: 0.92)?.write(to: file, options: .atomic)
+                        do {
+                            try render(banner: UIImage(cgImage: image), kind: titles[index].kind, title: titles[index].title).jpegData(compressionQuality: 0.92)?.write(to: file, options: .atomic)
+                        } catch {
+                            log.error("Cannot save shelf artwork: \(error.localizedDescription, privacy: .public)")
+                        }
                     }
                 }
                 if FileManager.default.fileExists(atPath: file.path) {
@@ -72,10 +83,10 @@ enum TopShelfArtwork {
             var y: CGFloat = 76
             if let kind, !kind.isEmpty {
                 let label = NSAttributedString(string: kind.uppercased(), attributes: [
-                    .font: UIFont.systemFont(ofSize: 30, weight: .bold), .kern: 3,
+                    .font: UIFont.systemFont(ofSize: 22.5, weight: .bold), .kern: 2.25,
                     .foregroundColor: UIColor.white.withAlphaComponent(0.75), .shadow: shadow])
                 label.draw(at: CGPoint(x: 90, y: y))
-                y += 48
+                y += 36
             }
             let name = titleText(title, shadow: shadow)
             let bounds = name.boundingRect(with: CGSize(width: 1150, height: CGFloat.greatestFiniteMagnitude),
@@ -89,15 +100,15 @@ enum TopShelfArtwork {
     static func titleText(_ title: String, shadow: NSShadow = NSShadow()) -> NSAttributedString {
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineBreakMode = .byWordWrapping
-        var fontSize: CGFloat = 72
+        var fontSize: CGFloat = 54
         while true {
             let text = NSAttributedString(string: title, attributes: [
                 .font: UIFont.systemFont(ofSize: fontSize, weight: .heavy), .foregroundColor: UIColor.white,
                 .shadow: shadow, .paragraphStyle: paragraph])
             let height = text.boundingRect(with: CGSize(width: 1150, height: CGFloat.greatestFiniteMagnitude),
                                           options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil).height
-            if height <= 220 || fontSize <= 48 { return text }
-            fontSize -= 4
+            if height <= 165 || fontSize <= 36 { return text }
+            fontSize -= 3
         }
     }
 }

@@ -1,6 +1,146 @@
 import XCTest
 
 final class TVFlowTests: XCTestCase {
+    func testBackScrollsUpThenReturnsHomeThenExits() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-appLanguage", "en", "-serverAddress", "http://192.168.0.102:5058"]
+        app.launch()
+        XCTAssertTrue(app.buttons["hero-play"].waitForExistence(timeout: 30))
+        openTab(app, "Library")
+        for _ in 0..<8 { XCUIRemote.shared.press(.down) }
+        XCUIRemote.shared.press(.menu)
+        XCTAssertEqual(app.state, .runningForeground)
+        XCTAssertTrue(app.buttons["main-tab-library"].isSelected)
+        XCTAssertTrue(app.buttons["main-tab-library"].hasFocus)
+        let heading = app.staticTexts["library-heading"]
+        expectation(for: NSPredicate { _, _ in heading.frame.minY > 100 && heading.frame.minY < 300 }, evaluatedWith: app)
+        waitForExpectations(timeout: 5)
+        add(keep(app, "Back returns Library to top"))
+        XCUIRemote.shared.press(.menu)
+        XCTAssertEqual(app.state, .runningForeground)
+        XCTAssertTrue(app.buttons["main-tab-home"].isSelected)
+        XCTAssertTrue(app.buttons["main-tab-home"].hasFocus)
+        XCUIRemote.shared.press(.menu)
+        expectation(for: NSPredicate { _, _ in app.state != .runningForeground }, evaluatedWith: app)
+        waitForExpectations(timeout: 5)
+    }
+
+    func testBackFromScrolledHomeUsesThreePresses() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-appLanguage", "en", "-serverAddress", "http://192.168.0.102:5058"]
+        app.launch()
+        XCTAssertTrue(app.buttons["hero-play"].waitForExistence(timeout: 30))
+        for _ in 0..<9 { XCUIRemote.shared.press(.down) }
+        XCUIRemote.shared.press(.menu)
+        XCTAssertEqual(app.state, .runningForeground)
+        XCTAssertTrue(app.buttons["main-tab-home"].hasFocus)
+        let hero = app.staticTexts["hero-title"]
+        expectation(for: NSPredicate { _, _ in hero.frame.minY > 100 && hero.frame.minY < 750 }, evaluatedWith: app)
+        waitForExpectations(timeout: 5)
+        XCUIRemote.shared.press(.menu)
+        XCTAssertEqual(app.state, .runningForeground)
+        XCUIRemote.shared.press(.menu)
+        expectation(for: NSPredicate { _, _ in app.state != .runningForeground }, evaluatedWith: app)
+        waitForExpectations(timeout: 5)
+    }
+
+    func testHomeShelvesCanMoveBackUp() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-appLanguage", "uk", "-serverAddress", "http://192.168.0.102:5058"]
+        app.launch()
+        XCTAssertTrue(app.buttons["hero-play"].waitForExistence(timeout: 30))
+        for _ in 0..<9 { XCUIRemote.shared.press(.down) }
+        let focused = app.buttons.allElementsBoundByIndex.first { $0.hasFocus }
+        XCTAssertNotNil(focused, app.debugDescription)
+        let lowerID = focused?.identifier
+        XCUIRemote.shared.press(.up)
+        let moved = NSPredicate { _, _ in
+            guard let next = app.buttons.allElementsBoundByIndex.first(where: { $0.hasFocus }) else { return false }
+            return next.identifier != lowerID
+        }
+        expectation(for: moved, evaluatedWith: app)
+        waitForExpectations(timeout: 10)
+        let upperID = app.buttons.allElementsBoundByIndex.first { $0.hasFocus }?.identifier
+        // A released key must not pull focus back to the lower shelf.
+        Thread.sleep(forTimeInterval: 2)
+        XCTAssertEqual(app.buttons.allElementsBoundByIndex.first { $0.hasFocus }?.identifier, upperID)
+        add(keep(app, "Home moves up without returning to lower shelf"))
+    }
+
+    func testPlayerLicenseLayout() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-appLanguage", "en", "-serverAddress", "http://192.168.0.102:5058"]
+        app.launch()
+        XCTAssertTrue(app.buttons["main-tab-settings"].waitForExistence(timeout: 30))
+        openTab(app, "Settings")
+        let playback = app.buttons["Playback"]
+        for _ in 0..<8 {
+            if playback.hasFocus { break }
+            XCUIRemote.shared.press(.down)
+        }
+        XCTAssertTrue(playback.hasFocus, app.debugDescription)
+        XCUIRemote.shared.press(.select)
+        XCUIRemote.shared.press(.right)
+        let licenses = app.buttons["Player licenses"]
+        XCTAssertTrue(licenses.waitForExistence(timeout: 10))
+        for _ in 0..<5 {
+            if licenses.hasFocus { break }
+            XCUIRemote.shared.press(.down)
+        }
+        XCTAssertTrue(licenses.hasFocus, app.debugDescription)
+        XCUIRemote.shared.press(.select)
+        let heading = app.staticTexts["license-heading"]
+        XCTAssertTrue(heading.waitForExistence(timeout: 10))
+        XCTAssertGreaterThan(heading.frame.minY, app.buttons["main-tab-settings"].frame.maxY + 30)
+        add(keep(app, "Readable player license"))
+        let back = app.buttons["license-back"]
+        XCTAssertTrue(back.waitForExistence(timeout: 5))
+        for _ in 0..<5 {
+            if back.hasFocus { break }
+            XCUIRemote.shared.press(.up)
+        }
+        XCTAssertTrue(back.hasFocus, app.debugDescription)
+        XCUIRemote.shared.press(.select)
+        XCTAssertTrue(app.staticTexts["settings-heading"].waitForExistence(timeout: 5))
+        XCTAssertFalse(heading.exists)
+        for _ in 0..<5 {
+            if licenses.hasFocus { break }
+            XCUIRemote.shared.press(.down)
+        }
+        XCTAssertTrue(licenses.hasFocus, app.debugDescription)
+        XCUIRemote.shared.press(.select)
+        XCTAssertTrue(heading.waitForExistence(timeout: 5))
+        XCUIRemote.shared.press(.menu)
+        XCTAssertTrue(app.staticTexts["settings-heading"].waitForExistence(timeout: 5))
+        XCTAssertFalse(heading.exists)
+    }
+
+    func testSearchFocusKeepsCustomKeyboard() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-appLanguage", "en", "-serverAddress", "http://192.168.0.102:5058"]
+        app.launch()
+        XCTAssertTrue(app.buttons["main-tab-search"].waitForExistence(timeout: 30))
+        openTab(app, "Search")
+        let field = app.descendants(matching: .any).matching(identifier: "search-query").firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        for _ in 0..<12 {
+            if field.hasFocus { break }
+            XCUIRemote.shared.press(.up)
+        }
+        XCTAssertTrue(field.hasFocus, app.debugDescription)
+        XCUIRemote.shared.press(.select)
+        XCTAssertFalse(app.keyboards.firstMatch.exists)
+        let firstKey = app.buttons["key-a"]
+        XCTAssertTrue(firstKey.exists)
+        XCUIRemote.shared.press(.down)
+        let focusedKey = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "key-")).allElementsBoundByIndex.first { $0.hasFocus }
+        XCTAssertNotNil(focusedKey, app.debugDescription)
+        let letter = focusedKey?.label
+        XCUIRemote.shared.press(.select)
+        XCTAssertEqual(field.label, letter)
+        add(keep(app, "Search focus with custom keyboard"))
+    }
+
     func testSingleNavigationMenuAndUkrainianScreenSpacing() {
         let app = XCUIApplication()
         app.launchArguments = ["-appLanguage", "uk", "-serverAddress", "http://192.168.0.102:5058"]

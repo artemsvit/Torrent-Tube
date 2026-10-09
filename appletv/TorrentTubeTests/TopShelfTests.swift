@@ -5,7 +5,7 @@ import UIKit
 
 final class TopShelfTests: XCTestCase {
     func testLongArtworkTitleWrapsWithoutTruncation() {
-        let title = "Людина-павук: Абсолютно новий день"
+        let title = "Людина-павук: Абсолютно новий день — Неймовірні пригоди у великому місті"
         let text = TopShelfArtwork.titleText(title)
         XCTAssertEqual(text.string, title)
         let paragraph = text.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
@@ -51,17 +51,18 @@ final class TopShelfTests: XCTestCase {
         TopShelfStore.save(ShelfSnapshot(server: "http://nas.local/", titles: [title]))
         XCTAssertEqual(TopShelfStore.snapshot?.titles.first?.title, "A film")
         XCTAssertFalse(title.url.absoluteString.contains("magnet"))
-        TopShelfStore.defaults.set(false, forKey: "showNewInTopShelf")
+        let saved = TopShelfStore.snapshot
+        TopShelfStore.clear()
         ContentProvider().loadTopShelfContent { XCTAssertNil($0) }
-        TopShelfStore.defaults.set(true, forKey: "showNewInTopShelf")
+        if let saved { TopShelfStore.save(saved) }
         ContentProvider().loadTopShelfContent { content in
             let carousel = content as? TVTopShelfCarouselContent
-            XCTAssertEqual(carousel?.style, .actions)
+            XCTAssertEqual(carousel?.style, .details)
             XCTAssertEqual(carousel?.items.first?.identifier, title.id)
             XCTAssertEqual(carousel?.items.first?.previewVideoURL?.absoluteString, title.previewURL)
-            XCTAssertNil(carousel?.items.first?.title)
+            XCTAssertEqual(carousel?.items.first?.title, title.title)
             XCTAssertEqual(carousel?.items.first?.imageURL(for: .screenScale1x), artworkFile)
-            XCTAssertEqual(carousel?.items.first?.displayAction?.url, title.url)
+            XCTAssertEqual(carousel?.items.first?.playAction?.url, title.url)
         }
         let many = (0..<6).map { index -> ShelfTitle in
             var copy = ShelfTitle(id: String(index), title: "Film", rawTitle: "Film", poster: title.poster,
@@ -71,7 +72,7 @@ final class TopShelfTests: XCTestCase {
         }
         TopShelfStore.save(ShelfSnapshot(server: "http://nas.local/", titles: many))
         ContentProvider().loadTopShelfContent { content in
-            XCTAssertEqual((content as? TVTopShelfCarouselContent)?.items.count, 4)
+            XCTAssertEqual((content as? TVTopShelfCarouselContent)?.items.count, 6)
         }
         TopShelfStore.clear()
         ContentProvider().loadTopShelfContent { XCTAssertNil($0) }

@@ -33,6 +33,15 @@ final class MetadataCache {
     /// The server's Library as last synced - shown at once on the next launch.
     private(set) var library: SavedLibrary?
 
+    private struct Snapshot: Sendable {
+        var matches: [String: Match] = [:]
+        var details: [String: SavedDetails] = [:]
+        var feeds: [String: SavedFeed] = [:]
+        var library: SavedLibrary?
+    }
+    private var initialLoad: Task<Snapshot, Never>?
+    private var loaded = false
+
     init(server: URL) {
         let name = server.absoluteString.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "server"
         let folder = Self.folder
@@ -41,24 +50,45 @@ final class MetadataCache {
         detailsFile = folder?.appendingPathComponent("details-v2-\(name).json")
         libraryFile = folder?.appendingPathComponent("library-v2-\(name).json")
         feedsFile = folder?.appendingPathComponent("feeds-v2-\(name).json")
-        for old in ["metadata-\(name).json", "details-\(name).json"] {
-            if let file = folder?.appendingPathComponent(old) { try? FileManager.default.removeItem(at: file) }
+        let files = (matchesFile, detailsFile, libraryFile, feedsFile)
+        initialLoad = Task {
+            await withCheckedContinuation { continuation in
+                Self.diskQueue.async {
+                    if let folder { try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true) }
+                    for old in ["metadata-\(name).json", "details-\(name).json"] {
+                        if let file = folder?.appendingPathComponent(old) { try? FileManager.default.removeItem(at: file) }
+                    }
+                    let decoder = JSONDecoder()
+                    var snapshot = Snapshot()
+                    if let file = files.0, let data = try? Data(contentsOf: file) {
+                        snapshot.matches = (try? decoder.decode([String: Match].self, from: data)) ?? [:]
+                    }
+                    if let file = files.1, let data = try? Data(contentsOf: file) {
+                        snapshot.details = (try? decoder.decode([String: SavedDetails].self, from: data)) ?? [:]
+                    }
+                    if let file = files.2, let data = try? Data(contentsOf: file) {
+                        snapshot.library = try? decoder.decode(SavedLibrary.self, from: data)
+                    }
+                    if let file = files.3, let data = try? Data(contentsOf: file) {
+                        snapshot.feeds = (try? decoder.decode([String: SavedFeed].self, from: data)) ?? [:]
+                    }
+                    continuation.resume(returning: snapshot)
+                }
+            }
         }
-        Self.diskQueue.sync {
-            let decoder = JSONDecoder()
-            if let file = matchesFile, let data = try? Data(contentsOf: file) {
-                matches = (try? decoder.decode([String: Match].self, from: data)) ?? [:]
-            }
-            if let file = detailsFile, let data = try? Data(contentsOf: file) {
-                savedDetails = (try? decoder.decode([String: SavedDetails].self, from: data)) ?? [:]
-            }
-            if let file = libraryFile, let data = try? Data(contentsOf: file) {
-                library = try? decoder.decode(SavedLibrary.self, from: data)
-            }
-            if let file = feedsFile, let data = try? Data(contentsOf: file) {
-                savedFeeds = (try? decoder.decode([String: SavedFeed].self, from: data)) ?? [:]
-            }
-        }
+    }
+
+    /// Readers await disk restoration without blocking the main thread. Newer in-memory values win.
+    func load() async {
+        guard !loaded, let initialLoad else { return }
+        let snapshot = await initialLoad.value
+        guard !loaded else { return }
+        matches = snapshot.matches.merging(matches) { _, current in current }
+        savedDetails = snapshot.details.merging(savedDetails) { _, current in current }
+        savedFeeds = snapshot.feeds.merging(savedFeeds) { _, current in current }
+        library = library ?? snapshot.library
+        loaded = true
+        self.initialLoad = nil
     }
 
     /// tvOS keeps no permanent local files, so there it is the Caches folder.
@@ -69,7 +99,6 @@ final class MetadataCache {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
         #endif
         guard let folder = base?.appendingPathComponent("TorrentTube", isDirectory: true) else { return nil }
-        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         return folder
     }
 
@@ -132,6 +161,8 @@ final class MetadataCache {
             .compactMap { try? FileManager.default.attributesOfItem(atPath: $0.path)[.size] as? Int }.reduce(0, +)
     }
     func clear() {
+        loaded = true
+        initialLoad = nil
         matches = [:]; savedDetails = [:]; savedFeeds = [:]; library = nil
         for work in pendingWrites.values { work.cancel() }
         pendingWrites.removeAll()
@@ -153,6 +184,7 @@ final class MetadataCache {
         // During sync, superseded snapshots need no encoding or disk write.
         pendingWrites[file]?.cancel()
         let work = DispatchWorkItem {
+            try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
             guard let data = try? JSONEncoder().encode(value) else { return }
             try? data.write(to: file, options: .atomic)
         }

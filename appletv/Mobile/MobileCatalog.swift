@@ -2,6 +2,13 @@ import SwiftUI
 
 enum MobileStyle {
     static let gold = Color(red: 1.0, green: 0.78, blue: 0.2)
+    static func itemTitle(_ mobileFont: Font, weight: Font.Weight = .medium) -> Font {
+        #if os(macOS)
+        .system(size: 16, weight: weight)
+        #else
+        mobileFont
+        #endif
+    }
 }
 
 /// Text in the banner. iOS text styles are much smaller on the Mac, so the
@@ -159,14 +166,7 @@ struct MobileArtwork: View {
     var body: some View {
         Color(white: 0.12).aspectRatio(ratio, contentMode: .fit)
             .overlay {
-                AsyncImage(url: url.map { higherResolution($0, backdrop: ratio > 1) }.flatMap(URL.init(string:)),
-                           transaction: Transaction(animation: .easeOut(duration: 0.25))) { phase in
-                    if let image = phase.image {  // fades in instead of popping in
-                        Group { if fit { image.resizable().scaledToFit() } else { image.resizable().scaledToFill() } }.transition(.opacity)
-                    } else {
-                        Image(systemName: "film").font(.largeTitle).foregroundStyle(.secondary)
-                    }
-                }
+                PosterArtwork(url: url.map { higherResolution($0, backdrop: ratio > 1) }.flatMap(URL.init(string:)), fit: fit)
             }
             .clipped()
             .accessibilityHidden(true)
@@ -289,7 +289,7 @@ struct MobileCard: View {
                                 .padding(6).background(.black.opacity(0.55), in: Circle()).padding(6)
                         }
                     }
-                Text(value.displayTitle).font(.subheadline.weight(.medium)).lineLimit(2, reservesSpace: true)
+                Text(value.displayTitle).font(MobileStyle.itemTitle(.subheadline.weight(.medium))).lineLimit(2, reservesSpace: true)
                     .foregroundStyle(.primary).multilineTextAlignment(.leading)
             }.contentShape(Rectangle())
         }
@@ -622,7 +622,7 @@ struct MobileHome: View {
                                                 .padding(.horizontal, 10).padding(.bottom, 8)
                                         }
                                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                    Text(entry.title).font(.subheadline.weight(.semibold)).lineLimit(1)
+                                    Text(entry.title).font(MobileStyle.itemTitle(.subheadline.weight(.semibold), weight: .semibold)).lineLimit(1)
                                     Text(L("Resume at %@", entry.displayPosition)).font(.caption).foregroundStyle(.secondary)
                                 }.frame(width: 250).contentShape(Rectangle())
                             }.hapticButtonStyle(PlainButtonStyle())
@@ -775,7 +775,6 @@ struct MobileSearch: View {
     /// shows only the results and hides its own field and close button.
     var sharedQuery: Binding<String>? = nil
     @Environment(CatalogStore.self) private var catalog
-    @AppStorage("recentSearches") private var recent = ""
     @State private var ownQuery = ""
     private var query: String {
         get { sharedQuery?.wrappedValue ?? ownQuery }
@@ -789,10 +788,13 @@ struct MobileSearch: View {
     @State private var retry = 0
     @State private var searchPath = NavigationPath()
     private var term: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var recentTerms: [String] { recent.split(separator: "\n").map(String.init) }
     private var results: LibrarySearchResults {
         LibrarySearchResults(query: term, library: catalog.library.map { catalog.resolved(libraryItem($0)) },
                              torrents: searched == term ? items.map { catalog.resolved($0) } : [])
+    }
+    private var noResults: Bool {
+        term.count >= 2 && !loading && !catalog.libraryLoading && error == nil && catalog.libraryError == nil &&
+        results.library.isEmpty && results.torrents.isEmpty && (!config.searchEnabled || searched == term)
     }
     var body: some View {
         searchStack {
@@ -809,7 +811,6 @@ struct MobileSearch: View {
                                 .autocorrectionDisabled()
                                 .textInputAutocapitalization(.never)
                                 .accessibilityIdentifier("search-input")
-                                .onSubmit { remember() }
                             if !query.isEmpty {
                                 Button { query = "" } label: {
                                     Image(systemName: "xmark.circle.fill")
@@ -840,29 +841,10 @@ struct MobileSearch: View {
                     .padding(.bottom, 12)
                 }
 
+                GeometryReader { viewport in
                 ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 if term.count < 2 {
-                    if !recentTerms.isEmpty {
-                        VStack(alignment: .leading, spacing: 10) {
-                            HStack {
-                                Text(L("Recent searches")).font(.title3.bold())
-                                Spacer()
-                                Button(L("Clear")) { recent = "" }.font(.subheadline)
-                            }.padding(.horizontal, edge)
-                            ScrollView(.horizontal) {
-                                HStack(spacing: 8) {
-                                    ForEach(recentTerms, id: \.self) { text in
-                                        Button { query = text } label: {
-                                            Label(text, systemImage: "clock.arrow.circlepath").font(.subheadline)
-                                                .padding(.horizontal, 12).padding(.vertical, 8)
-                                                .background(.white.opacity(0.12), in: Capsule())
-                                        }.hapticButtonStyle(PlainButtonStyle())
-                                    }
-                                }.padding(.horizontal, edge)
-                            }.scrollIndicators(.hidden)
-                        }
-                    }
                     if let popular = catalog.rows["popular"], !popular.isEmpty {
                         Text(L("Popular now")).font(.title3.bold()).padding(.horizontal, edge)
                         MobileGrid(items: Array(popular.prefix(24)))
@@ -876,7 +858,11 @@ struct MobileSearch: View {
                         MobileError(message: libraryError) { Task { await catalog.loadLibrary(api: api) } }
                     }
                     if config.searchEnabled {
+                        #if os(macOS)
+                        if !noResults { Label(L("Torrents"), systemImage: "network").font(.title3.bold()).padding(.horizontal, edge) }
+                        #else
                         Label(L("Torrents"), systemImage: "network").font(.title3.bold()).padding(.horizontal, edge)
+                        #endif
                         if let error {
                             MobileError(message: error) { retry += 1 }
                         } else if loading || searched != term {
@@ -887,10 +873,12 @@ struct MobileSearch: View {
                             Text(L("No additional torrent titles.")).foregroundStyle(.secondary).padding(.horizontal, edge)
                         }
                     }
-                    if !loading && !catalog.libraryLoading && error == nil && catalog.libraryError == nil &&
-                        results.library.isEmpty && results.torrents.isEmpty && (!config.searchEnabled || searched == term) {
+                    if noResults {
                         ContentUnavailableView(L("No results for “%@”", term), systemImage: "magnifyingglass",
                                                description: Text(L("Check the spelling or try a new search.")))
+                            #if os(macOS)
+                            .frame(maxWidth: .infinity)
+                            #endif
                     }
                     if !config.searchEnabled {
                         Text(L("Searching your library. Torrent search is disabled on this server."))
@@ -899,9 +887,17 @@ struct MobileSearch: View {
                 }
             }
             .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            #if os(macOS)
+            .frame(minHeight: noResults ? max(0, viewport.size.height - 16) : 0)
+            #endif
         }
+        #if !os(macOS)
         .scrollDismissesKeyboard(.immediately)
+        #endif
+                }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(AppBackground())
         .hidesNavigationBar()
         .navigationDestination(for: MediaItem.self) { item in
@@ -910,10 +906,13 @@ struct MobileSearch: View {
         .navigationDestination(for: PersonRoute.self) { MobilePerson(route: $0, api: api) }
     }
     .onAppear {
-            isFieldFocused = true
+            UserDefaults.standard.removeObject(forKey: "recentSearches")
+            if sharedQuery == nil { isFieldFocused = true }
         }
         .task {
+            guard sharedQuery == nil else { return }
             try? await Task.sleep(for: .milliseconds(120))
+            guard !Task.isCancelled else { return }
             isFieldFocused = true
         }
         .task { await catalog.loadLibrary(api: api) }
@@ -932,16 +931,14 @@ struct MobileSearch: View {
             }
         }
     }
-    private func remember() {
-        guard term.count >= 2 else { return }
-        recent = ([term] + recentTerms.filter { $0.caseInsensitiveCompare(term) != .orderedSame }).prefix(8).joined(separator: "\n")
-    }
+
 }
 
 
 /// A person's page: their photo and name, then every film and show they are in.
 struct MobilePerson: View {
     @Environment(\.mobileEdge) private var edge
+    @Environment(\.horizontalSizeClass) private var sizeClass
     let route: PersonRoute
     let api: TorrentTubeAPI
     @State private var credits: PersonCredits?
@@ -986,7 +983,21 @@ struct MobilePerson: View {
         #if !os(macOS)
         .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
         #endif
+        #if os(macOS)
         .navigationTitle(scrolled ? route.name : "")
+        #else
+        .navigationTitle(sizeClass == .regular ? "" : (scrolled ? route.name : ""))
+        .toolbar {
+            if sizeClass == .regular, scrolled {
+                if #available(iOS 26.0, *) {
+                    ToolbarItem(placement: .topBarLeading) { floatingName }
+                        .sharedBackgroundVisibility(.hidden)
+                } else {
+                    ToolbarItem(placement: .topBarLeading) { floatingName }
+                }
+            }
+        }
+        #endif
         .navigationBarTitleDisplayMode(.inline)
         .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y + $0.contentInsets.top > 70 } action: { _, new in scrolled = new }
         .task(id: retry) {
@@ -994,5 +1005,12 @@ struct MobilePerson: View {
             do { credits = try await api.request("api/person", query: [.init(name: "id", value: String(route.id))]) }
             catch is CancellationError {} catch { self.error = error.localizedDescription }
         }
+    }
+    private var floatingName: some View {
+        Text(route.name)
+            .font(.headline).lineLimit(1).minimumScaleFactor(0.65)
+            .frame(width: 220, height: 44, alignment: .leading)
+            .fixedSize(horizontal: true, vertical: false)
+            .accessibilityIdentifier("person-floating-name")
     }
 }

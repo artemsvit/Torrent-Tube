@@ -30,7 +30,7 @@ struct LibraryView: View {
         let active = section.isEmpty ? LibrarySections.defaultSection(catalog.library) : section
         ScrollView {
             VStack(alignment: .leading, spacing: 35) {
-                Text(L("Library")).font(.system(size: 50, weight: .bold))
+                Text(L("Library")).font(.system(size: 50, weight: .bold)).accessibilityIdentifier("library-heading")
                 // The Library syncs itself (new titles only); Settings has "Sync now".
                 ChipRow(options: LibrarySections.chips(catalog.library, favorites: favorites.entries(server: api.baseURL).count),
                         selected: active) { section = $0 }
@@ -49,8 +49,9 @@ struct LibraryView: View {
                     }
                     FilmGrid(items: items.map(libraryItem), api: api, config: config)
                 }
-            }.padding(.horizontal, TVLayout.edge).padding(.top, ScreenLayout.top).padding(.bottom, 70)
+            }.padding(.horizontal, TVLayout.edge).padding(.top, 158 + ScreenLayout.top).padding(.bottom, 70)
         }
+        .tvScrollEdge()
         .ignoresSafeArea(edges: .horizontal)
         .task {
             await catalog.loadLibrary(api: api)

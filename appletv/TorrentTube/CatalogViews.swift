@@ -13,6 +13,24 @@ extension EnvironmentValues {
 
 enum MainTab: Hashable { case home, movies, tv, cartoons, library, search, settings }
 
+private struct BackScrollAction: Equatable {
+    let id: UUID
+    let scroll: () -> Void
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
+}
+
+private struct BackScrollPreference: PreferenceKey {
+    static let defaultValue: [BackScrollAction] = []
+    static func reduce(value: inout [BackScrollAction], nextValue: () -> [BackScrollAction]) {
+        value += nextValue()
+    }
+}
+
+private struct BackDismissPreference: PreferenceKey {
+    static let defaultValue: [BackScrollAction] = []
+    static func reduce(value: inout [BackScrollAction], nextValue: () -> [BackScrollAction]) { value += nextValue() }
+}
+
 struct MainView: View {
     let store: AppStore
     let api: TorrentTubeAPI
@@ -24,6 +42,10 @@ struct MainView: View {
     // coming back shows its top level, not the movie last opened there.
     @State private var paths: [MainTab: NavigationPath] = [:]
     @State private var settingsReset = 0
+    @State private var backScrollActions: [BackScrollAction] = []
+    @State private var needsHomeReturn = false
+    @State private var backDismissActions: [BackScrollAction] = []
+    @FocusState private var navigationFocus: MainTab?
     @Environment(\.scenePhase) private var scenePhase
     private func path(_ tab: MainTab) -> Binding<NavigationPath> {
         Binding(get: { paths[tab] ?? NavigationPath() }, set: { paths[tab] = $0 })
@@ -31,7 +53,7 @@ struct MainView: View {
     /// A tab's stack, with title pages pushed as values so it can be reset.
     private func stack<Root: View>(_ tab: MainTab, @ViewBuilder root: () -> Root) -> some View {
         NavigationStack(path: path(tab)) {
-            root().tvTopFade(tab == .home ? 0 : 70).padding(.top, tab == .home ? 0 : 118).navigationDestination(for: MediaItem.self) { item in TitleView(item: item, api: api, config: config) }
+            root().navigationDestination(for: MediaItem.self) { item in TitleView(item: item, api: api, config: config) }
                 .navigationDestination(for: PersonRoute.self) { PersonView(route: $0, api: api, config: config) }
         }
         .environment(\.backToTop) { paths[tab] = NavigationPath() }
@@ -45,12 +67,15 @@ struct MainView: View {
             case .cartoons: stack(.cartoons) { CategoryView(feed: "cartoons", title: "Cartoons", api: api, config: config) }
             case .library: stack(.library) { LibraryView(api: api, config: config) }
             case .search: stack(.search) { SearchView(api: api, config: config) }
-            case .settings: NavigationStack { SettingsView(store: store, api: api, config: config).tvTopFade(70).padding(.top, 118) }.id(settingsReset)
+            case .settings: NavigationStack { SettingsView(store: store, api: api, config: config).padding(.top, 118) }.id(settingsReset)
             }
         }
         // NavigationStack does not pass an outer safe-area inset to every root.
         // Reserve actual layout space so fixed screens cannot sit behind the bar.
         .overlay(alignment: .top) { navigationBar }
+        .onPreferenceChange(BackScrollPreference.self) { backScrollActions = $0 }
+        .onPreferenceChange(BackDismissPreference.self) { backDismissActions = $0 }
+        .onExitCommand(perform: backCommand)
         .onChange(of: tab) { old, _ in
             if old == .settings { settingsReset += 1 } else { paths[old] = NavigationPath() }
         }
@@ -112,10 +137,30 @@ struct MainView: View {
         }
         .buttonStyle(TVNavigationButtonStyle(selected: tab == destination, iconOnly: iconOnly))
         .accessibilityIdentifier("main-tab-\(destination)")
+        .focused($navigationFocus, equals: destination)
         .accessibilityLabel(L(title))
         .accessibilityAddTraits(tab == destination ? .isSelected : [])
     }
 
+    private var backCommand: (() -> Void)? {
+        if let action = backDismissActions.last { return action.scroll }
+        if let action = backScrollActions.last {
+            return {
+                needsHomeReturn = true
+                backScrollActions.removeAll()
+                navigationFocus = tab
+                withAnimation(.easeOut(duration: 0.3)) { action.scroll() }
+            }
+        }
+        guard needsHomeReturn || tab != .home || !(paths[tab]?.isEmpty ?? true) else { return nil }
+        return {
+            needsHomeReturn = false
+            paths[tab] = NavigationPath()
+            paths[.home] = NavigationPath()
+            tab = .home
+            navigationFocus = .home
+        }
+    }
 }
 
 private struct TVNavigationGlass: ViewModifier {
@@ -216,7 +261,9 @@ struct HomeView: View {
     }
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 54) {
+            // Keep shelf frames and focus sections alive when moving vertically.
+            // Each horizontal shelf still creates its posters lazily.
+            VStack(alignment: .leading, spacing: 54) {
                 if let active {
                     CinemaHero(item: catalog.resolved(active), details: catalog.details[active.title], height: 1080, bottomInset: 245, preview: preview.controller, nextArtwork: nextHeroArtwork) {
                         // Actions stay on the left; page indicators align with the right screen margin.
@@ -247,7 +294,7 @@ struct HomeView: View {
                         .padding(.trailing, TVLayout.edge)
                     }
                     // The first row rises into the banner's fade. The banner gives up that
-                    // height itself: the rows are lazy and appear only when their frames are on screen.
+                    // height itself; poster creation stays lazy inside each shelf.
                     .padding(.bottom, -210)
                 } else if catalog.loading.contains("new") || catalog.libraryLoading {
                     LoadingState(text: L("Finding something to watch…"), minHeight: 600)
@@ -541,13 +588,17 @@ struct ArtworkView: View {
                     Color(white: 0.07)
                 }
                 if let url, let address = URL(string: higherResolution(url, backdrop: background)) {
-                    AsyncImage(url: address, transaction: Transaction(animation: .easeOut(duration: 0.25))) { phase in
-                        if let image = phase.image {  // fades in instead of popping in
-                            image.resizable().aspectRatio(contentMode: background && !fill ? .fit : .fill).transition(.opacity)
-                        } else { Color.clear }
+                    if !background {
+                        PosterArtwork(url: address)
+                    } else {
+                        AsyncImage(url: address, transaction: Transaction(animation: .easeOut(duration: 0.25))) { phase in
+                            if let image = phase.image {  // fades in instead of popping in
+                                image.resizable().aspectRatio(contentMode: background && !fill ? .fit : .fill).transition(.opacity)
+                            } else { Color.clear }
+                        }
+                            .frame(width: geometry.size.width, height: geometry.size.height, alignment: background && !fill ? .trailing : .center)
+                            .clipped()
                     }
-                        .frame(width: geometry.size.width, height: geometry.size.height, alignment: background && !fill ? .trailing : .center)
-                        .clipped()
                 } else if !background {
                     Image(systemName: "film").font(.system(size: 45)).foregroundStyle(.white.opacity(0.35)).accessibilityHidden(true)
                 }
@@ -605,15 +656,31 @@ extension View {
     }
     /// For screens whose banner runs under the bar: the top edge fades only once the page has scrolled,
     /// so the banner still reaches the top edge at rest.
-    func tvScrollEdge() -> some View { modifier(TVScrollEdge()) }
+    func tvScrollEdge(_ height: CGFloat = 170) -> some View { modifier(TVScrollEdge(height: height)) }
+    func tvBackScroll() -> some View { modifier(TVBackScroll()) }
+}
+
+private struct TVBackScroll: ViewModifier {
+    @State private var position = ScrollPosition(edge: .top)
+    @State private var scrolled = false
+    @State private var id = UUID()
+    func body(content: Content) -> some View {
+        content
+            .scrollPosition($position)
+            .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y + $0.contentInsets.top > 40 } action: { _, value in scrolled = value }
+            .preference(key: BackScrollPreference.self,
+                        value: scrolled ? [BackScrollAction(id: id, scroll: { position.scrollTo(edge: .top) })] : [])
+    }
 }
 
 private struct TVScrollEdge: ViewModifier {
+    let height: CGFloat
     @State private var scrolled = false
     func body(content: Content) -> some View {
         content
+            .tvBackScroll()
             .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y + $0.contentInsets.top > 40 } action: { _, new in scrolled = new }
-            .tvTopFade(scrolled ? 170 : 0)
+            .tvTopFade(scrolled ? height : 0)
             .animation(.easeOut(duration: 0.25), value: scrolled)
     }
 }
@@ -741,8 +808,9 @@ struct CategoryView: View {
                         .frame(maxWidth: .infinity, minHeight: 500)
                 }
                 FilmGrid(items: catalog.rows[activeFeed] ?? [], api: api, config: config)
-            }.padding(.horizontal, TVLayout.edge).padding(.top, ScreenLayout.top).padding(.bottom, 70)
+            }.padding(.horizontal, TVLayout.edge).padding(.top, 158 + ScreenLayout.top).padding(.bottom, 70)
         }
+        .tvScrollEdge()
         .ignoresSafeArea(edges: .horizontal)
         .task(id: activeFeed) { await catalog.loadFeed(activeFeed, api: api, config: config) }
     }
@@ -815,7 +883,6 @@ struct SearchView: View {
     let api: TorrentTubeAPI
     let config: ServerConfig
     @Environment(CatalogStore.self) private var catalog
-    @AppStorage("recentSearches") private var recentRaw = ""
     @State private var query = ""
     @State private var searched = ""          // the term the results are for
     @State private var items: [MediaItem] = []
@@ -823,7 +890,6 @@ struct SearchView: View {
     @State private var error: String?
     @State private var layout: KeyboardLayout = Localizer.shared.language == .uk ? .ukrainian : .english
     @FocusState private var focusedKey: String?
-    private var recent: [String] { recentRaw.split(separator: "\n").map(String.init) }
     private var term: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var results: LibrarySearchResults {
         LibrarySearchResults(query: term, library: catalog.library.map { catalog.resolved(libraryItem($0)) },
@@ -839,22 +905,9 @@ struct SearchView: View {
                 queryLine
                 SearchKeyboard(layout: $layout, focusedKey: $focusedKey, type: { query += $0 },
                                delete: { if !query.isEmpty { query.removeLast() } })
-                if !recent.isEmpty && term.isEmpty {
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack {
-                            Text(L("Recent searches")).font(.system(size: 24, weight: .semibold)).foregroundStyle(.white.opacity(0.6))
-                            Spacer()
-                            Button(L("Clear")) { recentRaw = "" }.font(.system(size: 20))
-                        }
-                        ForEach(recent.prefix(4), id: \.self) { term in
-                            Button { query = term } label: {
-                                Label(term, systemImage: "clock.arrow.circlepath").font(.system(size: 24))
-                            }.buttonStyle(TVSelectionRowStyle())
-                        }
-                    }.focusSection()
-                }
             }
             .frame(width: 600)
+            .padding(.top, 158)
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     if term.count < 2 {
@@ -867,7 +920,7 @@ struct SearchView: View {
                     } else {
                         if !results.library.isEmpty {
                             Label(L("In your library"), systemImage: "folder").font(.system(size: 32, weight: .bold))
-                            FilmGrid(items: results.library, api: api, config: config) { _ in if keyboardVisited { remember(term) } else { cardFocused() } }
+                            FilmGrid(items: results.library, api: api, config: config) { _ in cardFocused() }
                         }
                         if let libraryError = catalog.libraryError {
                             ErrorPanel(message: libraryError) { Task { await catalog.loadLibrary(api: api) } }
@@ -879,7 +932,7 @@ struct SearchView: View {
                             } else if loading || searched != term {
                                 LoadingState(text: L("Searching…"), minHeight: 180)
                             } else if !results.torrents.isEmpty {
-                                FilmGrid(items: results.torrents, api: api, config: config) { _ in if keyboardVisited { remember(searched) } else { cardFocused() } }
+                                FilmGrid(items: results.torrents, api: api, config: config) { _ in cardFocused() }
                             } else if !results.library.isEmpty {
                                 Text(L("No additional torrent titles.")).foregroundStyle(.secondary)
                             }
@@ -906,10 +959,13 @@ struct SearchView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 24)
+                .padding(.top, 158)
                 .padding(.bottom, 60)
             }
             .frame(maxWidth: .infinity)
             .scrollClipDisabled()
+            .tvScrollEdge()
             .focusSection()
         }
         .padding(.horizontal, TVLayout.edge).padding(.top, ScreenLayout.top)
@@ -934,6 +990,7 @@ struct SearchView: View {
         .task { await catalog.loadLibrary(api: api) }
         .task { await catalog.loadFeed("popular", api: api, config: config) }
         .onChange(of: focusedKey) { _, key in if key != nil { keyboardVisited = true } }
+        .onAppear { UserDefaults.standard.removeObject(forKey: "recentSearches") }
         .onDisappear { keyboardVisited = false }
     }
     /// Down from the tab bar lands under the Search tab - in the results, on
@@ -946,18 +1003,16 @@ struct SearchView: View {
         focusedKey = layout.letters.first.map(String.init)
     }
     private var queryLine: some View {
-        HStack(spacing: 18) {
-            Image(systemName: "magnifyingglass").font(.system(size: 30, weight: .semibold)).foregroundStyle(.white.opacity(0.5))
-            Group {
-                if query.isEmpty { Text(L("Search")).foregroundStyle(.white.opacity(0.35)) }
-                else { Text(query).foregroundStyle(.white) }
-            }
-            .font(.system(size: 34, weight: .semibold)).lineLimit(1).truncationMode(.head)
+        Text(query.isEmpty ? L("Search") : query)
+            .font(.system(size: 34, weight: .semibold))
+            .lineLimit(1).truncationMode(.head)
+            .foregroundStyle(focusedKey == "search-input" ? .black : .white)
+            .padding(.horizontal, 24)
+            .frame(maxWidth: .infinity, minHeight: 76, alignment: .leading)
+            .background(focusedKey == "search-input" ? Color.white : Color.white.opacity(0.08), in: Capsule())
+            .focusable()
+            .focused($focusedKey, equals: "search-input")
             .accessibilityIdentifier("search-query")
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 24).frame(height: 76)
-        .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
     private func search(_ text: String) async {
         loading = true; error = nil
@@ -971,11 +1026,7 @@ struct SearchView: View {
             await catalog.enrich(Array(items.prefix(12)), api: api, config: config)
         } catch is CancellationError {} catch { self.error = error.localizedDescription; searched = text }
     }
-    private func remember(_ text: String) {
-        guard text.count >= 2 else { return }
-        let others = recent.filter { $0.caseInsensitiveCompare(text) != .orderedSame }
-        recentRaw = ([text] + others).prefix(8).joined(separator: "\n")
-    }
+
 }
 
 enum KeyboardLayout: Equatable {
@@ -1073,18 +1124,66 @@ struct ErrorPanel: View {
 }
 
 struct LicenseView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var backID = UUID()
+    @FocusState private var backFocused: Bool
     private var license: String {
         guard let url = Bundle.main.url(forResource: "VLCKit-COPYING", withExtension: "txt") else { return L("License file unavailable.") }
         return (try? String(contentsOf: url, encoding: .utf8)) ?? L("License file unavailable.")
     }
+    private var paragraphs: [String] {
+        license.components(separatedBy: "\n\n").map {
+            $0.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+        }.filter { !$0.isEmpty }
+    }
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 25) {
-                Text("VideoLAN TVVLCKit 3.7.2").font(.title)
-                Text(L("Playback uses VideoLAN’s VLCKit library. Source: %@", "https://code.videolan.org/videolan/VLCKit"))
-                Text(license).font(.callout)
-            }.padding(70)
-        }.navigationTitle(L("Player licenses"))
+            VStack(alignment: .leading, spacing: 32) {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(L("Player licenses"))
+                        .font(.system(size: 50, weight: .bold))
+                        .accessibilityIdentifier("license-heading")
+                    Text("VideoLAN TVVLCKit 3.7.2")
+                        .font(.system(size: 28, weight: .semibold))
+                    Text(L("Playback uses VideoLAN’s VLCKit library. Source: %@", "https://code.videolan.org/videolan/VLCKit"))
+                        .font(.system(size: 22)).foregroundStyle(.white.opacity(0.65))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                VStack(alignment: .leading, spacing: 26) {
+                    ForEach(Array(paragraphs.enumerated()), id: \.offset) { index, paragraph in
+                        Text(verbatim: paragraph)
+                            .font(.system(size: index == 0 ? 28 : 24, weight: index == 0 ? .semibold : .regular))
+                            .foregroundStyle(.white.opacity(index == 0 ? 1 : 0.85))
+                            .lineSpacing(8)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .focusable()
+                    }
+                }
+                .padding(36)
+                .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 24))
+            }
+            .frame(maxWidth: 1240, alignment: .leading)
+            .padding(.horizontal, TVLayout.edge)
+            .padding(.top, 198).padding(.bottom, 70)
+            .frame(maxWidth: .infinity)
+        }
+        .tvScrollEdge()
+        .ignoresSafeArea(edges: .horizontal)
+        .toolbar(.hidden, for: .navigationBar)
+        .overlay(alignment: .top) {
+            Button { dismiss() } label: { Label(L("Back"), systemImage: "chevron.left") }
+                .buttonStyle(TVNavigationButtonStyle(selected: false, iconOnly: false))
+                .padding(6).modifier(TVNavigationGlass())
+                .focused($backFocused)
+                .accessibilityIdentifier("license-back")
+                .padding(.top, 104)
+                .frame(maxWidth: .infinity)
+        }
+        .defaultFocus($backFocused, true)
+        .preference(key: BackDismissPreference.self, value: [BackScrollAction(id: backID, scroll: { dismiss() })])
+        .onExitCommand { dismiss() }
     }
 }
 
@@ -1155,15 +1254,16 @@ struct PersonView: View {
             }.padding(.horizontal, TVLayout.edge).padding(.top, 118 + 40).padding(.bottom, 70)
         }
         // Content melts into the bar; the name moves up beside it once the big one scrolls away.
-        .tvTopFade(150)
+        .tvScrollEdge(150)
         .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y + $0.contentInsets.top > 170 } action: { _, new in scrolled = new }
         .ignoresSafeArea(edges: .horizontal)
         .overlay(alignment: .top) {
-            // Centred, just under the bar.
-            Text(route.name).font(.system(size: 34, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.6)
-                .shadow(color: .black.opacity(0.6), radius: 8)
-                .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.horizontal, TVLayout.edge).padding(.top, 162)
+            // Beside the navigation panel, at the same top edge.
+            Text(route.name).font(.system(size: 26, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.65)
+                .frame(width: 350, height: 74, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, TVLayout.edge).padding(.top, 14)
+                .accessibilityIdentifier("person-floating-name")
                 .opacity(scrolled ? 1 : 0).animation(.easeOut(duration: 0.2), value: scrolled)
         }
         .task(id: retry) {

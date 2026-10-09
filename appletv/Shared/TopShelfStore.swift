@@ -1,5 +1,6 @@
 import Foundation
 import CryptoKit
+import os
 
 struct ShelfTitle: Codable, Identifiable {
     let id: String
@@ -32,10 +33,14 @@ struct ShelfSnapshot: Codable {
 }
 
 enum TopShelfStore {
+    private static let log = Logger(subsystem: "com.artsvit.torrenttube.tv", category: "shelf-storage")
     static let group = "group.com.artsvit.torrenttube.tv"
     static var defaults: UserDefaults { UserDefaults(suiteName: group)! }
     static var file: URL? {
-        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group)?.appendingPathComponent("top-shelf.json")
+        // tvOS permits disposable files in Library/Caches, not at the container root.
+        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group)?
+            .appendingPathComponent("Library/Caches/TopShelf", isDirectory: true)
+            .appendingPathComponent("top-shelf.json")
     }
     static var artworkDirectory: URL? { file?.deletingLastPathComponent().appendingPathComponent("top-shelf-artwork", isDirectory: true) }
     static func artworkURL(for title: ShelfTitle) -> URL? {
@@ -49,8 +54,17 @@ enum TopShelfStore {
         return try? JSONDecoder().decode(ShelfSnapshot.self, from: data)
     }
     static func save(_ snapshot: ShelfSnapshot) {
-        guard let file, let data = try? JSONEncoder().encode(snapshot) else { return }
-        do { try data.write(to: file, options: .atomic) } catch { return }
+        guard let file else {
+            log.error("Cannot save shelf: app group container is unavailable")
+            return
+        }
+        do {
+            try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try JSONEncoder().encode(snapshot).write(to: file, options: .atomic)
+        } catch {
+            log.error("Cannot save shelf: \(error.localizedDescription, privacy: .public)")
+            return
+        }
         // Keep current banners and a bounded set of older images while the system refreshes.
         if let directory = artworkDirectory,
            let files = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.contentModificationDateKey]) {
@@ -60,6 +74,14 @@ enum TopShelfStore {
                           ((try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast) }
             for url in older.dropFirst(24) { try? FileManager.default.removeItem(at: url) }
         }
+    }
+    /// One line for Settings: what the extension can see in the shared container.
+    static var status: String {
+        guard let file else { return "No app group container" }
+        guard FileManager.default.fileExists(atPath: file.path) else { return "Container ok, no shelf file" }
+        guard let snapshot else { return "Shelf file unreadable" }
+        let art = snapshot.titles.filter { artworkURL(for: $0) != nil }.count
+        return "\(snapshot.titles.count) titles, \(art) images"
     }
     static func clear() {
         if let file { try? FileManager.default.removeItem(at: file) }
