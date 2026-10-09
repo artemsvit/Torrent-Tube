@@ -47,13 +47,20 @@ running on the Synology at `192.168.0.102:5058` was deployed.
 
 ### Publishing to Docker Hub
 
-From a machine that already has Docker (e.g. wherever `artsvit/musictube` was
-built and pushed from):
+Docker Hub is the one source of truth: the NAS never builds images, it only
+pulls `artsvit/torrenttube:latest` (`docker-compose pull torrenttube && docker-compose up -d torrenttube`).
+
+GitHub Actions (`.github/workflows/docker-publish.yml`) builds the image
+(linux/amd64) and pushes it to Docker Hub on every push to `main` or
+`apple-apps-and-library` that changes the server, or by hand from the Actions
+tab. It needs the repository secrets `DOCKERHUB_USERNAME` and
+`DOCKERHUB_TOKEN` (a Docker Hub access token with Read & Write).
+
+By hand, from a machine with Docker:
 
 ```bash
 docker login -u artsvit
-docker build -t artsvit/torrenttube:latest .
-docker push artsvit/torrenttube:latest
+docker buildx build --platform linux/amd64 -t artsvit/torrenttube:latest --push .
 ```
 
 ### docker-compose
