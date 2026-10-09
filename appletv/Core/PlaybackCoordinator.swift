@@ -37,11 +37,7 @@ final class PlaybackCoordinator {
         let identity: EpisodeIdentity?
         if let session {
             let file = prepared?.files.first { $0.index == session.file }
-            let source = selectedSource ?? request.source
-            identity = file.flatMap { file in
-                EpisodeIdentity.parse(name: file.name, path: file.path ?? source.path.map { $0 + "/" + file.name })
-            }
-                ?? EpisodeIdentity.parse(session.name)
+            identity = file.flatMap(identity(of:)) ?? EpisodeIdentity.parse(session.name)
         } else {
             identity = nil
         }
@@ -55,20 +51,31 @@ final class PlaybackCoordinator {
     static func selectedFile(request: PlaybackRequest, prepared: PreparedPlayback) -> Int? {
         if let season = request.season, let episode = request.episode {
             // A file with two episodes in it plays for either of them.
-            let matches = prepared.files.filter { file in
-                let path = file.path ?? request.source.path.map { $0 + "/" + file.name }
-                return EpisodeIdentity.parse(name: file.name, path: path)?.covers(season: season, episode: episode) == true
-            }
+            let matches = episodeMatches(request: request, prepared: prepared, season: season, episode: episode)
             return matches.count == 1 ? matches.first?.index : nil
         }
         if let file = request.source.file, prepared.files.contains(where: { $0.index == file }) { return file }
         if prepared.files.count == 1 { return prepared.files.first?.index }
         // A season or a whole series: start at its first episode instead of asking.
-        let episodes = prepared.files.compactMap { file in
-            EpisodeIdentity.parse(name: file.name, path: file.path ?? request.source.path.map { $0 + "/" + file.name }).map { (file.index, $0) }
-        }
+        let episodes = prepared.files.compactMap { file in identity(of: file, in: request.source).map { (file.index, $0) } }
         guard episodes.count > 1 else { return nil }
         return episodes.min { ($0.1.season, $0.1.episode) < ($1.1.season, $1.1.episode) }?.0
+    }
+
+    /// The server's season and episode for the file, else read from its name
+    /// and the folders above it.
+    static func identity(of file: VideoFile, in source: PlaybackSource) -> EpisodeIdentity? {
+        if let season = file.season, let episode = file.episode {
+            return EpisodeIdentity(season: season, episode: episode, lastEpisode: file.lastEpisode)
+        }
+        return EpisodeIdentity.parse(name: file.name, path: file.path ?? source.path.map { $0 + "/" + file.name })
+    }
+    private func identity(of file: VideoFile) -> EpisodeIdentity? { Self.identity(of: file, in: selectedSource ?? request.source) }
+
+    /// The files that hold this episode: one normally, several when the
+    /// folder has more than one copy (then the person chooses).
+    static func episodeMatches(request: PlaybackRequest, prepared: PreparedPlayback, season: Int, episode: Int) -> [VideoFile] {
+        prepared.files.filter { identity(of: $0, in: request.source)?.covers(season: season, episode: episode) == true }
     }
 
     /// The file to play after `current`: the next episode by season and
@@ -102,9 +109,11 @@ final class PlaybackCoordinator {
             if let selectedSource { selection = PlaybackRequest(source: selectedSource, title: request.title, artwork: request.artwork, tmdbID: request.tmdbID) }
             if let file = Self.selectedFile(request: selection, prepared: result) {
                 await start(file: file)
-            } else if selection.episode != nil {
+            } else if let season = selection.season, let episode = selection.episode,
+                      Self.episodeMatches(request: selection, prepared: result, season: season, episode: episode).isEmpty {
                 throw APIError(message: L("The selected episode could not be found in this source."))
             }
+            // Otherwise several copies of the episode (or no episode asked for): the file list asks.
         } catch is CancellationError {} catch {
             if current == operation { self.error = error.localizedDescription }
         }

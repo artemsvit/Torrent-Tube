@@ -7,6 +7,8 @@ import threading
 import time
 from pathlib import Path
 
+import episodes
+
 # Category folder -> the kind the apps sort by.
 KINDS = {"movies": "movie", "movie": "movie", "cartoon": "cartoon", "cartoons": "cartoon",
          "tv shows": "tv", "tv": "tv", "series": "tv"}
@@ -17,23 +19,9 @@ def _natural(name: str):
     return [int(part) if part.isdigit() else part.lower() for part in re.split(r"(\d+)", name)]
 
 
-# S01E02, 1x02, or "1-1-2 Name" (season 1, episodes 1 and 2 in one file).
-_EPISODE_RE = re.compile(r"(?i)(?:^|[^a-z0-9])s(\d{1,2})[ ._-]*e\d{1,3}(?!\d)|(?:^|[^a-z0-9])(\d{1,2})x\d{1,3}(?!\d)"
-                         r"|^(\d{1,2})-\d{1,3}-\d{1,3}(?=[ ._])")
-_SEASON_FOLDER_RE = re.compile(r"(?i)(?:^|[^\w])(?:season|сезон|s)[ ._-]*(\d{1,2})(?!\d)|(?:^|[^\w])(\d{1,2})[ ._-]+(?:season|сезон)")
-
-
 def season_of(path: Path):
-    """The season a video belongs to: from S01E02 / 1x02 in its name, else
-    from a "Season 1" / "Сезон 1" folder above it. None for a film."""
-    match = _EPISODE_RE.search(path.name)
-    if match:
-        return int(match.group(1) or match.group(2) or match.group(3))
-    for folder in reversed(path.parent.parts[-3:]):
-        match = _SEASON_FOLDER_RE.search(folder)
-        if match:
-            return int(match.group(1) or match.group(2))
-    return None
+    """The season a video belongs to (see episodes.py). None for a film."""
+    return episodes.season_of(path.name, path.as_posix())
 
 
 def _hidden(name: str) -> bool:
@@ -136,5 +124,9 @@ class MediaLibrary:
             return None
         videos = [path] if path.is_file() and self._is_video(path) else (self._videos(path) if path.is_dir() else [])
         root = self.root.resolve()
-        return [{"index": i, "name": v.name, "path": v.resolve().relative_to(root).as_posix(), "size": v.stat().st_size}
-                for i, v in enumerate(videos)]
+        files = []
+        for i, v in enumerate(videos):
+            relative = v.resolve().relative_to(root).as_posix()
+            files.append({"index": i, "name": v.name, "path": relative, "size": v.stat().st_size,
+                          **(episodes.identify(v.name, relative) or {})})
+        return files

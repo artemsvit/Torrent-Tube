@@ -223,8 +223,22 @@ struct VideoFile: Decodable, Identifiable {
     let name: String
     let size: Int64
     var path: String? = nil
+    /// The server's reading of the name (episodes.py) - the one the web page
+    /// uses too. Older servers do not send it: then the app reads the name.
+    var season: Int? = nil
+    var episode: Int? = nil
+    var lastEpisode: Int? = nil
     var id: Int { index }
-    var episodeIdentity: EpisodeIdentity? { EpisodeIdentity.parse(name: name, path: path) }
+    var episodeIdentity: EpisodeIdentity? {
+        if let season, let episode { return EpisodeIdentity(season: season, episode: episode, lastEpisode: lastEpisode) }
+        return EpisodeIdentity.parse(name: name, path: path)
+    }
+
+    init(index: Int, name: String, size: Int64, path: String? = nil) {
+        self.index = index; self.name = name; self.size = size; self.path = path
+    }
+
+    private enum CodingKeys: String, CodingKey { case index, name, size, path, season, episode, lastEpisode = "last_episode" }
 }
 /// Skip intro: where a library episode's opening is ("pending" while the
 /// server compares its sound with the next episode).

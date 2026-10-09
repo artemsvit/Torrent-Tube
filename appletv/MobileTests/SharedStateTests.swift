@@ -190,6 +190,24 @@ final class SharedStateTests: XCTestCase {
         XCTAssertNil(PlaybackCoordinator.selectedFile(request: request, prepared: PreparedPlayback(id: "torrent", selected: 0, files: [file, duplicate])))
         XCTAssertNil(PlaybackCoordinator.selectedFile(request: request, prepared: PreparedPlayback(id: "torrent", selected: 0, files: [VideoFile(index: 0, name: "Unknown.mkv", size: 100)])))
     }
+    func testServerEpisodeFieldsWinAndDoubleFilesPlayForBothEpisodes() throws {
+        // The server's reading (episodes.py) is used as sent, even where the name alone says nothing.
+        let data = Data(#"{"id":"library:Cartoon/Bluey","selected":0,"files":[{"index":0,"name":"1-1-2 Ксилофон & Лікарня.mp4","path":"Cartoon/Bluey/1-1-2 Ксилофон & Лікарня.mp4","size":100,"season":1,"episode":1,"last_episode":2},{"index":1,"name":"Untitled.mp4","path":"Cartoon/Bluey/Untitled.mp4","size":100,"season":1,"episode":3,"last_episode":4}]}"#.utf8)
+        let prepared = try JSONDecoder().decode(PreparedPlayback.self, from: data)
+        let source = PlaybackSource(path: "Cartoon/Bluey")
+        XCTAssertEqual(prepared.files[1].episodeIdentity, EpisodeIdentity(season: 1, episode: 3, lastEpisode: 4))
+        XCTAssertEqual(PlaybackCoordinator.selectedFile(request: PlaybackRequest(source: source, title: "Bluey", season: 1, episode: 2), prepared: prepared), 0)
+        XCTAssertEqual(PlaybackCoordinator.selectedFile(request: PlaybackRequest(source: source, title: "Bluey", season: 1, episode: 4), prepared: prepared), 1)
+        XCTAssertEqual(PlaybackCoordinator.nextFile(after: 0, in: prepared.files), 1)
+        XCTAssertNil(PlaybackCoordinator.selectedFile(request: PlaybackRequest(source: source, title: "Bluey", season: 1, episode: 5), prepared: prepared))
+    }
+    func testCyrillicAndUnusualEpisodeNames() {
+        XCTAssertEqual(EpisodeIdentity.parse("Гільда С01Е01.mkv"), EpisodeIdentity(season: 1, episode: 1))
+        XCTAssertEqual(EpisodeIdentity.parse("Пантеон - S02EP05 [1080p].mkv"), EpisodeIdentity(season: 2, episode: 5))
+        XCTAssertEqual(EpisodeIdentity.parse("S010E1.mp4"), EpisodeIdentity(season: 10, episode: 1))
+        XCTAssertEqual(EpisodeIdentity.parse(name: "Кармен - Серія 05 - Витівка.mkv", path: "Cartoon/Кармен Сезон 1/Кармен - Серія 05 - Витівка.mkv"), EpisodeIdentity(season: 1, episode: 5))
+        XCTAssertNil(EpisodeIdentity.parse(name: "[01] Toy Story (1995).mkv", path: "Cartoon/Toy Story. Collection (1995-2022)/[01] Toy Story (1995).mkv"))
+    }
     func testNumberedLibraryEpisodesMatchTheirSeasonFolder() throws {
         let data = Data(#"{"id":"library:TV Shows/Show","selected":0,"files":[{"index":0,"name":"03 The Fuzzyboots Corollary (HD).m4v","path":"TV Shows/Show/Season 1/03 The Fuzzyboots Corollary (HD).m4v","size":100},{"index":27,"name":"03 The Procreation Calculation (HD).m4v","path":"TV Shows/Show/Season 12/03 The Procreation Calculation (HD).m4v","size":100}]}"#.utf8)
         let prepared = try JSONDecoder().decode(PreparedPlayback.self, from: data)

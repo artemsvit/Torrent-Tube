@@ -50,6 +50,12 @@ class MediaLibraryTests(unittest.TestCase):
         # "1-1-2 Name": season 1, episodes 1 and 2 in one file.
         self.assertEqual(items["Cartoon/Bluey (2018)"]["seasons"], 2)
 
+    def test_files_carry_their_season_and_episode(self):
+        files = {f["name"]: f for f in self.library.files("Cartoon/Bluey (2018)")}
+        self.assertEqual({k: files["1-3-4 Підкидайки.mp4"][k] for k in ("season", "episode", "last_episode")},
+                         {"season": 1, "episode": 3, "last_episode": 4})
+        self.assertNotIn("season", self.library.files("Movies/Heat (1995).mkv")[0])
+
     def test_episodes_play_in_natural_order(self):
         names = [f["name"] for f in self.library.files("TV Shows/Chernobyl")]
         self.assertEqual(names, ["Chernobyl.S01E01.mkv", "Chernobyl.S01E02.mkv", "Chernobyl.S01E10.mkv"])

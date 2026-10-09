@@ -4860,37 +4860,30 @@ function libraryMediaUrl(file) {
 
 // Season and episode of a library file, as the apps read it: S01E02 or
 // 1x02 in the name, else a "Season 1" / "Сезон 1" folder and a leading number.
-// A file with two episodes in it ("1-1-2 Name", "S01E01-E02") also has `last`.
+// The season and episode the server read from the file's name and folders
+// (episodes.py - the same reading the apps use). A file with two episodes
+// in it ("1-1-2 Name", "S01E01-E02") has `last` after `episode`.
 function episodeOf(file) {
-  const name = file.name;
-  const range = (first, second) => second && +second > first && +second - first <= 4 ? +second : first;
-  let m = name.match(/(?:^|[^a-z0-9])s(\d{1,2})[ ._-]*e(\d{1,3})(?:[ ._]*-?[ ._]*e?(\d{1,3}))?(?!\d)/i);
-  if (m) return { season: +m[1], episode: +m[2], last: range(+m[2], m[3]) };
-  m = name.match(/(?:^|[^a-z0-9])(\d{1,2})x(\d{1,3})(?!\d)/i);
-  if (m) return { season: +m[1], episode: +m[2], last: +m[2] };
-  m = name.match(/^(\d{1,2})-(\d{1,3})-(\d{1,3})(?=[ ._])/);
-  if (m && range(+m[2], m[3]) > +m[2]) return { season: +m[1], episode: +m[2], last: +m[3] };
-  const folders = file.path.split("/").slice(0, -1).reverse();
-  for (const folder of folders) {
-    const s = folder.match(/(?:^|[^\p{L}\d])(?:season|сезон|s)[ ._-]*(\d{1,2})(?!\d)/iu) || folder.match(/(?:^|[^\p{L}\d])(\d{1,2})[ ._-]+(?:season|сезон)/iu);
-    if (s) {
-      const e = name.match(/^(?:(?:episode|ep|e)[ ._-]*)?(\d{1,3})(?=[ ._-])/i);
-      return e ? { season: +s[1], episode: +e[1], last: +e[1] } : null;
-    }
-  }
-  return null;
+  return file.season != null && file.episode != null
+    ? { season: file.season, episode: file.episode, last: file.last_episode || file.episode } : null;
 }
 
 // A series' episodes: one file per season and episode (the first copy of
 // each), in order. Null for a film.
 function libraryEpisodes() {
-  const seen = new Map();
+  // Another copy of an episode already listed (also inside a double file) is skipped.
+  const covered = new Set(), rows = [];
   for (const file of libraryFileList()) {
     const id = episodeOf(file);
-    if (id && !seen.has(`${id.season}:${id.episode}`)) seen.set(`${id.season}:${id.episode}`, { ...id, file });
+    if (!id) continue;
+    const keys = [];
+    for (let n = id.episode; n <= id.last; n++) keys.push(`${id.season}:${n}`);
+    if (keys.some(k => covered.has(k))) continue;
+    keys.forEach(k => covered.add(k));
+    rows.push({ ...id, file });
   }
-  if (seen.size < 2) return null;
-  return [...seen.values()].sort((a, b) => a.season - b.season || a.episode - b.episode);
+  if (rows.length < 2) return null;
+  return rows.sort((a, b) => a.season - b.season || a.episode - b.episode);
 }
 
 // TMDB's names and stills for a season's episodes, once per season.

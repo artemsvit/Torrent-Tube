@@ -32,6 +32,7 @@ COPY playback_sessions.py .
 COPY media_library.py .
 COPY trailer_streams.py .
 COPY intro_detection.py .
+COPY episodes.py .
 COPY templates/ templates/
 COPY static/ static/
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh

@@ -17,6 +17,7 @@ from functools import wraps
 from pathlib import Path
 
 import libtorrent as lt
+import episodes
 from media_library import MediaLibrary
 from intro_detection import IntroDetector
 from playback_sessions import PlaybackSessions
@@ -2647,8 +2648,11 @@ def prepare_native_playback():
             with LOCK:
                 handle = HANDLES.get(tid)
             fs = handle.torrent_file().files()
+            # Season and episode as episodes.py reads them: the apps and the
+            # web page use this instead of parsing names themselves.
             files = [{"index": i, "name": Path(fs.file_path(i)).name,
-                      "path": fs.file_path(i), "size": fs.file_size(i)}
+                      "path": fs.file_path(i), "size": fs.file_size(i),
+                      **(episodes.identify(Path(fs.file_path(i)).name, fs.file_path(i)) or {})}
                      for i in range(fs.num_files())
                      if Path(fs.file_path(i)).suffix.lower() in VIDEO_EXTS]
             return jsonify({"id": tid, "selected": selected, "files": files})
