@@ -42,18 +42,65 @@ class PickTests(unittest.TestCase):
 
 
 class StructureTests(unittest.TestCase):
-    def files(self, *names):
-        return [{"name": n} for n in names]
+    def item(self, name, files, episodes=0):
+        return {"name": name, "files": files, "episodes": episodes}
 
     def test_episodes_make_a_show(self):
-        self.assertEqual(server.library_structure(self.files("House.S01E01.mkv", "House.S01E02.mkv")), "tv")
-        self.assertEqual(server.library_structure(self.files("01. Pilot.mkv", "02. Paternity.mkv")), "tv")
-        self.assertEqual(server.library_structure(self.files("Серія 1.mkv", "Серія 2.mkv")), "tv")
+        self.assertEqual(server.library_structure(self.item("House", 2, episodes=2)), "tv")
+        # The folder names a season, even when the files are not read as episodes.
+        self.assertEqual(server.library_structure(self.item("Патрік Мелроуз (Сезон 1)", 5)), "tv")
 
     def test_one_file_or_a_film_collection_is_a_film(self):
-        self.assertEqual(server.library_structure(self.files("Heat (1995).mkv")), "movie")
-        self.assertEqual(server.library_structure(self.files("Harry Potter and the Chamber of Secrets.mkv",
-                                                             "Harry Potter and the Goblet of Fire.mkv")), "movie")
+        self.assertEqual(server.library_structure(self.item("Heat (1995)", 1)), "movie")
+        # "1. Aladdin (1992)": numbered like episodes, but no season - films.
+        self.assertEqual(server.library_structure(self.item("Aladdin. Trilogy (1992-1996)", 3)), "movie")
+        self.assertEqual(server.library_structure(self.item("Show S01", 1, episodes=1)), "movie")
+
+
+class LibraryScanEpisodeTests(unittest.TestCase):
+    """The scan counts episodes with episodes.py - the reading the apps use."""
+
+    def scan(self, folder, names):
+        root = Path(tempfile.mkdtemp())
+        for name in names:
+            path = root / "Cartoon" / folder / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"v")
+        from media_library import MediaLibrary
+        return MediaLibrary(root, ["Cartoon"], server.VIDEO_EXTS).items()[0]
+
+    def test_a_numbered_film_collection_has_no_episodes(self):
+        item = self.scan("Aladdin. Trilogy (1992-1996)", ["1. Aladdin (1992).mkv", "2. Aladdin 2. Return of Jafar (1994).mkv"])
+        self.assertEqual((item["episodes"], item["seasons"]), (0, 0))
+        self.assertEqual(server.library_structure(item), "movie")
+
+    def test_cyrillic_and_double_episode_files_are_episodes(self):
+        item = self.scan("Bluey", ["1-1-2 Ксилофон & Лікарня.mp4", "1-3-4 Підкидайки.mp4", "Гільда С02Е01.mkv"])
+        self.assertEqual((item["episodes"], item["seasons"]), (3, 2))
+        self.assertEqual(server.library_structure(item), "tv")
+
+
+class StaleMatchTests(unittest.TestCase):
+    def test_a_match_saved_as_the_wrong_structure_is_looked_up_again(self):
+        item = {"id": "Cartoon/Aladdin. Trilogy (1992-1996)", "name": "Aladdin. Trilogy (1992-1996)", "files": 3,
+                "episodes": 0, "seasons": 0, "kind": "cartoon", "size": 3, "category": "Cartoon", "added": 1}
+        saved = {"checked": 1e12, "structure": "tv", "tmdb_id": 2745, "media_type": "tv", "confident": True}
+        submitted = []
+        original = (server.LIBRARY_META.get(item["id"]), server.TMDB_API_KEY, server.TMDB_EXECUTOR.submit)
+        try:
+            server.LIBRARY_META[item["id"]] = saved
+            server.TMDB_API_KEY = "key"
+            server.TMDB_EXECUTOR.submit = lambda fn, arg: submitted.append(arg["id"])
+            server._library_with_metadata([item])
+            self.assertEqual(submitted, [item["id"]])
+        finally:
+            if original[0] is None:
+                server.LIBRARY_META.pop(item["id"], None)
+            else:
+                server.LIBRARY_META[item["id"]] = original[0]
+            server.TMDB_API_KEY = original[1]
+            server.TMDB_EXECUTOR.submit = original[2]
+            server.LIBRARY_META_PENDING.discard(item["id"])
 
 
 class ClassifyTests(unittest.TestCase):

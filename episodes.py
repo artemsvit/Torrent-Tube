@@ -94,7 +94,3 @@ def identify(name, path=None):
         return _result(season if season is not None else 1, match.group(1))
     return None
 
-
-def season_of(name, path=None):
-    found = identify(name, path)
-    return found["season"] if found else None

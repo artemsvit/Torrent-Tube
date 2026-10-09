@@ -2446,8 +2446,6 @@ LIBRARY_PREFIX = "lib:"
 INTROS = IntroDetector(LIBRARY, STATE_DIR / "intros.json")
 
 
-# A file name that is an episode: "S01E05", "1x05", "E05", "Episode 5", "Серія 5", "05. Name".
-EPISODE_FILE_RE = re.compile(r"(?i)(?:^|[^a-z0-9])(?:s\d{1,2}[ ._-]*e\d{1,3}|\d{1,2}x\d{2,3}|ep?\d{2,3}|episode[ ._-]?\d+|сері[яї][ ._-]?\d+)(?![a-z0-9])|^\d{1,3}[ ._-]")
 LIBRARY_META_FILE = STATE_DIR / "library-metadata.json"
 LIBRARY_META_LOCK = threading.Lock()
 LIBRARY_META_PENDING = set()
@@ -2458,10 +2456,14 @@ except (OSError, ValueError):
     LIBRARY_META = {}
 
 
-def library_structure(files: list) -> str:
-    """"tv" for a folder of episodes; "movie" for one file or a collection of films."""
-    episodes = sum(1 for f in files if EPISODE_FILE_RE.search(Path(f["name"]).stem))
-    return "tv" if len(files) > 1 and episodes >= 2 else "movie"
+def library_structure(item: dict) -> str:
+    """"tv" for a folder of episodes - two or more files episodes.py reads as
+    episodes, or a folder named for a season ("Патрік Мелроуз (Сезон 1)").
+    "movie" for one file or a collection of films: "01. Madagascar (2005)"
+    is numbered like an episode, but without a season it is not one."""
+    if item.get("files", 0) > 1 and (item.get("episodes", 0) >= 2 or SERIES_NAME_RE.search(item["name"])):
+        return "tv"
+    return "movie"
 
 
 def classify_library_item(folder_kind: str, structure: str, meta) -> str:
@@ -2484,10 +2486,7 @@ def classify_library_item(folder_kind: str, structure: str, meta) -> str:
 
 def _lookup_library_item(item: dict):
     try:
-        files = LIBRARY.files(item["id"]) or []
-        structure = library_structure(files)
-        if len(files) > 1 and SERIES_NAME_RE.search(item["name"]):
-            structure = "tv"  # "Патрік Мелроуз (Сезон 1)": the folder says so even if the files don't
+        structure = library_structure(item)
         title, base, year = extract_title_and_year(item["name"])
         hint = "tv" if structure == "tv" or SERIES_NAME_RE.search(item["name"]) else "movie"
         meta = tmdb_lookup(title, base, year, hint)
@@ -2518,13 +2517,17 @@ def _library_with_metadata(items: list) -> list:
     with LIBRARY_META_LOCK:
         for item in items:
             entry = LIBRARY_META.get(item["id"])
-            stale = entry is None or (not entry.get("tmdb_id") and now - entry.get("checked", 0) > LIBRARY_META_RETRY)
+            structure = library_structure(item)
+            # Looked up again: never matched (after a week), or matched as a show
+            # while it is films (or the other way) - a fixed rule, or new files.
+            stale = (entry is None or entry.get("structure") != structure
+                     or (not entry.get("tmdb_id") and now - entry.get("checked", 0) > LIBRARY_META_RETRY))
             if stale and TMDB_API_KEY and item["id"] not in LIBRARY_META_PENDING:
                 LIBRARY_META_PENDING.add(item["id"])
                 TMDB_EXECUTOR.submit(_lookup_library_item, item)
             merged = dict(item, folder_kind=item["kind"])
             if entry:
-                merged["kind"] = classify_library_item(item["kind"], entry.get("structure", "movie"), entry)
+                merged["kind"] = classify_library_item(item["kind"], structure, entry)
                 for key in ("poster", "rating", "overview", "tmdb_id", "media_type", "display_title"):
                     if entry.get(key) is not None:
                         merged[key] = entry[key]

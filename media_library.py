@@ -19,11 +19,6 @@ def _natural(name: str):
     return [int(part) if part.isdigit() else part.lower() for part in re.split(r"(\d+)", name)]
 
 
-def season_of(path: Path):
-    """The season a video belongs to (see episodes.py). None for a film."""
-    return episodes.season_of(path.name, path.as_posix())
-
-
 def _hidden(name: str) -> bool:
     # Synology's @eaDir thumbnails, .DS_Store, the stream cache, app state.
     return name.startswith((".", "@", "#"))
@@ -76,6 +71,8 @@ class MediaLibrary:
                     if not videos:
                         continue
                     title, year = self.describe(name)
+                    # Each video's season and episode (episodes.py), for a folder of several.
+                    found = [episodes.identify(v.name, self._relative(v)) for v in videos] if len(videos) > 1 else []
                     items.append({
                         "title": title or name,
                         "year": year,
@@ -84,8 +81,10 @@ class MediaLibrary:
                         "category": category,
                         "kind": kind,
                         "files": len(videos),
-                        # How many seasons the episodes are in (0 for a film).
-                        "seasons": len({s for s in map(season_of, videos) if s is not None}) if len(videos) > 1 else 0,
+                        # How many seasons the episodes are in (0 for a film), and how
+                        # many files are episodes - two or more make it a show.
+                        "seasons": len({f["season"] for f in found if f}),
+                        "episodes": sum(1 for f in found if f),
                         "size": sum(v.stat().st_size for v in videos),
                         "added": int(entry.stat().st_mtime),
                     })
@@ -93,6 +92,12 @@ class MediaLibrary:
                     continue  # unreadable or vanished mid-scan
         items.sort(key=lambda item: item["added"], reverse=True)
         return items
+
+    def _relative(self, path: Path) -> str:
+        try:
+            return path.relative_to(self.root).as_posix()
+        except ValueError:
+            return path.name
 
     def items(self, refresh=False) -> list:
         with self._lock:
