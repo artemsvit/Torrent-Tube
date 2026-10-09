@@ -56,6 +56,16 @@ GitHub Actions (`.github/workflows/docker-publish.yml`) builds the image
 tab. It needs the repository secrets `DOCKERHUB_USERNAME` and
 `DOCKERHUB_TOKEN` (a Docker Hub access token with Read & Write).
 
+The NAS updates itself: `nas-update.sh` (next to `docker-compose.yml` in
+`/volume1/docker/torrenttube`) runs every hour from DSM Task Scheduler. It
+pulls `latest`, and when Docker Hub has a new image it recreates the container
+and deletes the old image, so only one stays. It never restarts while a film
+is streaming; it tries again the next hour. It writes what it did to
+`nas-update.log` in the same folder. Set it up once in DSM: Control Panel →
+Task Scheduler → Create → Scheduled Task → User-defined script; User: root;
+Schedule: daily, every hour; Run command:
+`/volume1/docker/torrenttube/nas-update.sh`.
+
 By hand, from a machine with Docker:
 
 ```bash

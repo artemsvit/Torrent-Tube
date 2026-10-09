@@ -9,6 +9,7 @@ on:
     paths-ignore:
       - "appletv/**"
       - "**.md"
+      - "nas-update.sh"
   workflow_dispatch:
 
 concurrency:
