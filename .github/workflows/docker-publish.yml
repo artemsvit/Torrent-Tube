@@ -1,6 +1,7 @@
-# Builds the server image and publishes it to Docker Hub - the one source of
-# truth for the NAS, which only pulls artsvit/torrenttube:latest. The Apple
-# apps are not part of the image (see .dockerignore).
+# Builds the server image, runs the server tests inside it, and only then
+# publishes it to Docker Hub - the one source of truth for the NAS, which only
+# pulls artsvit/torrenttube:latest. The Apple apps are not part of the image
+# (see .dockerignore).
 name: Publish server image
 
 on:
@@ -22,10 +23,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
+      # The image as it will run on the NAS, kept locally for the tests.
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: torrenttube:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      # The tests are not in the image (.dockerignore): mount them in.
+      - name: Server tests inside the image
+        run: >
+          docker run --rm --entrypoint python3
+          -v "$PWD/tests:/app/tests:ro" -w /app torrenttube:test
+          -m unittest discover -s tests
       - uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+      # The same build again, all from cache: only now does it reach Docker Hub.
       - uses: docker/build-push-action@v6
         with:
           context: .
@@ -35,4 +52,3 @@ jobs:
             artsvit/torrenttube:latest
             artsvit/torrenttube:${{ github.sha }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
