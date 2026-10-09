@@ -71,6 +71,7 @@
   }
 
   * { box-sizing: border-box; }
+  ::selection { background: var(--accent); color: #fff; }
 
   /* Reserve the scrollbar's gutter permanently, so switching between short
      content (no scrollbar) and long content (Discover's 50-item feed)
@@ -397,6 +398,23 @@
   }
   /* The library belongs to Downloads: Discover (the main screen) is as before. */
   body.discover-active .layout .library-panel { display: none !important; }
+  /* Downloads and Buffering appear beside the library only when they hold
+     something; with nothing in them the library takes the full width. */
+  body:not(.discover-active) .layout.has-library.downloads-empty { grid-template-columns: minmax(0, 1fr); }
+  body:not(.discover-active) .layout.has-library.downloads-empty .side-column { display: none; }
+  body:not(.discover-active) .layout.has-library.no-downloads #downloadsTab { display: none; }
+
+  /* Search results are page content: they take the place of the library
+     and Downloads until closed. */
+  .search-page { display: none; }
+  .search-page:has(#searchDropdown.is-open) { display: block; margin-bottom: 20px; }
+  .layout:has(#searchDropdown.is-open) { display: block !important; }
+  .layout:has(#searchDropdown.is-open) > :not(.search-page) { display: none !important; }
+  .search-page .panel-header { align-items: center; }
+  .search-page .search-title { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .search-page .search-close { margin-left: auto; flex: none; }
+  .search-page .search-dropdown { position: static; max-height: none; overflow: visible; background: none; border: 0; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; padding: 0; z-index: auto; }
+  .search-page .search-dropdown .item { background: var(--surface-solid); }
   @media (max-width: 1000px) {
     .layout.has-library { display: flex; flex-direction: column; }
     .layout.has-library > * { width: 100%; }
@@ -414,7 +432,15 @@
     .dt-episode-still { width: 96px; }
   }
   .library-panel .panel-header { flex-wrap: wrap; gap: 10px; }
-  .library-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+  .library-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; align-items: center; }
+  .library-kinds { display: contents; }
+  /* Search inside the library, a chip like the tabs beside it. */
+  .library-chip.library-filter { display: inline-flex; align-items: center; gap: 6px; cursor: text; font-weight: 500; }
+  .library-filter svg { flex: none; color: var(--text-secondary); }
+  .library-filter input { border: 0; outline: 0; background: none; color: inherit; font: inherit; width: 120px; padding: 0; }
+  .library-filter input::placeholder { color: var(--text-secondary); }
+  .library-filter:focus-within { border-color: var(--accent); }
+  .library-empty { grid-column: 1 / -1; padding: 32px 8px; text-align: center; color: var(--text-secondary); font-size: 14px; }
   .library-chip {
     border: 1px solid var(--border); background: var(--surface); color: var(--text);
     border-radius: var(--radius-pill); padding: 6px 13px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
@@ -1987,7 +2013,7 @@
   <div class="searchbar">
     <div class="search-field">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-      <input type="text" id="mainInput" placeholder="Search or paste link" autofocus autocomplete="off">
+      <input type="text" id="mainInput" placeholder="Search torrents, library, or paste a magnet link" autofocus autocomplete="off">
       <button type="button" class="clear-field-btn" id="clearMainInput" aria-label="Clear" title="Clear"></button>
     </div>
     <input type="file" id="fileInput" accept=".torrent" style="display:none">
@@ -1999,18 +2025,27 @@
     <button class="btn-circle btn-circle-accent" id="uploadBtn" title="Upload a .torrent file" aria-label="Upload a .torrent file">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
     </button>
-    <div class="search-dropdown" id="searchDropdown"></div>
   </div>
 </div>
 
 <div class="layout" id="layout">
+  <section class="panel search-page" id="searchPage">
+    <div class="panel-header">
+      <div class="search-title" id="searchTitle">Results</div>
+      <button type="button" class="btn-secondary search-close" id="searchCloseBtn">Close</button>
+    </div>
+    <div class="search-dropdown" id="searchDropdown"></div>
+  </section>
   <!-- What is already in the download folders, matched on TMDB by the server -
        the same library, tabs and metadata as the Apple apps. -->
   <section class="panel library-panel" id="libraryPanel" hidden>
     <div class="panel-header">
       <div class="section-label">My library</div>
       <span class="count-badge" id="libraryCount">0</span>
-      <div class="library-chips" id="libraryChips"></div>
+      <div class="library-chips" id="libraryChips">
+        <label class="library-chip library-filter"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input type="search" id="libraryFilter" placeholder="Search" autocomplete="off" aria-label="Search the library"></label>
+        <span class="library-kinds" id="libraryKinds"></span>
+      </div>
     </div>
     <p class="library-note" id="libraryNote" hidden></p>
     <div class="library-grid" id="libraryGrid"></div>
@@ -2607,7 +2642,7 @@ function handleGo() {
 document.addEventListener("click", (e) => {
   // A details popup opened from a search result sits outside .searchbar -
   // clicking around in it shouldn't close the results underneath.
-  if (!e.target.closest(".searchbar, .modal-overlay")) closeSearchDropdown();
+  if (e.target.closest("#searchCloseBtn")) { closeSearchDropdown(); window.scrollTo({ top: 0 }); }
 });
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
@@ -2803,8 +2838,8 @@ function renderStreamItem(st) {
 // The Buffering block under Downloads - shown only while something plays,
 // and not over Discover.
 function renderStreams(streams) {
-  // Always there beside Downloads (empty like it), hidden only in Discover.
-  streamsPanel.hidden = discoverMode;
+  // Only while something plays, and not over Discover.
+  streamsPanel.hidden = discoverMode || !streams.length;
   streamsCount.textContent = streams.length;
   if (streams.length) streamsList.replaceChildren(...streams.map(renderStreamItem));
   else streamsList.innerHTML = `<div class="empty-state">Nothing is playing. Films you play in Infuse or VLC buffer here.</div>`;
@@ -2900,6 +2935,7 @@ async function refresh() {
     currentTorrents = torrents;
     clearAllBtn.disabled = torrents.length === 0;
     layoutEl.classList.toggle("downloads-empty", torrents.length === 0 && !currentStreams.length);
+    layoutEl.classList.toggle("no-downloads", torrents.length === 0);
     if (!discoverMode) render(torrents);
     renderStreams(currentStreams);
   } catch (e) {
@@ -3076,6 +3112,7 @@ function exitDiscover() {
 }
 
 viewToggleBtn.addEventListener("click", () => {
+  closeSearchDropdown();
   if (discoverMode) exitDiscover(); else enterDiscover();
 });
 clearAllBtn.addEventListener("click", clearAllTorrents);
@@ -3356,6 +3393,8 @@ let lastSearchQuery = "";
 async function runSearch(query) {
   const requestId = ++searchRequestId;
   lastSearchQuery = query;
+  document.getElementById("searchTitle").textContent = `Results for “${query}”`;
+  window.scrollTo({ top: 0 });
   if (!libraryLoaded) await loadLibrary();
   // The library answers at once; torrents follow below it.
   const inLibrary = librarySearch(query);
@@ -4694,6 +4733,8 @@ if (window.ResizeObserver) new ResizeObserver(syncTopBarHeight).observe(topBarEl
 // TMDB, sorted into Movies, TV Shows and Cartoons - the same as the apps.
 const libraryPanel = document.getElementById("libraryPanel");
 const libraryChips = document.getElementById("libraryChips");
+const libraryKinds = document.getElementById("libraryKinds");
+const libraryFilter = document.getElementById("libraryFilter");
 const libraryGrid = document.getElementById("libraryGrid");
 const libraryNote = document.getElementById("libraryNote");
 const libraryCount = document.getElementById("libraryCount");
@@ -4726,15 +4767,21 @@ function renderLibrary() {
   libraryPanel.hidden = !show;
   layoutEl.classList.toggle("has-library", show);
   if (!show) return;
-  const counts = Object.fromEntries(LIBRARY_KINDS.map(([k]) => [k, libraryItems.filter(i => i.kind === k).length]));
-  if (!librarySection || !counts[librarySection]) librarySection = (LIBRARY_KINDS.find(([k]) => counts[k]) || ["movie"])[0];
-  libraryCount.textContent = libraryItems.length;
-  libraryChips.innerHTML = LIBRARY_KINDS.filter(([k]) => counts[k]).map(([k, label]) =>
+  const words = plainText(libraryFilter.value).split(" ").filter(Boolean);
+  const items = words.length ? libraryItems.filter(item => {
+    const hay = " " + plainText([item.display_title, item.title, item.name, item.original_title].filter(Boolean).join(" ")) + " ";
+    return words.every(w => hay.includes(" " + w));
+  }) : libraryItems;
+  const counts = Object.fromEntries(LIBRARY_KINDS.map(([k]) => [k, items.filter(i => i.kind === k).length]));
+  if (!librarySection || !counts[librarySection]) librarySection = (LIBRARY_KINDS.find(([k]) => counts[k]) || [librarySection || "movie"])[0];
+  libraryCount.textContent = items.length;
+  libraryKinds.innerHTML = LIBRARY_KINDS.filter(([k]) => counts[k]).map(([k, label]) =>
     `<button type="button" class="library-chip${k === librarySection ? " is-active" : ""}" data-kind="${k}">${label} · ${counts[k]}</button>`).join("");
   libraryNote.hidden = !libraryPending;
   libraryNote.textContent = libraryPending ? `Matching ${libraryPending} new title${libraryPending === 1 ? "" : "s"} on TMDB…` : "";
   libraryGrid.innerHTML = "";
-  libraryItems.filter(i => i.kind === librarySection).forEach(item => libraryGrid.appendChild(buildLibraryCard(item)));
+  items.filter(i => i.kind === librarySection).forEach(item => libraryGrid.appendChild(buildLibraryCard(item)));
+  if (!items.length) libraryGrid.innerHTML = `<div class="library-empty">Nothing in your library matches “${escapeHtml(libraryFilter.value.trim())}”.</div>`;
 }
 
 function buildLibraryCard(item) {
@@ -4761,13 +4808,15 @@ window.addEventListener("resize", measureTopBar);
 measureTopBar();
 
 libraryChips.addEventListener("click", e => {
-  const chip = e.target.closest(".library-chip");
+  const chip = e.target.closest(".library-chip[data-kind]");
   if (chip) { librarySection = chip.dataset.kind; renderLibrary(); libraryGrid.scrollTop = 0; }
 });
 
+libraryFilter.addEventListener("input", () => { renderLibrary(); libraryGrid.scrollTop = 0; });
+libraryFilter.addEventListener("keydown", e => { if (e.key === "Escape" && libraryFilter.value) { e.stopPropagation(); libraryFilter.value = ""; renderLibrary(); } });
+
 // The details popup, with the title's files to play instead of releases.
 function openLibraryTitle(item) {
-  closeSearchDropdownIfOpen();
   openDetails({
     title: libraryTitle(item), clean_title: libraryTitle(item), poster: item.poster, rating: item.rating,
     overview: item.overview, tmdb_id: item.tmdb_id, media_type: item.media_type, library: item,
