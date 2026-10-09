@@ -202,6 +202,11 @@ struct MobileRoot: View {
     /// Mac: the top row's search field; while it has text the tab shows results.
     @State private var searchText = ""
     @FocusState private var searchFocused: Bool
+    /// Mac: the top row's width and its tabs' width - when the search field
+    /// would run into the tabs, it folds into a round button.
+    @State private var macBarWidth: CGFloat = 0
+    @State private var macTabsWidth: CGFloat = 0
+    @State private var macSearchOpen = false
     /// Mac: how deep Settings sits in the current tab's stack (nil: not open).
     @State private var settingsDepth: Int?
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -296,6 +301,11 @@ struct MobileRoot: View {
                     .padding(4)
                     .background(.ultraThinMaterial, in: Capsule())
                     .overlay(Capsule().strokeBorder(.white.opacity(0.1)))
+                    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { macTabsWidth = $0 }
+                    // A narrow window: an open search takes the tabs' place (its
+                    // results replace the page anyway).
+                    .opacity(macSearchCompact && macSearchExpanded ? 0 : 1)
+                    .allowsHitTesting(!(macSearchCompact && macSearchExpanded))
                     HStack(spacing: 10) {
                         MacBarButton(symbol: "gearshape", label: L("Settings")) {
                             searchText = ""
@@ -307,12 +317,26 @@ struct MobileRoot: View {
                             .keyboardShortcut("[", modifiers: .command)
                         Spacer(minLength: 0)
                         // Settings needs no search; the slot stays so nothing moves.
-                        MacSearchField(text: $searchText, focused: $searchFocused)
-                            .opacity(inSettings ? 0 : 1).allowsHitTesting(!inSettings)
+                        Group {
+                            if macSearchCompact && !macSearchExpanded {
+                                MacBarButton(symbol: "magnifyingglass", label: L("Search")) { macSearchOpen = true }
+                                    .keyboardShortcut("f", modifiers: .command)
+                            } else {
+                                MacSearchField(text: $searchText, focused: $searchFocused,
+                                               width: macSearchCompact ? max(220, min(420, macBarWidth - MacBar.leftWidth - 48)) : MacBar.searchWidth)
+                                    .onAppear { if macSearchOpen { searchFocused = true } }
+                            }
+                        }
+                        .opacity(inSettings ? 0 : 1).allowsHitTesting(!inSettings)
                     }
                     .padding(.horizontal, 16)
                 }
                 .frame(height: MacBar.height)
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { macBarWidth = $0 }
+                .onChange(of: searchFocused) { _, focused in
+                    // Folds back once it is left empty.
+                    if !focused && searchText.isEmpty { macSearchOpen = false }
+                }
                 // Pinned to the window's top edge: pushed pages (a title,
                 // Settings) get a taller top inset, and the row must not follow it.
                 .frame(maxHeight: .infinity, alignment: .top)
@@ -323,6 +347,11 @@ struct MobileRoot: View {
             }
             .onChange(of: searching) { _, now in if now { paths[tab] = NavigationPath() } }
     }
+    /// Not enough room beside the centred tabs for the full search field.
+    private var macSearchCompact: Bool {
+        macBarWidth > 0 && (macBarWidth - macTabsWidth) / 2 < MacBar.searchWidth + 16 + 12
+    }
+    private var macSearchExpanded: Bool { macSearchOpen || searchFocused || !searchText.isEmpty }
     private func goBack() {
         if var path = paths[tab], !path.isEmpty { path.removeLast(); paths[tab] = path }
         else { searchText = ""; searchFocused = false }

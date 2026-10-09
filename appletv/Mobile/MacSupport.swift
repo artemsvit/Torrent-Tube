@@ -58,12 +58,16 @@ struct BarelessWindow: NSViewRepresentable {
 enum MacBar {
     static let height: CGFloat = 70
     static let control: CGFloat = 46
+    static let searchWidth: CGFloat = 280
+    /// Settings and Back with their padding, at the left of the row.
+    static let leftWidth: CGFloat = 16 + control + 10 + control
 }
 
 /// The always-visible search field at the right of the Mac top row (⌘F).
 struct MacSearchField: View {
     @Binding var text: String
     var focused: FocusState<Bool>.Binding
+    var width: CGFloat = MacBar.searchWidth
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass").font(.system(size: 16, weight: .semibold)).foregroundStyle(.white.opacity(0.7))
@@ -77,7 +81,7 @@ struct MacSearchField: View {
             }
         }
         .padding(.horizontal, 14)
-        .frame(width: 280, height: MacBar.control)
+        .frame(width: width, height: MacBar.control)
         .background(.ultraThinMaterial, in: Capsule())
         .overlay(Capsule().strokeBorder(.white.opacity(focused.wrappedValue ? 0.35 : 0.1)))
         .background { Button("") { focused.wrappedValue = true }.keyboardShortcut("f", modifiers: .command).hidden() }
