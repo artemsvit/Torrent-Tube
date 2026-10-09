@@ -535,10 +535,28 @@ function announceAutoRemoved(removed) {
   });
 }
 
+// One request at a time: a call while one runs asks for one more after it
+// (so a pause/remove shows at once). An answer equal to the last one, on the
+// same screen, changes nothing on the page - so no rows are rebuilt.
+let refreshRunning = false, refreshAgain = false, lastRefreshKey = "";
 async function refresh() {
+  if (refreshRunning) { refreshAgain = true; return; }
+  refreshRunning = true;
+  try {
+    await refreshOnce();
+  } finally {
+    refreshRunning = false;
+    if (refreshAgain) { refreshAgain = false; refresh(); }
+  }
+}
+
+async function refreshOnce() {
   try {
     const res = await fetch("/api/torrents");
-    const data = await res.json();
+    const body = await res.text();
+    const key = `${discoverMode}|${body}`;
+    if (key === lastRefreshKey) return;
+    const data = JSON.parse(body);
     const torrents = data.torrents || [];
     currentStreams = data.streams || [];
     announceAutoRemoved(data.auto_removed || []);
@@ -555,6 +573,7 @@ async function refresh() {
     layoutEl.classList.toggle("no-downloads", torrents.length === 0);
     if (!discoverMode) render(torrents);
     renderStreams(currentStreams);
+    lastRefreshKey = key;  // only once it is on the page: a failed render tries again
   } catch (e) {
     // Transient network hiccup; the next poll will retry.
   }
@@ -2627,6 +2646,9 @@ async function init() {
     renderViewToggleBtn();
   }
   refresh();
-  setInterval(refresh, 1500);
+  // Every 1.5 s while the page is in view; a tab in the background asks
+  // nothing and catches up the moment it is shown again.
+  setInterval(() => { if (!document.hidden) refresh(); }, 1500);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
 }
 init();
