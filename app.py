@@ -22,7 +22,7 @@ from media_library import MediaLibrary
 from intro_detection import IntroDetector
 from playback_sessions import PlaybackSessions
 from trailer_streams import TrailerError, TrailerStreams
-from flask import Flask, Response, jsonify, redirect, render_template, request, send_file
+from flask import Flask, Response, jsonify, redirect, render_template, request, send_file, url_for
 
 DOWNLOAD_DIR = Path(os.environ.get("TORRENTTUBE_DOWNLOAD_DIR") or (Path.home() / "Downloads" / "TorrentTube"))
 DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -175,6 +175,35 @@ TMDB_EXECUTOR = ThreadPoolExecutor(max_workers=8)
 app = Flask(__name__)
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024  # .torrent files are tiny; 8MB is generous
+
+
+# The page's own stylesheet and script carry a hash of their content in the
+# URL, so browsers keep them for a year and still fetch a new version the
+# moment it changes.
+_ASSET_HASHES = {}
+
+
+def asset_url(name):
+    path = Path(app.static_folder) / name
+    try:
+        stamp = path.stat().st_mtime_ns
+    except OSError:
+        return url_for("static", filename=name)
+    cached = _ASSET_HASHES.get(name)
+    if not cached or cached[0] != stamp:
+        cached = (stamp, hashlib.sha1(path.read_bytes()).hexdigest()[:12])
+        _ASSET_HASHES[name] = cached
+    return url_for("static", filename=name, v=cached[1])
+
+
+app.jinja_env.globals["asset_url"] = asset_url
+
+
+@app.after_request
+def cache_versioned_assets(response):
+    if request.endpoint == "static" and request.args.get("v") and response.status_code == 200:
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    return response
 TRAILER_STREAMS = TrailerStreams()
 
 STATE_NAMES = {

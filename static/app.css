@@ -1,0 +1,1976 @@
+/* Torrent Tube web page - the styles of templates/index.html. */
+  :root {
+    --bg-base: #f4f4f6;
+    --blob-1: rgba(60, 140, 255, 0.20);
+    --blob-2: rgba(80, 200, 180, 0.16);
+    --blob-3: rgba(140, 120, 255, 0.14);
+
+    --surface: rgba(255, 255, 255, 0.62);
+    --surface-solid: rgba(255, 255, 255, 0.9);
+    --surface-hover: rgba(255, 255, 255, 0.85);
+    --border: rgba(0, 0, 0, 0.07);
+    --border-strong: rgba(0, 0, 0, 0.13);
+    --text: #1d1d1f;
+    --text-secondary: #6e6e73;
+    --text-tertiary: #a1a1a6;
+    --accent: #0668e1;
+    --accent-hover: #2b8aff;
+    --accent-soft: rgba(6, 104, 225, 0.10);
+    --success: #1f9d4b;
+    --danger: #d9730d;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+    --shadow-lg: 0 16px 40px -12px rgba(0, 0, 0, 0.16);
+    --blur: blur(26px) saturate(180%);
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 20px;
+    --radius-pill: 980px;
+    --ui-zoom: 1.12;
+  }
+
+  html[data-theme="dark"] {
+    --bg-base: #08080a;
+    --blob-1: rgba(60, 140, 255, 0.16);
+    --blob-2: rgba(70, 210, 180, 0.14);
+    --blob-3: rgba(140, 110, 255, 0.14);
+
+    --surface: rgba(32, 32, 36, 0.55);
+    --surface-solid: rgba(28, 28, 32, 0.92);
+    --surface-hover: rgba(44, 44, 48, 0.7);
+    --border: rgba(255, 255, 255, 0.08);
+    --border-strong: rgba(255, 255, 255, 0.16);
+    --text: #f5f5f7;
+    --text-secondary: #a1a1a6;
+    --text-tertiary: #6e6e73;
+    --accent: #3b93ff;
+    --accent-hover: #62a9ff;
+    --accent-soft: rgba(59, 147, 255, 0.16);
+    --success: #32d158;
+    --danger: #ff9f0a;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 20px 48px -12px rgba(0, 0, 0, 0.55);
+  }
+
+  * { box-sizing: border-box; }
+  ::selection { background: var(--accent); color: #fff; }
+
+  /* Reserve the scrollbar's gutter permanently, so switching between short
+     content (no scrollbar) and long content (Discover's 50-item feed)
+     doesn't shift the whole page a scrollbar-width to the left/right. */
+  html { scrollbar-gutter: stable; }
+
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", sans-serif;
+    background: var(--bg-base);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    transition: background 0.3s ease, color 0.3s ease;
+    min-height: 100vh;
+  }
+
+  /* Desktop-only scale-up (~2 clicks of browser zoom). Mobile stays untouched.
+     Viewport units don't get the zoom multiplier the way px lengths do, so
+     `min-height: 100vh` above would render at 100vh * zoom (overflowing the
+     real viewport) unless divided back down here - same fix applies to
+     every other vh-based calc() below once zoom is active. */
+  @media (min-width: 641px) {
+    body { zoom: var(--ui-zoom); min-height: calc(100vh / var(--ui-zoom)); }
+  }
+
+  .bg-decor {
+    position: fixed;
+    inset: -10%;
+    z-index: -1;
+    background:
+      radial-gradient(circle at 12% 18%, var(--blob-1), transparent 42%),
+      radial-gradient(circle at 88% 12%, var(--blob-2), transparent 45%),
+      radial-gradient(circle at 45% 92%, var(--blob-3), transparent 48%);
+    filter: blur(60px);
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+
+  svg { display: block; flex-shrink: 0; }
+
+  /* ---------- Header ---------- */
+
+  .top-bar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: var(--surface);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    border-bottom: 1px solid var(--border);
+    padding-top: env(safe-area-inset-top);
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 28px 12px;
+  }
+  .logo-mark {
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+    background: linear-gradient(145deg, var(--accent-hover), var(--accent));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: var(--shadow-sm);
+  }
+  .logo-mark svg { width: 15px; height: 15px; }
+  .brand-text { flex: 1; min-width: 0; }
+  .brand-text h1 {
+    font-size: 14.5px;
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+  .brand-text p {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin: 1px 0 0;
+  }
+
+  .theme-toggle { position: relative; }
+  .theme-toggle svg { position: absolute; transition: opacity 0.2s, transform 0.3s; }
+  .theme-toggle .icon-sun { opacity: 0; transform: rotate(-90deg) scale(0.5); }
+  .theme-toggle .icon-moon { opacity: 1; transform: rotate(0) scale(1); }
+  html[data-theme="dark"] .theme-toggle .icon-sun { opacity: 1; transform: rotate(0) scale(1); }
+  html[data-theme="dark"] .theme-toggle .icon-moon { opacity: 0; transform: rotate(90deg) scale(0.5); }
+
+  /* ---------- Add bar ---------- */
+
+  .searchbar {
+    display: flex;
+    gap: 10px;
+    padding: 0 28px 14px;
+    position: relative;
+  }
+  .search-field {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  /* Direct-child only: the dropdown that lives inside .search-field is full
+     of its own icons (result cards, buttons) that must NOT be pulled into
+     this absolute-positioned search-glyph slot. */
+  .search-field > svg {
+    position: absolute;
+    left: 15px;
+    z-index: 1;
+    color: var(--text-secondary);
+    pointer-events: none;
+  }
+  input[type="text"] {
+    width: 100%;
+    padding: 12px 44px 12px 38px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    color: var(--text);
+    font-size: 14px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+  }
+  input[type="text"]::placeholder { color: var(--text-tertiary); }
+  input[type="text"]:focus {
+    border-color: var(--accent);
+    background: var(--surface-hover);
+    box-shadow: 0 0 0 4px var(--accent-soft);
+  }
+
+  /* A CSS-drawn X (two rotated bars) instead of an inline SVG: pixel-perfect
+     centering via transform: translate(-50%,-50%), independent of any
+     per-browser SVG intrinsic-size quirks. */
+  .clear-field-btn {
+    position: absolute;
+    right: 8px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: transparent;
+    border: none;
+    color: var(--text-tertiary);
+    padding: 0;
+    display: none;
+    flex-shrink: 0;
+    cursor: pointer;
+    z-index: 1;
+  }
+  .clear-field-btn.is-visible { display: block; }
+  .clear-field-btn:hover { background: var(--border); color: var(--text); }
+  .clear-field-btn::before,
+  .clear-field-btn::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 12px;
+    height: 1.6px;
+    background: currentColor;
+    border-radius: 1px;
+  }
+  .clear-field-btn::before { transform: translate(-50%, -50%) rotate(45deg); }
+  .clear-field-btn::after { transform: translate(-50%, -50%) rotate(-45deg); }
+
+  button {
+    border: none;
+    border-radius: var(--radius-md);
+    font-family: inherit;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    /* No `background` here on purpose: several buttons are a gradient at
+       rest and a flat color on hover (.btn-primary, .btn-circle-accent,
+       .btn-circle-discover, the danger button), and a browser can't
+       smoothly interpolate gradient -> solid - it either snaps or shows a
+       broken in-between frame, which reads as the button "blinking" on
+       hover. Leaving background out of the transition list means it just
+       changes instantly instead of failing to animate. */
+    transition: opacity 0.15s, border-color 0.15s, transform 0.1s, box-shadow 0.15s;
+  }
+  button:disabled { opacity: 0.4; cursor: default; }
+  button:active:not(:disabled) { transform: scale(0.97); }
+
+  .btn-primary {
+    padding: 12px 22px;
+    background: linear-gradient(180deg, var(--accent-hover), var(--accent));
+    color: white;
+    box-shadow: var(--shadow-sm);
+  }
+  .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+
+  /* Icon shown only on phones (see the 480px query), where the button
+     collapses to icon-only to save the label's horizontal space. */
+  .go-btn-icon { display: none; align-items: center; justify-content: center; }
+
+  .btn-circle {
+    position: relative;
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .btn-badge {
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: var(--radius-pill);
+    /* The button underneath this badge is itself an orange gradient, so an
+       orange (--danger) fill barely showed up against it - use the page
+       background instead, which reads clearly against any button color. */
+    background: var(--bg-base);
+    color: var(--text);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 16px;
+    text-align: center;
+    box-shadow: 0 0 0 2px var(--bg-base);
+  }
+  .btn-circle-accent {
+    background: linear-gradient(180deg, #34c766, var(--success));
+    color: white;
+    box-shadow: var(--shadow-sm);
+  }
+  .btn-circle-accent:hover:not(:disabled) { background: #34c766; }
+
+  .btn-circle-discover {
+    background: linear-gradient(180deg, #ffab40, #ff8f00);
+    color: white;
+    box-shadow: var(--shadow-sm);
+  }
+  .btn-circle-discover:hover:not(:disabled) { background: #ff8f00; }
+
+  .btn-pill { border-radius: var(--radius-pill); }
+
+  .btn-secondary {
+    padding: 12px 18px;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    color: var(--text);
+    border-radius: var(--radius-pill);
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    white-space: nowrap;
+  }
+  .btn-secondary svg { width: 14px; height: 14px; }
+  .btn-secondary:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); background: var(--surface-hover); }
+
+  .icon-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding: 0;
+  }
+  .icon-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+
+  .action-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--surface-solid);
+    border: 1px solid var(--border-strong);
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding: 0;
+  }
+  .action-btn svg { width: 14px; height: 14px; }
+  .action-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  .action-btn.danger:hover:not(:disabled) { border-color: var(--danger); color: var(--danger); }
+
+  /* ---------- Layout ---------- */
+
+  .layout {
+    width: 100%;
+    padding: 16px 28px 28px;
+  }
+  /* My library on the left (about three quarters), Downloads and Buffering
+     in a column on the right. One column when there is no library, in
+     Discover, and on narrow screens (Downloads first there). */
+  .layout.has-library {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(320px, 1fr);
+    gap: 20px;
+    align-items: start;
+  }
+  .side-column { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+  body.discover-active .layout.has-library { display: block; }
+  /* Wide screens: the library keeps its title and tabs in place and scrolls
+     only its posters, the height of the window under the top bar. (Body
+     zoom does not scale viewport units, hence the division.) */
+  @media (min-width: 1001px) {
+    .layout.has-library .library-panel {
+      position: sticky; top: calc(var(--topbar-h, 140px) + 16px);
+      height: calc(100dvh / var(--ui-zoom) - var(--topbar-h, 140px) - 44px); min-height: 420px;
+      display: flex; flex-direction: column;
+    }
+    .layout.has-library .library-grid {
+      flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+      align-content: start; padding: 6px 8px 16px 2px; margin-right: -8px;
+    }
+  }
+  /* The library belongs to Downloads: Discover (the main screen) is as before. */
+  body.discover-active .layout .library-panel { display: none !important; }
+  /* Downloads and Buffering appear beside the library only when they hold
+     something; with nothing in them the library takes the full width. */
+  body:not(.discover-active) .layout.has-library.downloads-empty { grid-template-columns: minmax(0, 1fr); }
+  body:not(.discover-active) .layout.has-library.downloads-empty .side-column { display: none; }
+  body:not(.discover-active) .layout.has-library.no-downloads #downloadsTab { display: none; }
+
+  /* Search results are page content: they take the place of the library
+     and Downloads until closed. */
+  .search-page { display: none; }
+  .search-page:has(#searchDropdown.is-open) { display: block; margin-bottom: 20px; }
+  .layout:has(#searchDropdown.is-open) { display: block !important; }
+  .layout:has(#searchDropdown.is-open) > :not(.search-page) { display: none !important; }
+  .search-page .panel-header { align-items: center; }
+  .search-page .search-title { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .search-page .search-close { margin-left: auto; flex: none; }
+  .search-page .search-dropdown { position: static; max-height: none; overflow: visible; background: none; border: 0; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; padding: 0; z-index: auto; }
+  .search-page .search-dropdown .item { background: var(--surface-solid); }
+  @media (max-width: 1000px) {
+    .layout.has-library { display: flex; flex-direction: column; }
+    .layout.has-library > * { width: 100%; }
+    /* Downloads first only when there is something in them. */
+    .layout.has-library:not(.downloads-empty) .side-column { order: -1; }
+    .layout.downloads-empty #downloadsTab .empty-state { padding: 14px 8px; }
+    .layout.downloads-empty #downloadsTab .clear-all-btn { display: none; }
+  }
+  @media (max-width: 700px) {
+    /* The title and count on one line, the tabs below in one sideways row. */
+    /* The search on its own line, the tabs below in one sideways row. */
+    .library-panel .library-chips { flex-wrap: wrap; }
+    .library-panel .library-chips .library-filter { order: -1; flex-basis: 100%; margin-left: 0; }
+    .library-filter input { width: 100%; }
+    .library-panel .library-kinds { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; flex-basis: 100%; }
+    .library-panel .library-kinds::-webkit-scrollbar { display: none; }
+    .library-panel .library-chip { flex: none; }
+    .library-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 16px 10px; }
+    .dt-episode-still { width: 96px; }
+  }
+  .library-panel .panel-header { flex-wrap: wrap; gap: 10px; }
+  /* Tabs on the left, the library's search on the right. */
+  .library-chips { display: flex; gap: 6px; align-items: center; flex: 1; min-width: 0; }
+  .library-kinds { display: flex; gap: 6px; flex-wrap: wrap; min-width: 0; }
+  .library-chips .library-filter { margin-left: auto; flex: none; }
+  /* Search inside the library, a chip like the tabs beside it. */
+  .library-chip.library-filter { display: inline-flex; align-items: center; gap: 6px; cursor: text; font-weight: 500; }
+  .library-filter svg { flex: none; color: var(--text-secondary); }
+  .library-filter input { border: 0; outline: 0; background: none; color: inherit; font: inherit; width: 120px; padding: 0; }
+  .library-filter input::placeholder { color: var(--text-secondary); }
+  .library-filter:focus-within { border-color: var(--accent); }
+  .library-empty { grid-column: 1 / -1; padding: 32px 8px; text-align: center; color: var(--text-secondary); font-size: 14px; }
+  .library-chip {
+    border: 1px solid var(--border); background: var(--surface); color: var(--text);
+    border-radius: var(--radius-pill); padding: 6px 13px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .library-chip.is-active { background: var(--text); color: var(--bg-base); border-color: transparent; }
+  .library-note { font-size: 12.5px; color: var(--text-secondary); margin: 0 0 12px; }
+  .library-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(138px, 1fr)); gap: 20px 14px; }
+  /* A column from the top: a button centres its content, which lifted the
+     poster of a card whose title takes two lines. */
+  .lib-card { display: flex; flex-direction: column; justify-content: flex-start; align-self: start; text-align: left; background: none; border: 0; padding: 0; color: inherit; font: inherit; cursor: pointer; min-width: 0; }
+  .lib-poster {
+    position: relative; aspect-ratio: 2 / 3; border-radius: var(--radius-md); overflow: hidden;
+    background: var(--surface-hover); border: 1px solid var(--border); transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .lib-poster img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .lib-poster .lib-fallback { position: absolute; inset: 0; display: grid; place-items: center; color: var(--text-tertiary); padding: 10px; text-align: center; font-size: 12px; }
+  .lib-card:hover .lib-poster, .lib-card:focus-visible .lib-poster { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
+  .lib-badge { position: absolute; left: 7px; top: 7px; font-size: 11px; font-weight: 700; padding: 3px 7px; border-radius: var(--radius-pill); background: rgba(0,0,0,.62); color: #fff; }
+  .lib-title { font-size: 13.5px; font-weight: 600; margin-top: 8px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .lib-sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+  .search-section-head { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-secondary); padding: 12px 16px 4px; }
+  .dt-files { display: flex; flex-direction: column; gap: 6px; }
+  .dt-file { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--radius-md); background: var(--surface); border: 1px solid var(--border); }
+  .dt-file-name { flex: 1; min-width: 0; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dt-file-size { font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
+  .dt-seasons-pick { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .dt-episode { display: flex; align-items: center; gap: 12px; padding: 8px; border-radius: var(--radius-md); background: var(--surface); border: 1px solid var(--border); cursor: pointer; text-align: left; color: inherit; font: inherit; width: 100%; }
+  .dt-episode:hover { background: var(--surface-hover); }
+  .dt-episode-still { width: 132px; aspect-ratio: 16 / 9; border-radius: var(--radius-sm); object-fit: cover; background: var(--surface-hover); flex: none; }
+  .dt-episode-text { flex: 1; min-width: 0; }
+  .dt-episode-title { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dt-episode-sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .library-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin: 6px 0 14px; }
+  .library-stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; }
+  .library-stat b { display: block; font-size: 20px; }
+  .library-stat span { font-size: 12px; color: var(--text-secondary); }
+  .settings-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+  @media (max-width: 640px) {
+    .layout { padding: 16px 16px 16px; }
+    header, .searchbar { padding-left: 16px; padding-right: 16px; }
+  }
+
+  /* ---------- Search dropdown ---------- */
+
+  .search-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 28px;
+    right: 28px;
+    max-height: 60vh;
+    overflow-y: auto;
+    background: var(--surface-solid);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    z-index: 30;
+    display: none;
+    padding: 8px;
+  }
+  .search-dropdown.is-open { display: block; }
+  .search-dropdown .item { margin-bottom: 6px; }
+  .search-dropdown .item:last-child { margin-bottom: 0; }
+
+  /* Discover reuses every .search-dropdown card rule (the mobile grid
+     reflow, the description's width cap, expand/collapse) but isn't a
+     floating overlay - it sits inline in the panel, so the positioning
+     and card chrome get undone here. */
+  .search-dropdown.discover-grid {
+    position: static;
+    display: none;
+    max-height: none;
+    padding: 0;
+    border: none;
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    box-shadow: none;
+  }
+  /* The tabs stay put and only the card list scrolls, in a panel bounded
+     to the viewport height - rather than the whole page growing tall
+     under a tab row that scrolls away with everything else. The 64px here
+     is .layout's own top+bottom padding (16+48) - has to match exactly,
+     or the panel is taller than the space actually available for it and
+     the *page* ends up scrollable by that leftover amount, defeating the
+     whole point. */
+  .panel.discover-mode {
+    display: flex;
+    flex-direction: column;
+    /* CSS `zoom` on body (desktop only) scales rendered px lengths but not
+       viewport units, so 100dvh must be divided by --ui-zoom here or this
+       renders taller than the real viewport once zoom is active.
+       `dvh` (not `vh`): on mobile Safari, 100vh is sized as if the
+       address bar/bottom toolbar were hidden, so a panel using it (plus
+       this page's own `overflow:hidden` scroll lock) can end up taller
+       than the space actually visible once that chrome is showing -
+       leaving controls at its bottom (e.g. the pagination row) rendered
+       behind Safari's real toolbar with no way to scroll to them. dvh
+       tracks the toolbar's actual current state instead. */
+    height: calc(100dvh / var(--ui-zoom) - var(--topbar-h, 140px) - 44px);
+    overflow: hidden;
+  }
+  @media (max-width: 640px) {
+    /* .layout's padding is 16+16 = 32px here (see the .layout media query).
+       No zoom below this breakpoint, so no --ui-zoom division needed. */
+    .panel.discover-mode { height: calc(100dvh - var(--topbar-h, 140px) - 32px); }
+  }
+  /* Belt and braces: even a 1-2px rounding mismatch (dynamic mobile browser
+     chrome changing 100vh, etc.) would otherwise leave the page itself
+     scrollable by that sliver. Hard-disable page scroll while Discover is
+     open so scrolling can only ever happen inside the card list. */
+  body.discover-active { overflow: hidden; }
+  .panel.discover-mode #discoverHeader { flex-shrink: 0; }
+  .panel.discover-mode .search-dropdown.discover-grid.is-open {
+    display: block;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    /* Scrolling still works with the wheel/trackpad/touch/keyboard - only
+       the visible track+thumb is hidden, matching the rest of Discover. */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .panel.discover-mode .search-dropdown.discover-grid.is-open::-webkit-scrollbar { display: none; }
+
+  .discover-pagination {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    flex-shrink: 0;
+    padding-top: 12px;
+    margin-top: 10px;
+    border-top: 1px solid var(--border);
+  }
+  .discover-pagination .btn-secondary { padding: 8px 16px; font-size: 12.5px; }
+  .discover-page-info {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    min-width: 90px;
+    text-align: center;
+  }
+
+  .discover-tabs {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    flex: 1;
+    min-width: 0;
+  }
+  .discover-tab {
+    padding: 6px 14px;
+    border-radius: var(--radius-pill);
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    color: var(--text-secondary);
+    font-size: 12.5px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .discover-tab:hover:not(.is-active) { border-color: var(--accent); color: var(--accent); }
+  .discover-tab.is-active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+  }
+
+  /* Mobile: the pill row wraps onto two lines and eats vertical space, so
+     swap it for a single dropdown instead - same control other pickers in
+     this app already use (.inline-category-select), not a new style. */
+  .discover-tabs-select { display: none; }
+  @media (max-width: 640px) {
+    .discover-tabs { display: none; }
+    .discover-tabs-select { display: block; width: 100%; }
+  }
+  /* Match .layout's 16px mobile inset so the dropdown lines up with the
+     panel underneath it instead of overhanging/underhanging it. This must
+     come after the base rule above (same selector, same specificity) -
+     a media query earlier in the file loses to a later unconditional rule
+     regardless of viewport, which was the actual bug here. */
+  @media (max-width: 640px) {
+    .search-dropdown { left: 16px; right: 16px; }
+  }
+
+  .inline-category-select {
+    -webkit-appearance: none;
+    appearance: none;
+    padding: 9px 30px 9px 14px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--border-strong);
+    background-color: var(--surface);
+    color: var(--text);
+    font-size: 12.5px;
+    font-weight: 600;
+    font-family: inherit;
+    outline: none;
+    cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236e6e73' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 12px;
+    transition: border-color 0.15s;
+  }
+  .inline-category-select:hover { border-color: var(--accent); }
+  .inline-category-select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 4px var(--accent-soft);
+  }
+
+  /* ---------- Search results ---------- */
+
+  .search-item-stats .seeders { color: var(--success); }
+  .search-item-stats .leechers { color: var(--text-tertiary); }
+  .btn-add-result {
+    /* Vertical padding matches .inline-category-select exactly (9px) so
+       the two controls in this row are the same height - they were 4px
+       off before (7px here vs. 9px there), visibly mismatched. */
+    padding: 9px 16px;
+    font-size: 12.5px;
+    flex-shrink: 0;
+  }
+  /* Everything aligns to the top of the row now, not stretched/centered -
+     stretching the poster to match an expanded ("Show more") description
+     distorted it into a tall, oddly-proportioned rectangle, and centering
+     the actions made them drift to the middle of a very tall card instead
+     of staying anchored near the title. */
+  .search-dropdown .item-top { align-items: flex-start; }
+  .search-dropdown .item-top > .search-result-actions { align-self: flex-start; }
+  .result-poster {
+    width: 84px;
+    height: 112px;
+    border-radius: 8px;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: var(--border);
+  }
+  .result-poster-fallback {
+    width: 84px;
+    height: 112px;
+    border-radius: 8px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .result-poster-fallback svg { width: 22px; height: 22px; }
+  .search-result-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .rating-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    color: #f5a623;
+    font-weight: 600;
+  }
+  .rating-badge svg { width: 11px; height: 11px; }
+  .item-overview {
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  /* Capped well short of the title/description column's full width on
+     desktop, so it doesn't read as a full-width paragraph running under
+     the actions column - tablet/mobile get the full column width back,
+     there's no room to spare there. The row's own 10px gap plus this cap
+     already keeps it clear of the folder picker/Download button, so this
+     can be generous without the two ever touching. */
+  .search-dropdown .item-overview { max-width: 65%; }
+  @media (max-width: 640px) {
+    .search-dropdown .item-overview { max-width: none; }
+  }
+  .search-dropdown .item.is-expanded .item-overview {
+    -webkit-line-clamp: unset;
+    overflow: visible;
+  }
+  .overview-toggle {
+    background: none;
+    border: none;
+    padding: 2px 0 0;
+    margin: 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent);
+    cursor: pointer;
+  }
+  .overview-toggle:hover { text-decoration: underline; }
+
+  /* ---------- Panel chrome ---------- */
+
+  .panel {
+    min-width: 0;
+    background: var(--surface);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    padding: 16px;
+    transition: background 0.3s ease, border-color 0.3s ease;
+  }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .section-label {
+    font-size: 11.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-tertiary);
+  }
+  .count-badge {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: var(--surface-solid);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-pill);
+    padding: 2px 9px;
+    min-width: 20px;
+    text-align: center;
+  }
+
+  .empty-state {
+    color: var(--text-tertiary);
+    font-size: 12.5px;
+    text-align: center;
+    padding: 40px 14px;
+    line-height: 1.6;
+  }
+
+  .hint {
+    font-size: 11.5px;
+    color: var(--text-tertiary);
+    margin: 14px 0 0;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+  }
+  .hint code {
+    color: var(--text-secondary);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11px;
+  }
+
+  .clear-all-btn {
+    display: block;
+    margin: 14px 0 0 auto;
+    padding: 6px 12px;
+    background: transparent;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-pill);
+    color: var(--text-secondary);
+    font-size: 11.5px;
+  }
+  .clear-all-btn:hover:not(:disabled) { border-color: var(--danger); color: var(--danger); }
+
+  /* ---------- Drop zone ---------- */
+
+  .drop-zone {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    background: rgba(6, 104, 225, 0.12);
+    backdrop-filter: blur(4px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+  .drop-zone.is-active { display: flex; }
+  .drop-zone-inner {
+    border: 2px dashed var(--accent);
+    border-radius: var(--radius-lg);
+    padding: 40px 60px;
+    background: var(--surface-solid);
+    color: var(--accent);
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  /* ---------- Torrent item ---------- */
+
+  .item {
+    background: var(--surface-solid);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    margin-bottom: 8px;
+    padding: 12px 14px;
+    transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+  }
+  .item:last-child { margin-bottom: 0; }
+  .item:hover { border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
+  .item.is-error { border-color: var(--danger); }
+
+  .item-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .item-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .item-icon svg { width: 16px; height: 16px; }
+  .item.is-done .item-icon { background: rgba(31, 157, 75, 0.14); color: var(--success); }
+  .item.is-paused .item-icon { color: var(--text-tertiary); background: var(--border); }
+
+  .item-meta { flex: 1 1 auto; min-width: 0; }
+  .item-title {
+    font-size: 13.5px;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    letter-spacing: -0.005em;
+  }
+  .release-count {
+    display: inline-block;
+    margin-left: 4px;
+    padding: 1px 7px;
+    border-radius: var(--radius-pill);
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 10.5px;
+    font-weight: 600;
+    vertical-align: 1px;
+  }
+  .item-sub {
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .item-sub.is-error-text { color: var(--danger); }
+  /* A bit more room under the title specifically in search results, where
+     the title sits alone on its own line (the downloads list keeps the
+     tighter 2px gap). */
+  .search-dropdown .item-sub { margin-top: 7px; }
+
+  .item-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+
+  .progress-track {
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    margin-top: 10px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-hover), var(--accent));
+    border-radius: 3px;
+    transition: width 0.4s ease;
+  }
+  .item.is-done .progress-fill, .item.is-seeding .progress-fill { background: var(--success); }
+
+  /* Buffering block: same panel, but its rows read as temporary - an
+     orange play icon and a striped bar instead of a download's blue. */
+  .streams-panel { margin-top: 16px; }
+  .streams-panel[hidden] { display: none; }
+  .streams-note { font-size: 12px; color: var(--text-tertiary); margin: -6px 0 12px; }
+  .item.is-stream .item-icon { background: rgba(255, 143, 0, 0.14); color: #ff8f00; }
+  .item.is-stream .progress-fill {
+    background: repeating-linear-gradient(-45deg, #ffab40 0 8px, #ff8f00 8px 16px);
+  }
+  .item.is-paused .progress-fill { background: var(--text-tertiary); }
+
+  .item-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+    margin-top: 8px;
+    font-size: 11.5px;
+    color: var(--text-tertiary);
+  }
+  .item-stats span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+  .item-stats svg { width: 11px; height: 11px; }
+
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  /* ---------- Upload modal ---------- */
+
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: rgba(0, 0, 0, 0.5);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .modal-overlay.is-open { display: flex; }
+  .modal-box {
+    width: 100%;
+    max-width: 460px;
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
+    background: var(--surface-solid);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    padding: 22px;
+  }
+  /* Divide by --ui-zoom for the same reason as .panel.discover-mode above -
+     100vh doesn't shrink under the desktop zoom, but this box's rendered
+     px does, so the raw vh value above would let it grow past the real
+     viewport. Only desktop (>=641px) has zoom active. */
+  @media (min-width: 641px) {
+    .modal-box { max-height: calc(100dvh / var(--ui-zoom) - 32px); }
+  }
+  .modal-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 18px;
+  }
+  .modal-preview {
+    display: flex;
+    gap: 14px;
+    margin-bottom: 18px;
+  }
+  .modal-preview .result-poster,
+  .modal-preview .result-poster-fallback {
+    width: 84px;
+    height: 112px;
+  }
+  .modal-preview-meta {
+    flex: 1;
+    min-width: 0;
+  }
+  .modal-filename {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .modal-preview-sub {
+    margin-top: 6px;
+  }
+  /* Unlike the search-dropdown card, the modal has room to just show the
+     whole description - no line-clamp, no expand/collapse toggle. */
+  .modal-preview-sub .item-overview {
+    font-size: 13.5px;
+    line-height: 1.5;
+    display: block;
+    -webkit-line-clamp: unset;
+    overflow: visible;
+    white-space: normal;
+    margin-top: 6px;
+  }
+  .modal-box .category-select {
+    width: 100%;
+    margin-bottom: 18px;
+  }
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+
+  /* ---------- Confirm dialog ---------- */
+  /* Replaces the native confirm() popup - same centered modal-overlay as
+     everything else, so it actually matches the app's own design instead
+     of the browser's stock alert styling. */
+  .confirm-box { max-width: 340px; }
+  .confirm-check { display: flex; align-items: center; gap: 9px; margin: -4px 0 18px; font-size: 13.5px; cursor: pointer; }
+  .confirm-check[hidden] { display: none; }
+  .confirm-check input { width: 18px; height: 18px; margin: 0; accent-color: var(--danger); flex-shrink: 0; }
+  .confirm-text {
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    margin: 0 0 20px;
+  }
+  .btn-primary.is-danger { background: linear-gradient(180deg, #e0722b, var(--danger)); }
+  .btn-primary.is-danger:hover:not(:disabled) { background: var(--danger); }
+
+  /* ---------- Details popup ---------- */
+  /* Opened by clicking any card (search, Discover, Downloads). Laid out
+     like the streaming apps' title pages (Netflix/Apple TV/Plex): a wide
+     backdrop hero that turns into the trailer player, one dot-separated
+     meta line, the main action right under it, then overview + key facts
+     side by side. Edge-to-edge (padding 0) so the hero bleeds to the box
+     edges; everything below it gets .dt-body's own padding. On phones it
+     becomes a bottom sheet. */
+
+  .search-dropdown .item, #list .item { cursor: pointer; }
+
+  /* No border and no visible scrollbar: the banner runs edge to edge, and
+     the shared modal border (plus the 8px scrollbar track the global
+     ::-webkit-scrollbar rule reserves) drew a light stroke round it and a
+     dark strip down its right side. Scrolling itself still works. */
+  .details-box {
+    position: relative;
+    max-width: 780px;
+    padding: 0;
+    border: none;
+    overflow-x: hidden;
+    scrollbar-width: none;
+  }
+  .details-box::-webkit-scrollbar { display: none; }
+  /* With a banner, the box paints no background of its own - the parts
+     under the banner do. The box's rounded corners clip the banner, and
+     under the desktop zoom (--ui-zoom) that clip lands on a fractional
+     pixel: the browser blends the banner's edge pixels with whatever is
+     painted beneath them, so the box's light surface (and its backdrop
+     blur) showed through as a 1px line along the top and right. */
+  .details-box.has-banner { background: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .details-box.has-banner .dt-body,
+  .details-box.has-banner .dt-hero.is-playing .dt-info {
+    background: var(--surface-solid);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+  }
+  /* Zero-height sticky strip holding Back/Close, so both stay pinned to
+     the top of the popup however far it's scrolled (they used to scroll
+     away with the hero). */
+  .dt-topbar { position: sticky; top: 0; height: 0; z-index: 6; }
+  .dt-topbtn {
+    position: absolute;
+    top: 12px;
+    z-index: 4;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .dt-topbtn:hover { background: rgba(0, 0, 0, 0.7); }
+  .dt-close { right: 12px; }
+  .dt-back { left: 12px; }
+  .dt-back[hidden] { display: none; }
+  .dt-close::before, .dt-close::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 13px;
+    height: 1.8px;
+    background: currentColor;
+    border-radius: 1px;
+  }
+  .dt-close::before { transform: translate(-50%, -50%) rotate(45deg); }
+  .dt-close::after { transform: translate(-50%, -50%) rotate(-45deg); }
+
+  /* Hero: backdrop with the title overlaid on its fade. Without a
+     backdrop it falls back to a compact poster + title header. */
+  .dt-hero { position: relative; }
+  .dt-media {
+    position: relative;
+    aspect-ratio: 16 / 7;
+    background: #000 center 25% / cover no-repeat;
+  }
+  .dt-media::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0) 35%, rgba(0, 0, 0, 0.55) 70%, rgba(0, 0, 0, 0.85) 100%);
+    pointer-events: none;
+  }
+  .dt-media iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  /* The trailer's YouTube player is loaded ahead, invisibly, behind the
+     banner, and clipped to a small circle right under the play button -
+     so the tap lands on YouTube's own play button. A real tap inside the
+     player is what lets every browser (Safari, iOS included) start it
+     with sound; our own click handler alone can't. Clipped, nothing else
+     on the banner can hit the player (its title/channel links). */
+  .dt-player-slot { position: absolute; inset: 0; z-index: 1; opacity: 0; pointer-events: none; clip-path: circle(34px at 50% 50%); }
+  .dt-hero.player-ready .dt-player-slot { pointer-events: auto; }
+  .dt-hero.player-ready .dt-hero-play { pointer-events: none; }
+  .dt-hero.is-playing .dt-player-slot { opacity: 1; pointer-events: auto; clip-path: none; z-index: 3; }
+  .dt-media-overlay { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+  .dt-media-overlay > * { pointer-events: auto; }
+  .dt-hero-rest { display: contents; }
+  /* body's desktop zoom (--ui-zoom) isn't passed on to an iframe's own
+     content in Safari - YouTube lays out for a 12% bigger box and the
+     frame shows it cropped at the right/bottom. Undo the zoom on the
+     iframe itself so it renders 1:1. Its 100% width/height still resolve
+     against the (zoomed) box - zoom doesn't scale percentages - so it
+     keeps exactly the visible size. */
+  @media (min-width: 641px) {
+    .dt-media iframe { zoom: calc(1 / var(--ui-zoom)); }
+  }
+  .dt-hero.has-backdrop .dt-info {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 0 22px 16px;
+    color: white;
+  }
+  .dt-hero.has-backdrop .dt-sub,
+  .dt-hero.has-backdrop .dt-meta { color: rgba(255, 255, 255, 0.78); }
+  /* Playing: the player takes the full 16:9 and the title drops below it
+     (text over a live player would sit on top of its controls). */
+  .dt-hero.is-playing .dt-media { aspect-ratio: 16 / 9; }
+  .dt-hero.is-playing .dt-media::after { display: none; }
+  .dt-hero.is-playing .dt-info { position: static; padding: 14px 22px 0; color: var(--text); }
+  .dt-hero.is-playing .dt-sub, .dt-hero.is-playing .dt-meta { color: var(--text-secondary); }
+
+  .dt-hero.no-backdrop { display: flex; gap: 16px; align-items: flex-end; padding: 22px 22px 0; }
+  .dt-hero.no-backdrop .dt-media { display: none; }
+  .dt-hero.no-backdrop.is-playing { display: block; padding: 0; }
+  /* The banner's own play button - plays the trailer, where streaming
+     apps put theirs. */
+  .dt-hero-play {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    /* Icon centre (32px down) exactly on the media box centre - that's
+       where the tap-through circle to YouTube's own play button is. */
+    transform: translate(-50%, -32px);
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    background: none;
+    border: none;
+    padding: 0;
+    color: white;
+    font-size: 12.5px;
+    font-weight: 600;
+    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .dt-hero-play-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.42);
+    border: 1.5px solid rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    transition: transform 0.15s, background 0.15s;
+  }
+  .dt-hero-play-icon svg { width: 24px; height: 24px; margin-left: 3px; }
+  .dt-hero-play:hover .dt-hero-play-icon { transform: scale(1.06); background: rgba(0, 0, 0, 0.6); }
+  /* The global button:active press effect sets transform, which would
+     wipe out the centring translate above - the button jumped half its
+     size down-right on press, the release landed off it, and the click
+     never fired. Press the icon instead. */
+  .dt-hero-play:active:not(:disabled) { transform: translate(-50%, -32px); }
+  .dt-hero-play:active:not(:disabled) .dt-hero-play-icon { transform: scale(0.95); }
+  .dt-hero-play:disabled { cursor: default; }
+  .dt-hero-play:disabled .dt-hero-play-icon { transform: none; }
+  .dt-hero-play .spinner-ring {
+    width: 24px;
+    height: 24px;
+    border: 2.5px solid rgba(255, 255, 255, 0.35);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: dt-spin 0.8s linear infinite;
+  }
+  @keyframes dt-spin { to { transform: rotate(360deg); } }
+  .dt-hero.no-backdrop.is-playing .dt-media { display: block; }
+  .dt-hero.no-backdrop.is-playing .dt-poster { display: none; }
+  .dt-poster {
+    width: 92px;
+    aspect-ratio: 2 / 3;
+    height: auto;
+    border-radius: var(--radius-sm);
+    object-fit: cover;
+    flex-shrink: 0;
+    background: var(--border);
+  }
+  .dt-hero.has-backdrop .dt-poster { display: none; }
+  .dt-info { min-width: 0; flex: 1; padding-right: 40px; }
+  .dt-title { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; margin: 0; }
+  .dt-sub { font-size: 13px; color: var(--text-secondary); margin-top: 3px; }
+  .dt-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    margin-top: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+  .dt-meta > span + span::before { content: "·"; margin-right: 8px; opacity: 0.6; }
+  .dt-cert {
+    border: 1px solid currentColor;
+    border-radius: 4px;
+    padding: 0 5px;
+    font-size: 11.5px;
+    line-height: 16px;
+  }
+  .dt-meta .rating-badge { gap: 4px; }
+
+  .dt-body { padding: 14px 22px 22px; }
+
+  /* One row: Play in <player>, Download (with the release's quality/size)
+     + where to. The trailer is started from the banner's play button. */
+  .dt-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .dt-actions .inline-category-select { max-width: 220px; text-overflow: ellipsis; }
+  /* Every control in the row is the same height - Play's app logo made it
+     taller than Download and the folder picker. */
+  .dt-actions { --dt-action-h: 38px; }
+  .dt-actions .btn-secondary, .dt-actions .btn-primary { height: var(--dt-action-h); padding: 0 16px; font-size: 13px; display: inline-flex; align-items: center; gap: 7px; }
+  .dt-actions .inline-category-select, .dt-actions .dt-status-pill { height: var(--dt-action-h); padding-top: 0; padding-bottom: 0; display: inline-flex; align-items: center; }
+  .dt-actions .btn-primary svg { width: 14px; height: 14px; }
+  .dt-actions .dt-download-meta { font-weight: 500; opacity: 0.85; }
+
+  /* Play in Infuse/VLC: the saved player's own logo on the button, and a
+     ▾ beside it to pick another one. */
+  .play-split { display: inline-flex; align-items: stretch; border-radius: var(--radius-pill); box-shadow: var(--shadow-sm); }
+  .play-split .btn-primary { box-shadow: none; }
+  .dt-actions .play-split .play-main { border-radius: var(--radius-pill) 0 0 var(--radius-pill); padding-right: 14px; }
+  .dt-actions .play-split .play-more { border-radius: 0 var(--radius-pill) var(--radius-pill) 0; padding: 0 12px 0 10px; border-left: 1px solid rgba(255, 255, 255, 0.28); }
+  .play-split .play-more svg { width: 12px; height: 12px; }
+  .player-logo { width: 20px; height: 20px; border-radius: 5px; flex-shrink: 0; display: block; }
+  .dt-release .action-btn + .action-btn { margin-left: 2px; }
+
+  /* Player picker */
+  .player-box { max-width: 380px; }
+  .player-list { display: flex; flex-direction: column; gap: 6px; }
+  .player-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text);
+    text-align: left;
+    font-weight: 400;
+  }
+  .player-option:hover:not(:disabled) { border-color: var(--accent); }
+  .player-option.is-current { border-color: var(--accent); background: var(--accent-soft); }
+  .player-option .player-logo { width: 40px; height: 40px; border-radius: 10px; }
+  .player-option-icon { width: 40px; height: 40px; border-radius: 10px; background: var(--border); color: var(--text-secondary); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .player-option-text { flex: 1; min-width: 0; }
+  .player-option-name { font-size: 14px; font-weight: 600; }
+  .player-option-sub { font-size: 12px; color: var(--text-secondary); margin-top: 1px; }
+  .player-option-check { color: var(--accent); display: none; }
+  .player-option.is-current .player-option-check { display: flex; }
+  .player-note { font-size: 12px; color: var(--text-tertiary); margin: 12px 2px 0; line-height: 1.45; }
+
+  /* Player setup checklist: a numbered mark per step that turns into a
+     green ✓ when done, or an orange ! when something's missing. */
+  .setup-box { max-width: 480px; }
+  .setup-box [hidden] { display: none !important; }  /* over the flex/inline-block below */
+  .setup-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .setup-head .player-logo { width: 44px; height: 44px; border-radius: 11px; }
+  .setup-head .modal-title { margin: 0; }
+  .setup-sub { font-size: 12.5px; color: var(--text-tertiary); margin-top: 2px; }
+  .setup-step { display: flex; gap: 12px; padding: 12px 0; border-top: 1px solid var(--border); }
+  .setup-mark {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .setup-step.is-done .setup-mark { background: rgba(31, 157, 75, 0.15); color: var(--success); }
+  .setup-step.is-warn .setup-mark { background: rgba(255, 143, 0, 0.16); color: #ff8f00; }
+  .setup-body { flex: 1; min-width: 0; }
+  .setup-title { font-size: 14px; font-weight: 600; }
+  .setup-step.is-done .setup-title { color: var(--success); }
+  .setup-text { font-size: 13px; line-height: 1.5; color: var(--text-secondary); margin-top: 2px; }
+  .setup-link, .setup-links a { display: inline-block; margin-top: 6px; font-size: 13px; font-weight: 600; color: var(--accent); text-decoration: none; }
+  .setup-link:hover, .setup-links a:hover { text-decoration: underline; }
+  .setup-links { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+  .setup-substeps { font-size: 13px; line-height: 1.6; margin: 8px 0; padding-left: 18px; }
+  .setup-foot { font-size: 12px; color: var(--text-tertiary); margin: 4px 0 0; }
+  .helper-command { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 12px; border-radius: var(--radius-md); background: var(--border); }
+  .helper-command code { flex: 1; min-width: 0; font-size: 12px; word-break: break-all; user-select: all; }
+  .helper-command .btn-secondary { padding: 6px 12px; font-size: 12px; }
+  .helper-wait { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--text-secondary); margin-top: 10px; }
+  .helper-wait .spinner-ring {
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--border-strong);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: dt-spin 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+  .dt-status-pill {
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: var(--radius-pill);
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+
+  .dt-cols { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 22px; margin-top: 18px; }
+  .dt-tagline { font-size: 13.5px; font-style: italic; color: var(--text-secondary); margin: 0 0 6px; }
+  .dt-overview {
+    font-size: 14px;
+    line-height: 1.55;
+    margin: 0;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 5;
+    -webkit-box-orient: vertical;
+  }
+  .dt-overview.is-expanded { -webkit-line-clamp: unset; display: block; }
+  .dt-facts { font-size: 12.5px; line-height: 1.5; color: var(--text); }
+  .dt-facts div + div { margin-top: 5px; }
+  .dt-facts .k { color: var(--text-tertiary); }
+  .dt-facts a { color: var(--accent); text-decoration: none; font-weight: 600; }
+  .dt-facts a:hover { text-decoration: underline; }
+  .dt-status { font-size: 12.5px; color: var(--text-tertiary); }
+  .dt-status.is-error { color: var(--danger); }
+  .dt-skeleton { height: 12px; border-radius: 6px; background: var(--border); margin-top: 9px; animation: dt-pulse 1.2s ease-in-out infinite; }
+  @keyframes dt-pulse { 50% { opacity: 0.45; } }
+
+  .dt-section { margin-top: 22px; }
+  .dt-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+  .dt-link-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent);
+  }
+  .dt-link-btn:hover { text-decoration: underline; }
+
+  .dt-row {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+    align-items: flex-start;
+  }
+  .dt-row::-webkit-scrollbar { display: none; }
+  .dt-person { width: 76px; flex-shrink: 0; text-align: center; text-decoration: none; color: inherit; scroll-snap-align: start; }
+  .dt-avatar {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto;
+    border-radius: 50%;
+    object-fit: cover;
+    background: var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-tertiary);
+    font-size: 20px;
+    font-weight: 600;
+  }
+  .dt-person:hover .dt-avatar { box-shadow: 0 0 0 2px var(--accent); }
+  .dt-person-name { font-size: 11.5px; font-weight: 600; margin-top: 6px; line-height: 1.25; }
+  .dt-person-role {
+    font-size: 10.5px;
+    color: var(--text-secondary);
+    margin-top: 1px;
+    line-height: 1.25;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  .dt-seasons { display: flex; flex-wrap: wrap; gap: 6px; }
+  .dt-chip {
+    padding: 4px 10px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--border-strong);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+  .dt-chip b { color: var(--text); font-weight: 600; }
+
+  .dt-releases { border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+  .dt-release {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border-top: 1px solid var(--border);
+  }
+  .dt-release:first-child { border-top: none; }
+  .dt-release.is-current { background: var(--accent-soft); }
+  .dt-release-main { flex: 1; min-width: 0; }
+  .dt-release-tags { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+  .dt-tag {
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: var(--border);
+    color: var(--text-secondary);
+  }
+  .dt-tag.is-res { background: var(--accent); color: white; }
+  .dt-release-title {
+    font-size: 11.5px;
+    color: var(--text-tertiary);
+    margin-top: 3px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .dt-release-stats { font-size: 12px; color: var(--text-secondary); white-space: nowrap; text-align: right; }
+  .dt-release-stats .seeders { color: var(--success); font-weight: 600; }
+
+  .dt-rec { display: flex; flex-direction: column; justify-content: flex-start; width: 96px; flex-shrink: 0; cursor: pointer; scroll-snap-align: start; background: none; border: none; padding: 0; text-align: left; color: inherit; font-weight: 400; border-radius: 0; }
+  .dt-rec img { width: 96px; aspect-ratio: 2 / 3; border-radius: var(--radius-sm); object-fit: cover; background: var(--border); display: block; transition: transform 0.15s; }
+  .dt-rec:hover img { transform: scale(1.03); }
+  .dt-rec-title { font-size: 11.5px; font-weight: 600; margin-top: 5px; line-height: 1.25; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .dt-rec-year { font-size: 11px; color: var(--text-tertiary); }
+
+  @media (max-width: 640px) {
+    /* Bottom sheet */
+    #detailsModal.is-open { align-items: flex-end; padding: 0; }
+    #detailsModal .details-box {
+      max-height: 94dvh;
+      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+      border-bottom: none;
+      padding-bottom: env(safe-area-inset-bottom);
+      animation: dt-sheet-in 0.22s ease-out;
+    }
+    .dt-media { aspect-ratio: 16 / 9; }
+    .dt-hero.has-backdrop .dt-info { padding: 0 16px 12px; }
+    .dt-hero.is-playing .dt-info { padding: 12px 16px 0; }
+    .dt-hero.no-backdrop { padding: 18px 16px 0; }
+    .dt-title { font-size: 20px; }
+    .dt-body { padding: 12px 16px 18px; }
+    .dt-cols { grid-template-columns: 1fr; gap: 14px; }
+    .dt-actions > * { min-width: 0; justify-content: center; }
+    /* Play gets a full-width row of its own; Download + folder share the
+       next one. Download carries its size/quality - give it the room. */
+    .dt-actions > .play-split { flex: 1 1 100%; }
+    .dt-actions { --dt-action-h: 42px; }
+    .dt-actions .play-split .play-main { flex: 1; justify-content: center; font-size: 14px; }
+    .dt-actions > [data-act="download-best"], .dt-actions > .dt-status-pill { flex: 1 1 0; white-space: nowrap; text-align: center; }
+    .dt-actions > [data-act="category"] { flex: 0 0 auto; }
+    .dt-actions > [data-act="download-best"] .dt-download-meta { overflow: hidden; text-overflow: ellipsis; }
+    /* The picker is a bottom sheet too. */
+    #playerModal.is-open { align-items: flex-end; padding: 0; }
+    #playerModal .player-box {
+      max-width: none;
+      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+      border-bottom: none;
+      padding-bottom: calc(22px + env(safe-area-inset-bottom));
+      animation: dt-sheet-in 0.22s ease-out;
+    }
+    .dt-hero-play-icon { width: 56px; height: 56px; }
+    .dt-hero-play, .dt-hero-play:active:not(:disabled) { transform: translate(-50%, -28px); }
+    /* The banner is short on a phone - the label would sit on the title. */
+    .dt-hero-play { font-size: 0; gap: 0; }
+    .dt-release-title { display: none; }
+    .dt-facts .dt-minor { display: none; }
+  }
+  @keyframes dt-sheet-in { from { transform: translateY(30px); opacity: 0.6; } to { transform: none; opacity: 1; } }
+
+  /* ---------- Settings ---------- */
+
+  /* A deliberate spacing scale, largest to smallest, so the eye can tell
+     "new section" from "next row in the same section" at a glance:
+     22px between sections, 10px from a section's label to its first row,
+     9px of padding within each row. */
+  .settings-box { max-width: 440px; }
+  .settings-box > .modal-actions { border-top: 1px solid var(--border); padding-top: 16px; margin-top: 18px; }
+  /* Pinned to the top, not centred: tabs differ in height, and centred the
+     whole box jumped on every switch - now only its bottom edge moves. */
+  #settingsModal.is-open { align-items: flex-start; padding-top: 56px; }
+  @media (min-width: 641px) {
+    #settingsModal .settings-box { max-height: calc(100dvh / var(--ui-zoom) - 72px); }
+  }
+  @media (max-width: 640px) {
+    #settingsModal.is-open { padding-top: 16px; }
+  }
+
+  .settings-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 18px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .settings-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 16px 6px 13px;
+    border-radius: var(--radius-pill);
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    color: var(--text-secondary);
+    font-size: 12.5px;
+    font-weight: 600;
+  }
+  .settings-tab svg { flex-shrink: 0; }
+  .settings-tab:hover:not(.is-active) { border-color: var(--accent); color: var(--accent); }
+  .settings-tab.is-active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+  }
+  .settings-tab-panel[hidden] { display: none; }
+
+  .settings-section { margin-bottom: 22px; }
+  .settings-section:last-of-type { margin-bottom: 0; }
+  .settings-section .section-label { margin-bottom: 10px; }
+  .settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .settings-row:last-child { border-bottom: none; }
+  .settings-row-label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+  }
+  .settings-value {
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    text-align: right;
+  }
+  .settings-value code {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11px;
+  }
+  .settings-box .category-select { width: 100%; }
+  /* Every field in Settings is one size: the URL and key inputs match the
+     drop-downs (TMDB language) - same width, height, pill and font, text
+     and placeholder from the left. ".settings-box input" so it beats the
+     search bar's input[type="text"] rule, which the URL field fell under. */
+  .settings-box .settings-select,
+  .settings-box input.settings-text-input {
+    box-sizing: border-box;
+    width: 220px;
+    max-width: 100%;
+    min-width: 0;
+    height: 35px;
+    flex: 0 1 auto;
+    text-overflow: ellipsis;
+  }
+  .settings-box input.settings-text-input {
+    padding: 0 14px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 12.5px;
+    font-weight: 600;
+    font-family: inherit;
+    text-align: left;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .settings-box input.settings-text-input::placeholder { color: var(--text-tertiary); font-weight: 500; }
+  .settings-box input.settings-text-input:hover { border-color: var(--accent); }
+  .settings-box input.settings-text-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 4px var(--accent-soft);
+  }
+  @media (max-width: 480px) {
+    /* iOS zooms into an input under 16px on focus. */
+    .settings-box input.settings-text-input { font-size: 16px; }
+  }
+
+  /* A small "i" badge carrying the explanation as a toast on tap/click
+     (a native title-attribute tooltip never fires on touch, which makes it
+     useless on the phone this app is mainly used from) instead of a
+     permanent second line of text under every row - keeps the list
+     scannable without losing the detail. It's a <button>, so it needs to
+     override the global button reset (padding, border-radius, font). */
+  .info-tip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 15px;
+    height: 15px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: var(--border);
+    color: var(--text-tertiary);
+    font-size: 10px;
+    font-weight: 700;
+    font-style: italic;
+    font-family: Georgia, "Times New Roman", serif;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .info-tip:hover { background: var(--border-strong); color: var(--text-secondary); }
+
+  .settings-number {
+    width: 72px;
+    padding: 6px 9px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 13px;
+    font-family: inherit;
+    text-align: right;
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    flex-shrink: 0;
+    /* Hide the native spinner so a 0 (our "unlimited"/"default" sentinel)
+       doesn't get bumped to 1 by an accidental scroll or arrow-key tap. */
+    -moz-appearance: textfield;
+  }
+  .settings-number::-webkit-outer-spin-button,
+  .settings-number::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  .settings-number:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: var(--radius-pill);
+  }
+  .status-badge::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+  .status-badge.is-on { color: var(--success); background: rgba(31, 157, 75, 0.12); }
+  .status-badge.is-off { color: var(--text-tertiary); background: var(--border); }
+  .status-badge.is-warn { color: #ff8f00; background: rgba(255, 143, 0, 0.14); }
+
+  /* Settings > Players: a card per player - its status on this device,
+     where to get it, and for VLC on a computer its helper's command. */
+  .player-card { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px; margin-bottom: 10px; }
+  .player-card .status-badge.is-on::before, .player-card .status-badge.is-warn::before {
+    width: auto; height: auto; border-radius: 0; background: none; font-weight: 800;
+  }
+  .player-card .status-badge.is-on::before { content: "✓"; }
+  .player-card .status-badge.is-warn::before { content: "!"; }
+  .player-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .player-card-head .player-logo { width: 32px; height: 32px; border-radius: 8px; }
+  .player-card-name { font-size: 14px; font-weight: 600; flex: 1; }
+  .player-card-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; padding: 5px 0; }
+  .player-card-links { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px 14px; }
+  .player-card-links a { font-size: 12.5px; font-weight: 600; color: var(--accent); text-decoration: none; }
+  .player-card-links a:hover { text-decoration: underline; }
+  .helper-block { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+  .helper-block-title { font-size: 13px; font-weight: 600; }
+  .helper-block .setup-text { margin: 2px 0 8px; font-size: 12.5px; }
+  .helper-block .dt-link-btn { margin-top: 8px; }
+
+  /* ---------- Sliders (download/upload speed) ---------- */
+
+  .settings-slider-row { padding: 9px 0; }
+  .settings-slider-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 7px;
+  }
+  .settings-slider-label { font-size: 13px; font-weight: 500; color: var(--text); }
+  .settings-slider-value { font-size: 12px; font-weight: 600; color: var(--accent); }
+  .settings-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border-strong);
+    outline: none;
+    cursor: pointer;
+    margin: 0;
+  }
+  .settings-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: var(--shadow-sm);
+    cursor: pointer;
+    margin-top: -6px;
+  }
+  .settings-slider::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; }
+  .settings-slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: none;
+    box-shadow: var(--shadow-sm);
+    cursor: pointer;
+  }
+  .settings-slider::-moz-range-track { height: 4px; border-radius: 2px; background: var(--border-strong); }
+
+  /* ---------- Toggle switch (seed after download) ---------- */
+
+  .switch { position: relative; display: inline-block; width: 40px; height: 24px; flex-shrink: 0; }
+  .switch input {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+    z-index: 1;
+  }
+  .switch-track {
+    position: absolute;
+    inset: 0;
+    background: var(--border-strong);
+    border-radius: var(--radius-pill);
+    transition: background 0.15s;
+  }
+  .switch-thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: white;
+    box-shadow: var(--shadow-sm);
+    transition: transform 0.15s;
+  }
+  .switch input:checked ~ .switch-track { background: var(--accent); }
+  .switch input:checked ~ .switch-thumb { transform: translateX(16px); }
+
+  /* ---------- Toasts ---------- */
+
+  /* A glass card like the rest of the app, with a round status icon - a
+     green check when something's done, an orange ! when it isn't. Above
+     the popups (a "Command copied" from inside one has to show), slides
+     in from the right, and a click dismisses it. */
+  .toast-stack {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+    z-index: 300;
+    max-width: 380px;
+    pointer-events: none;
+  }
+  .toast {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    max-width: 100%;
+    padding: 10px 16px 10px 10px;
+    background: var(--surface-solid);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: var(--shadow-lg);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.4;
+    color: var(--text);
+    pointer-events: auto;
+    cursor: pointer;
+    animation: toast-in 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+  }
+  .toast-icon {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(31, 157, 75, 0.16);
+    color: var(--success);
+  }
+  .toast-icon svg { width: 14px; height: 14px; }
+  .toast.is-error .toast-icon { background: rgba(255, 143, 0, 0.16); color: #ff8f00; }
+  .toast-text { min-width: 0; overflow-wrap: anywhere; }
+  .toast.is-leaving { animation: toast-out 0.2s ease forwards; }
+  @keyframes toast-in {
+    from { opacity: 0; transform: translateX(24px) scale(0.98); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes toast-out {
+    to { opacity: 0; transform: translateX(16px); }
+  }
+
+  @media (max-width: 640px) {
+    .toast-stack { left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); max-width: none; align-items: stretch; }
+    .item-stats { gap: 3px 10px; }
+  }
+
+  @media (pointer: coarse) {
+    .action-btn { width: 36px; height: 36px; }
+    .icon-btn { width: 38px; height: 38px; }
+  }
+
+  /* ---------- Category picker ---------- */
+
+  .category-select {
+    -webkit-appearance: none;
+    appearance: none;
+    padding: 12px 34px 12px 16px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 13.5px;
+    font-family: inherit;
+    font-weight: 600;
+    outline: none;
+    cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236e6e73' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 13px;
+    transition: border-color 0.15s, background-color 0.15s;
+  }
+  .category-select:hover { border-color: var(--border-strong); }
+  .category-select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 4px var(--accent-soft);
+  }
+
+  .category-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-radius: var(--radius-pill);
+    padding: 5px 12px;
+  }
+  #settingsCategories { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+
+  @media (max-width: 480px) {
+    /* The subtitle just repeats what the placeholder text already says -
+       drop it on phones to save vertical space above the fold. */
+    .brand-text p { display: none; }
+    .searchbar { gap: 6px; }
+    /* iOS Safari auto-zooms on focus into any text input under 16px font -
+       keep it at 16px exactly to prevent that, and pad enough for a 44pt
+       (Apple HIG minimum) touch target rather than a smaller "looks fine"
+       height that's annoying to tap accurately. */
+    input[type="text"] { padding: 13px 40px 13px 36px; font-size: 16px; height: 44px; }
+    .search-field > svg { left: 12px; }
+    .clear-field-btn { right: 8px; }
+    /* Icon-only on phones - "Search"/"Add" as text next to a magnet-link
+       input eats space that matters more here than the label does. */
+    .btn-primary.btn-pill#goBtn { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; }
+    #goBtn .go-btn-label { display: none; }
+    #goBtn .go-btn-icon { display: flex; }
+    .btn-circle { width: 44px; height: 44px; }
+    .result-poster, .result-poster-fallback { width: 68px; height: 91px; }
+    /* On narrow screens there isn't room for the folder picker + Download
+       button next to the title/description column, so switch to an
+       explicit grid: poster+meta on row 1, actions spanning full width on
+       row 2. (flex-wrap here is unreliable - a flex item with an auto
+       basis can get pushed onto its own line instead of shrinking to fit,
+       which once left the poster/description column collapsed to
+       zero-height. Grid's track sizing doesn't have that ambiguity.) */
+    .search-dropdown .item-top {
+      display: grid;
+      grid-template-columns: 68px 1fr;
+      grid-template-areas: "poster meta" "actions actions";
+      column-gap: 10px;
+      row-gap: 10px;
+    }
+    .search-dropdown .item-top > .result-poster,
+    .search-dropdown .item-top > .result-poster-fallback {
+      grid-area: poster;
+      width: 100%;
+      /* Grid items stretch to fill their row's height by default - without
+         this, an expanded ("Show more") description makes the whole row
+         taller and the poster stretches/distorts along with it. */
+      align-self: start;
+    }
+    .search-dropdown .item-top > .item-meta { grid-area: meta; min-width: 0; }
+    .search-dropdown .item-top > .search-result-actions {
+      grid-area: actions;
+      width: 100%;
+      align-self: auto;
+    }
+    .search-dropdown .search-result-actions .inline-category-select { flex: 1; }
+    .search-dropdown .search-result-actions .btn-add-result { flex: 1; justify-content: center; }
+  }
