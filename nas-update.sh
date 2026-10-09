@@ -23,7 +23,10 @@ if ! $DOCKER pull -q "$IMAGE" > /dev/null 2>&1; then
   exit 1
 fi
 latest=$($DOCKER image inspect --format '{{.Id}}' "$IMAGE")
-[ "$running" = "$latest" ] && exit 0
+if [ "$running" = "$latest" ]; then
+  log "Up to date"
+  exit 0
+fi
 
 # Films playing in Infuse/VLC right now; a restart would cut them off.
 streams=$($DOCKER exec "$SERVICE" python3 -c "import json, urllib.request; print(len(json.load(urllib.request.urlopen('http://127.0.0.1:5058/api/torrents', timeout=10)).get('streams', [])))" 2>/dev/null || echo 0)
