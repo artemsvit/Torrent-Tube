@@ -212,9 +212,11 @@ struct TitleView: View {
             Button(L("OK"), role: .cancel) {}
         } message: { Text(trailerError ?? "") }
         .fullScreenCover(item: $playback) { request in PlaybackLauncher(request: request, api: api) }
-        // Back from the player: focus comes back straight to the episode that
-        // played, so the page does not jump up to Play and down again.
-        .defaultFocus($focusedEpisode, selectedEpisode, priority: .userInitiated)
+        // Back from the player: tvOS gave focus to Play, so the page jumped up.
+        // Give it to the episode that played as the player starts to close.
+        .onChange(of: playback == nil) { _, closed in
+            if closed, let episode = selectedEpisode { focusedEpisode = episode }
+        }
         .task {
             await catalog.enrich([item], api: api, config: config)
             await catalog.loadDetails(item, api: api, config: config)

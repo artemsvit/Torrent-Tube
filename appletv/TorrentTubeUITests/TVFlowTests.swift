@@ -1171,6 +1171,43 @@ final class TVFlowTests: XCTestCase {
         XCUIRemote.shared.press(.menu)
     }
 
+    /// Back from an episode keeps the page where it was: focus on that
+    /// episode, no jump up to Play.
+    func testBackFromEpisodeKeepsPageAtEpisodes() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-appLanguage", "en", "-serverAddress", "http://192.168.0.102:5058", "-autoplayHomeTrailers", "NO"]
+        app.launch()
+        XCTAssertTrue(app.buttons["hero-play"].waitForExistence(timeout: 30))
+        openTab(app, "Library")
+        let tvChip = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "TV Shows · ")).firstMatch
+        XCTAssertTrue(tvChip.waitForExistence(timeout: 15)); sleep(1)
+        let tabs = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "main-tab-"))
+        for _ in 0..<8 where !tvChip.hasFocus { XCUIRemote.shared.press(tabs.allElementsBoundByIndex.contains { $0.hasFocus } ? .down : .right); usleep(500_000) }
+        XCUIRemote.shared.press(.select); sleep(2)
+        XCUIRemote.shared.press(.down); usleep(600_000)
+        func focused() -> XCUIElement? { app.buttons.allElementsBoundByIndex.first { $0.hasFocus } }
+        for i in 0..<30 { if focused()?.label == "Доктор Хаус" { break }; XCUIRemote.shared.press(i % 12 == 11 ? .down : .right); usleep(350_000) }
+        XCUIRemote.shared.press(.select)
+        let season = app.buttons["season-1"]
+        XCTAssertTrue(season.waitForExistence(timeout: 20)); sleep(2)
+        for _ in 0..<4 { XCUIRemote.shared.press(.down); usleep(500_000); if focused()?.label.hasPrefix("1.") == true { break } }
+        XCUIRemote.shared.press(.right); usleep(600_000)
+        let episodeLabel = focused()?.label ?? ""
+        let seasonY = season.frame.minY
+        XCUIRemote.shared.press(.select)
+        let timeline = app.descendants(matching: .any)["playback-timeline"]
+        let resume = app.buttons["resume-playback"]
+        _ = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in resume.exists || timeline.exists }, object: app)], timeout: 30)
+        if resume.exists { XCUIRemote.shared.press(.select) }
+        sleep(10)  // controls hide
+        XCUIRemote.shared.press(.menu)
+        for _ in 0..<8 {
+            usleep(250_000)
+            XCTAssertEqual(focused()?.label, episodeLabel, "Focus left the episode")
+            XCTAssertEqual(season.frame.minY, seasonY, accuracy: 2, "The page moved")
+        }
+    }
+
     private func keep(_ app: XCUIApplication, _ name: String) -> XCTAttachment {
         let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = name; shot.lifetime = .keepAlways; return shot
     }
