@@ -1056,6 +1056,35 @@ final class TVFlowTests: XCTestCase {
         XCTAssertGreaterThan(below?.frame.minY ?? 0, rowEnd.frame.minY, "Down from the row end did not move down")
     }
 
+    /// Switching between a long and a short Library list keeps the page at
+    /// its top; it used to drift down past the top with each switch.
+    func testLibraryChipSwitchesKeepPageAtTop() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-appLanguage", "en", "-serverAddress", "http://192.168.0.102:5058", "-autoplayHomeTrailers", "NO"]
+        app.launch()
+        XCTAssertTrue(app.buttons["hero-play"].waitForExistence(timeout: 30))
+        openTab(app, "Library")
+        let heading = app.staticTexts["library-heading"]
+        XCTAssertTrue(heading.waitForExistence(timeout: 15))
+        let top = heading.frame.minY
+        let chips = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", " · "))
+        for _ in 0..<4 { XCUIRemote.shared.press(.down); usleep(500_000) }
+        for _ in 0..<8 where !chips.allElementsBoundByIndex.contains(where: { $0.hasFocus }) { XCUIRemote.shared.press(.up); usleep(500_000) }
+        let favorites = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Favorites")).firstMatch
+        for round in 0..<4 {
+            // Over to Favorites and pick it, then back to the first chip and pick it.
+            for _ in 0..<5 where !favorites.hasFocus { XCUIRemote.shared.press(.right); usleep(350_000) }
+            XCUIRemote.shared.press(.select); usleep(900_000)
+            print("PROBE round \(round) favorites heading=\(heading.frame.minY) top=\(top)")
+            XCTAssertLessThan(abs(heading.frame.minY - top), 80, "Favorites moved the page")
+            for _ in 0..<5 { XCUIRemote.shared.press(.left); usleep(350_000) }
+            XCUIRemote.shared.press(.select); usleep(900_000)
+            print("PROBE round \(round) movies heading=\(heading.frame.minY)")
+            XCTAssertLessThan(abs(heading.frame.minY - top), 80, "Movies moved the page")
+        }
+        add(keep(app, "Library after chip switches"))
+    }
+
     private func keep(_ app: XCUIApplication, _ name: String) -> XCTAttachment {
         let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = name; shot.lifetime = .keepAlways; return shot
     }

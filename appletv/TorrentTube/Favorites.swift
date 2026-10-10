@@ -26,9 +26,15 @@ struct LibraryView: View {
     @Environment(CatalogStore.self) private var catalog
     @Environment(FavoritesStore.self) private var favorites
     @State private var section = ""
+    private static let top = "library-top"
     var body: some View {
         let active = section.isEmpty ? LibrarySections.defaultSection(catalog.library) : section
+        ScrollViewReader { proxy in
         ScrollView {
+            // The very top of the page, above its padding: scrolling here shows
+            // the heading below the bar, where it starts.
+            VStack(alignment: .leading, spacing: 0) {
+            Color.clear.frame(height: 0).id(Self.top)
             VStack(alignment: .leading, spacing: 35) {
                 Text(L("Library")).font(.system(size: 50, weight: .bold)).accessibilityIdentifier("library-heading")
                 // The Library syncs itself (new titles only); Settings has "Sync now".
@@ -50,6 +56,16 @@ struct LibraryView: View {
                     FilmGrid(items: items.map(libraryItem), api: api, config: config)
                 }
             }.padding(.horizontal, TVLayout.edge).padding(.top, 158 + ScreenLayout.top).padding(.bottom, 70)
+            }
+        }
+        // A shorter list (Movies, then Favorites) kept the old offset and the
+        // focused chip's place on screen, so each switch pushed the page
+        // further down, past its top. Keep the top fixed and go back to it.
+        .defaultScrollAnchor(.top, for: .sizeChanges)
+        .onChange(of: section) { _, _ in
+            var transaction = Transaction(); transaction.disablesAnimations = true
+            withTransaction(transaction) { proxy.scrollTo(Self.top, anchor: .top) }
+        }
         }
         .tvScrollEdge()
         .ignoresSafeArea(edges: .horizontal)
