@@ -167,6 +167,11 @@ struct TVResumePrompt: View {
     let resume: () -> Void
     let restart: () -> Void
     let back: () -> Void
+    /// Untouched, the prompt starts from the beginning after this many
+    /// seconds - nobody has to find the remote between episodes. Any press
+    /// stops it.
+    static let countdown = 7
+    @State private var remaining: Int? = Self.countdown
     @FocusState private var focusedAction: Action?
     private enum Action { case resume, restart, back }
 
@@ -192,7 +197,10 @@ struct TVResumePrompt: View {
                 .focused($focusedAction, equals: .resume)
                 .accessibilityIdentifier("resume-playback")
                 Button(action: restart) {
-                    Label(L("Start from beginning"), systemImage: "arrow.counterclockwise").frame(minWidth: 340)
+                    HStack(spacing: 14) {
+                        Label(L("Start from beginning"), systemImage: "arrow.counterclockwise")
+                        if let remaining { CountdownRing(remaining: remaining, total: Self.countdown) }
+                    }.frame(minWidth: 340)
                 }
                 .buttonStyle(.bordered).tint(.white.opacity(0.2)).foregroundStyle(.white)
                 .focused($focusedAction, equals: .restart)
@@ -216,6 +224,37 @@ struct TVResumePrompt: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         .focusSection()
         .defaultFocus($focusedAction, .resume)
+        .task {
+            while let left = remaining {
+                do { try await Task.sleep(for: .seconds(1)) } catch { return }
+                guard remaining != nil else { return }
+                if left <= 1 { remaining = nil; restart(); return }
+                remaining = left - 1
+            }
+        }
+        // The first focus is the prompt's own; any later move is the viewer.
+        .onChange(of: focusedAction) { old, _ in if old != nil { remaining = nil } }
+        .onMoveCommand { _ in remaining = nil }
+        .onPlayPauseCommand { remaining = nil }
+    }
+}
+
+/// Seconds left, in a ring that empties as they run out.
+private struct CountdownRing: View {
+    let remaining: Int
+    let total: Int
+    var body: some View {
+        ZStack {
+            Circle().stroke(.white.opacity(0.25), lineWidth: 3)
+            Circle().trim(from: 0, to: CGFloat(remaining) / CGFloat(total))
+                .stroke(.white, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+                .animation(.linear(duration: 1), value: remaining)
+            Text("\(remaining)").font(.system(size: 20, weight: .semibold)).monospacedDigit()
+        }
+        .frame(width: 38, height: 38)
+        .accessibilityLabel(L("Starts from the beginning in %ld seconds", remaining))
+        .accessibilityIdentifier("restart-countdown")
     }
 }
 

@@ -126,7 +126,8 @@ final class PlaybackCoordinator {
     }
 
     /// `continuing`: the next episode after one ended - play at once (from
-    /// its saved place, if any) instead of asking.
+    /// its saved place, if any) instead of asking. Apple TV asks anyway: its
+    /// prompt starts from the beginning by itself after a few seconds.
     func start(file: Int, continuing: Bool = false) async {
         guard !closed, !suspended else { return }
         let current = UUID(); operation = current
@@ -145,7 +146,11 @@ final class PlaybackCoordinator {
             beginHeartbeat(result)
             loadIntro(file: file, source: source)
             if let prior = history?.entry(server: api.baseURL, torrentID: result.id, file: result.file) {
+                #if os(tvOS)
+                resumeEntry = prior
+                #else
                 if continuing { openPlayer(at: prior.seconds) } else { resumeEntry = prior }
+                #endif
             } else { openPlayer(at: 0) }
         } catch is CancellationError {} catch {
             if current == operation { self.error = error.localizedDescription }

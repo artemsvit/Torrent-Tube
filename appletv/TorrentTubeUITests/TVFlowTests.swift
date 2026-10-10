@@ -1108,6 +1108,69 @@ final class TVFlowTests: XCTestCase {
         XCTAssertFalse(timeline.exists, "The player is still open")
     }
 
+    /// The resume prompt starts from the beginning by itself after its
+    /// countdown; any press stops the countdown.
+    func testResumePromptCountdownStartsFromBeginning() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-appLanguage", "en", "-serverAddress", "http://192.168.0.102:5058", "-autoplayHomeTrailers", "NO"]
+        app.launch()
+        XCTAssertTrue(app.buttons["hero-play"].waitForExistence(timeout: 30))
+        openTab(app, "Library")
+        XCUIRemote.shared.press(.down); sleep(1)
+        XCUIRemote.shared.press(.select)
+        let play = app.buttons["title-play"]
+        XCTAssertTrue(play.waitForExistence(timeout: 15))
+        func focusPlay() {
+            sleep(2)  // focus settles after the player closes
+            let tabs = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "main-tab-"))
+            for _ in 0..<6 where !play.hasFocus {
+                let direction: XCUIRemote.Button = tabs.allElementsBoundByIndex.contains { $0.hasFocus } ? .down
+                    : app.buttons["show-trailers"].hasFocus || app.buttons["favorite-toggle"].hasFocus ? .left : .up
+                XCUIRemote.shared.press(direction)
+                usleep(500_000)
+            }
+            XCTAssertTrue(play.hasFocus, "Play has no focus")
+        }
+        focusPlay()
+        // Play a little, so the title has a saved place, then leave.
+        XCUIRemote.shared.press(.select)
+        if app.buttons["resume-playback"].waitForExistence(timeout: 8) { XCUIRemote.shared.press(.select) }
+        let position = app.staticTexts["playback-position"]
+        sleep(15)
+        XCUIRemote.shared.press(.menu); usleep(500_000)
+        if position.exists { XCUIRemote.shared.press(.menu) }
+        XCTAssertTrue(play.waitForExistence(timeout: 10))
+        sleep(1)
+
+        // Untouched: the countdown runs out and playback starts from 0.
+        focusPlay()
+        XCUIRemote.shared.press(.select)
+        let countdown = app.descendants(matching: .any)["restart-countdown"]
+        XCTAssertTrue(countdown.waitForExistence(timeout: 15), "No countdown on the resume prompt")
+        let started = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !app.buttons["resume-playback"].exists }, object: app)
+        XCTAssertEqual(XCTWaiter.wait(for: [started], timeout: 11), .completed, "The countdown did not start playback")
+        sleep(20)  // long enough for a saved place, so the prompt comes back below
+        XCUIRemote.shared.press(.up); usleep(800_000)
+        let seconds = position.label.split(separator: ":").reduce(0) { $0 * 60 + (Int($1) ?? 0) }
+        print("PROBE after countdown position=\(position.label)")
+        XCTAssertLessThan(seconds, 35, "Playback did not start from the beginning")
+        // Controls are showing: Back hides them, the second Back closes.
+        XCUIRemote.shared.press(.menu); sleep(1)
+        XCUIRemote.shared.press(.menu)
+        XCTAssertTrue(play.waitForExistence(timeout: 10))
+        sleep(1)
+
+        // A press stops the countdown: the prompt stays.
+        focusPlay()
+        XCUIRemote.shared.press(.select)
+        XCTAssertTrue(countdown.waitForExistence(timeout: 15))
+        XCUIRemote.shared.press(.right)
+        sleep(9)
+        XCTAssertTrue(app.buttons["resume-playback"].exists, "The prompt went away after a press")
+        XCTAssertFalse(countdown.exists)
+        XCUIRemote.shared.press(.menu)
+    }
+
     private func keep(_ app: XCUIApplication, _ name: String) -> XCTAttachment {
         let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = name; shot.lifetime = .keepAlways; return shot
     }

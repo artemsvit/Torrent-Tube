@@ -196,6 +196,7 @@ private let ukrainian: [String: String] = [
     "Continue from %@?": "Продовжити з %@?",
     "Resume": "Продовжити",
     "Start from beginning": "Почати спочатку",
+    "Starts from the beginning in %ld seconds": "Почнеться спочатку через %ld с",
     "Choose a file for episode %ld": "Виберіть файл для серії %ld",
     "Choose an episode": "Виберіть серію",
     "This torrent contains no supported video files.": "У цьому торенті немає підтримуваних відеофайлів.",
