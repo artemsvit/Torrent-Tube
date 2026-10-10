@@ -744,8 +744,13 @@ struct MobileLibrary: View {
                 }
             }.padding(.vertical, 8)
         }
-        .refreshable { await catalog.loadLibrary(api: api) }
+        .refreshable {
+            async let hearts: Void = favorites.sync().value
+            await catalog.loadLibrary(api: api)
+            await hearts
+        }
         .task {
+            favorites.sync()
             await catalog.loadLibrary(api: api)
             // The server is still matching titles: show them as they come in.
             while catalog.libraryPending > 0 && !Task.isCancelled {

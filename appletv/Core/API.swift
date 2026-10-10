@@ -11,6 +11,8 @@ struct ServerConfig: Decodable {
         let fileSelection: Bool?
         let playbackSessions: Bool?
         var topShelfPreviews: Bool? = nil
+        /// The server keeps one favorites list for every app (/api/favorites).
+        var favorites: Bool? = nil
     }
     var supportsPlayback: Bool { capabilities?.playbackSessions == true && capabilities?.fileSelection == true }
 }
@@ -259,6 +261,7 @@ struct StreamStatus: Decodable {
     let progress: Double
     let numPeers: Int?
     let gone: Bool?
+    var done: Bool? = nil
 }
 struct APIError: LocalizedError {
     let message: String

@@ -3,10 +3,6 @@ import Observation
 import UIKit
 import TVServices
 
-extension Color {
-    static let torrentAccent = Color(red: 0.23, green: 0.576, blue: 1)
-}
-
 @main
 struct TorrentTubeApp: App {
     @State private var store = AppStore()

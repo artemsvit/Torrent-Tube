@@ -1,6 +1,234 @@
 import XCTest
 
 final class TVFlowTests: XCTestCase {
+    func testFinalEpisodeClosesPlayerAndKeepsTitleScreen() throws {
+        guard let address = ProcessInfo.processInfo.environment["TORRENTTUBE_COMPLETION_SERVER"] else {
+            throw XCTSkip("Set TORRENTTUBE_COMPLETION_SERVER to smoke_server.py with an eight-second sample.")
+        }
+        let app = XCUIApplication()
+        app.launchArguments = ["-appLanguage", "en", "-serverAddress", address, "-resumeHistory", "",
+                               "-seekInterval", "30", "-autoplayHomeTrailers", "NO", "-showContinueWatching", "NO"]
+        app.launch()
+        let details = app.buttons["Details"]
+        XCTAssertTrue(details.waitForExistence(timeout: 30))
+        for _ in 0..<8 {
+            if details.hasFocus { break }
+            if app.buttons["hero-play"].hasFocus { XCUIRemote.shared.press(.right) }
+            else if app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "title-")).firstMatch.hasFocus { XCUIRemote.shared.press(.up) }
+            else { XCUIRemote.shared.press(.down) }
+        }
+        XCTAssertTrue(details.hasFocus)
+        XCUIRemote.shared.press(.select)
+        let titlePlay = app.buttons["title-play"]
+        XCTAssertTrue(titlePlay.waitForExistence(timeout: 15))
+        for _ in 0..<5 where !titlePlay.hasFocus { XCUIRemote.shared.press(.down) }
+        XCTAssertTrue(titlePlay.hasFocus, app.debugDescription)
+        XCUIRemote.shared.press(.select)
+        let toggle = app.buttons["toggle-playback"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 20))
+        func waitForPosition(_ minimum: Int) {
+            let progressed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                let position = app.staticTexts["playback-position"]
+                guard position.exists else { return false }
+                return position.label.split(separator: ":").reduce(0) { $0 * 60 + (Int($1) ?? 0) } >= minimum
+            }, object: app)
+            XCTAssertEqual(XCTWaiter.wait(for: [progressed], timeout: 20), .completed)
+        }
+        waitForPosition(3)
+        add(keep(app, "Episode before completion"))
+        let next = app.staticTexts["playback-episode"]
+        let continued = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            next.exists && next.label == "Season 1 · Episode 2"
+        }, object: app)
+        XCTAssertEqual(XCTWaiter.wait(for: [continued], timeout: 25), .completed, app.debugDescription)
+        add(keep(app, "Automatic next episode"))
+        let closed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            titlePlay.exists && titlePlay.isHittable && !app.buttons["playback-timeline"].exists &&
+                !app.buttons["Show playback controls"].exists
+        }, object: app)
+        XCTAssertEqual(XCTWaiter.wait(for: [closed], timeout: 25), .completed)
+        XCTAssertTrue(titlePlay.exists)
+        XCTAssertFalse(app.buttons["hero-play"].isHittable)
+        XCTAssertFalse(app.buttons["resume-playback"].exists)
+        add(keep(app, "Final episode returns to title details"))
+    }
+
+    func testResumePromptLayoutAndRemoteActions() throws {
+        let address = try XCTUnwrap(ProcessInfo.processInfo.environment["TORRENTTUBE_TEST_SERVER"])
+        let app = XCUIApplication()
+        func openPlayback() {
+            let play = app.buttons["hero-play"]
+            XCTAssertTrue(play.waitForExistence(timeout: 30))
+            for _ in 0..<8 {
+                if play.hasFocus { break }
+                if app.buttons["Деталі"].exists && app.buttons["Деталі"].hasFocus { XCUIRemote.shared.press(.left) }
+                else if app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "title-")).firstMatch.hasFocus { XCUIRemote.shared.press(.up) }
+                else { XCUIRemote.shared.press(.down) }
+            }
+            XCTAssertTrue(play.hasFocus, app.debugDescription)
+            XCUIRemote.shared.press(.select)
+        }
+        func positionAtLeast(_ seconds: Int) {
+            let progressed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                let text = app.staticTexts["playback-position"]
+                guard text.exists else { return false }
+                return text.label.split(separator: ":").reduce(0) { $0 * 60 + (Int($1) ?? 0) } >= seconds
+            }, object: app)
+            XCTAssertEqual(XCTWaiter.wait(for: [progressed], timeout: 20), .completed)
+        }
+        app.launchArguments = ["-appLanguage", "uk", "-serverAddress", address,
+                               "-resumeHistory", "", "-seekInterval", "10", "-autoplayHomeTrailers", "NO", "-showContinueWatching", "NO"]
+        app.launch()
+        openPlayback()
+        XCTAssertTrue(app.buttons["toggle-playback"].waitForExistence(timeout: 20))
+        positionAtLeast(3)
+        XCUIRemote.shared.press(.up)
+        for _ in 0..<3 { XCUIRemote.shared.press(.right) }
+        positionAtLeast(25)
+        XCUIRemote.shared.press(.menu)
+        app.terminate()
+        app.launchArguments = ["-appLanguage", "uk", "-serverAddress", address, "-autoplayHomeTrailers", "NO", "-showContinueWatching", "NO"]
+        app.launch()
+        openPlayback()
+        let resume = app.buttons["resume-playback"]
+        let restart = app.buttons["restart-playback"]
+        let back = app.buttons["resume-back"]
+        let timestamp = app.staticTexts["resume-position"]
+        XCTAssertTrue(resume.waitForExistence(timeout: 15))
+        XCTAssertTrue(resume.hasFocus, app.debugDescription)
+        XCTAssertTrue(timestamp.exists)
+        XCTAssertFalse(app.buttons["resume-position"].exists)
+        XCTAssertLessThan(timestamp.frame.maxY, resume.frame.minY)
+        XCTAssertGreaterThan(back.frame.minY, max(resume.frame.maxY, restart.frame.maxY) + 15)
+        XCTAssertEqual((resume.frame.minX + restart.frame.maxX) / 2, app.frame.midX, accuracy: 40)
+        add(keep(app, "Centered Ukrainian resume prompt"))
+        XCUIRemote.shared.press(.right)
+        XCTAssertTrue(restart.hasFocus)
+        XCUIRemote.shared.press(.down)
+        XCTAssertTrue(back.hasFocus)
+        add(keep(app, "Resume Back action focus"))
+        XCUIRemote.shared.press(.select)
+        XCTAssertTrue(app.buttons["hero-play"].waitForExistence(timeout: 10))
+        openPlayback()
+        XCTAssertTrue(resume.waitForExistence(timeout: 15))
+        XCUIRemote.shared.press(.select)
+        positionAtLeast(25)
+        XCUIRemote.shared.press(.menu)
+        openPlayback()
+        XCTAssertTrue(resume.waitForExistence(timeout: 15))
+        XCUIRemote.shared.press(.right)
+        XCTAssertTrue(restart.hasFocus)
+        XCUIRemote.shared.press(.select)
+        XCTAssertTrue(app.buttons["toggle-playback"].waitForExistence(timeout: 15))
+        let start = app.staticTexts["playback-position"].label.split(separator: ":").reduce(0) { $0 * 60 + (Int($1) ?? 0) }
+        XCTAssertLessThan(start, 10)
+        XCUIRemote.shared.press(.menu)
+    }
+
+    func testPlayerTimelineFocusAndRemoteSeeking() throws {
+        let address = try XCTUnwrap(ProcessInfo.processInfo.environment["TORRENTTUBE_TEST_SERVER"])
+        let app = XCUIApplication()
+        app.launchArguments = ["-appLanguage", "en", "-serverAddress", address,
+                               "-resumeHistory", "", "-seekInterval", "10", "-autoplayHomeTrailers", "NO"]
+        app.launch()
+        let play = app.buttons["hero-play"]
+        XCTAssertTrue(play.waitForExistence(timeout: 30))
+        for _ in 0..<8 {
+            if play.hasFocus { break }
+            if app.buttons["Details"].hasFocus { XCUIRemote.shared.press(.left) }
+            else if app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "title-")).firstMatch.hasFocus { XCUIRemote.shared.press(.up) }
+            else { XCUIRemote.shared.press(.down) }
+        }
+        XCTAssertTrue(play.hasFocus, app.debugDescription)
+        XCUIRemote.shared.press(.select)
+        let episode = app.buttons.containing(.staticText, identifier: "Episode 1.mkv").firstMatch
+        let opened = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            episode.exists || app.buttons["Pause"].exists || app.buttons["Resume"].exists
+        }, object: app)
+        XCTAssertEqual(XCTWaiter.wait(for: [opened], timeout: 20), .completed, app.debugDescription)
+        if episode.exists {
+            for _ in 0..<4 where !episode.hasFocus { XCUIRemote.shared.press(.down) }
+            XCTAssertTrue(episode.hasFocus)
+            XCUIRemote.shared.press(.select)
+        }
+        if app.buttons["Resume"].exists {
+            XCUIRemote.shared.press(.select)
+        }
+        XCTAssertTrue(app.buttons["Pause"].waitForExistence(timeout: 20))
+        let running = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            let parts = app.staticTexts["playback-position"].label.split(separator: ":").compactMap { Int($0) }
+            return parts.count == 2 && parts[0] * 60 + parts[1] >= 3
+        }, object: app)
+        XCTAssertEqual(XCTWaiter.wait(for: [running], timeout: 15), .completed)
+        let timeline = app.descendants(matching: .any).matching(identifier: "playback-timeline").firstMatch
+        guard timeline.waitForExistence(timeout: 5) else {
+            XCTFail("The player needs a focusable timeline")
+            return
+        }
+        XCUIRemote.shared.press(.up)
+        XCTAssertTrue(timeline.hasFocus, app.debugDescription)
+        add(keep(app, "Focused playback timeline"))
+        let position = app.staticTexts["playback-position"]
+        func seconds() -> Int {
+            position.label.split(separator: ":").reduce(0) { $0 * 60 + (Int($1) ?? 0) }
+        }
+        func waitForPosition(_ condition: @escaping (Int) -> Bool) {
+            let changed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in condition(seconds()) }, object: position)
+            XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 10), .completed)
+        }
+        let start = seconds()
+        XCUIRemote.shared.press(.right)
+        waitForPosition { $0 >= start + 8 }
+        let first = seconds()
+        XCUIRemote.shared.press(.right)
+        waitForPosition { $0 >= first + 8 }
+        let second = seconds()
+        XCUIRemote.shared.press(.left)
+        waitForPosition { $0 <= second - 8 }
+        XCTAssertTrue(timeline.hasFocus)
+
+        XCUIRemote.shared.press(.down)
+        XCTAssertTrue(app.buttons["toggle-playback"].hasFocus)
+        XCUIRemote.shared.press(.left)
+        XCTAssertTrue(app.buttons["seek-backward"].hasFocus)
+        XCUIRemote.shared.press(.right)
+        XCTAssertTrue(app.buttons["toggle-playback"].hasFocus)
+        // Once controls hide, a direction press must both seek and focus the timeline.
+        let hidden = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !timeline.exists }, object: app)
+        XCTAssertEqual(XCTWaiter.wait(for: [hidden], timeout: 12), .completed)
+        XCUIRemote.shared.press(.right)
+        XCTAssertTrue(timeline.waitForExistence(timeout: 5))
+        let refocused = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in timeline.hasFocus }, object: timeline)
+        XCTAssertEqual(XCTWaiter.wait(for: [refocused], timeout: 5), .completed)
+        let revealed = seconds()
+        XCUIRemote.shared.press(.right)
+        waitForPosition { $0 >= revealed + 8 }
+        let advanced = seconds()
+        XCUIRemote.shared.press(.left)
+        waitForPosition { $0 <= advanced - 6 }
+        XCTAssertTrue(timeline.hasFocus)
+        add(keep(app, "Remote seeking after controls hide"))
+        XCUIRemote.shared.press(.playPause)
+        let paused = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            app.buttons["toggle-playback"].label == "Play"
+        }, object: app)
+        XCTAssertEqual(XCTWaiter.wait(for: [paused], timeout: 5), .completed)
+        let pausedStart = seconds()
+        XCUIRemote.shared.press(.right)
+        waitForPosition { $0 >= pausedStart + 8 }
+        XCUIRemote.shared.press(.right)
+        waitForPosition { $0 >= pausedStart + 18 }
+        XCUIRemote.shared.press(.left)
+        waitForPosition { $0 >= pausedStart + 8 && $0 <= pausedStart + 12 }
+        XCTAssertEqual(app.buttons["toggle-playback"].label, "Play")
+        let selected = seconds()
+        add(keep(app, "Paused timeline selection"))
+        XCUIRemote.shared.press(.select)
+        waitForPosition { $0 >= selected + 2 }
+        XCTAssertEqual(app.buttons["toggle-playback"].label, "Pause")
+        XCUIRemote.shared.press(.menu)
+    }
+
     func testBackScrollsUpThenReturnsHomeThenExits() {
         let app = XCUIApplication()
         app.launchArguments = ["-appLanguage", "en", "-serverAddress", "http://192.168.0.102:5058"]

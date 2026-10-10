@@ -54,6 +54,7 @@ struct LibraryView: View {
         .tvScrollEdge()
         .ignoresSafeArea(edges: .horizontal)
         .task {
+            favorites.sync()
             await catalog.loadLibrary(api: api)
             // The server is still matching titles: show them as they come in.
             while catalog.libraryPending > 0 && !Task.isCancelled {

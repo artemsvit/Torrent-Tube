@@ -3,10 +3,6 @@ import SwiftUI
 import UIKit
 #endif
 
-extension Color {
-    static let torrentAccent = Color(red: 0.23, green: 0.576, blue: 1)
-}
-
 @main
 struct TorrentTubeMobileApp: App {
     @State private var store = AppStore()
@@ -210,6 +206,8 @@ struct MobileRoot: View {
     /// Mac: how deep Settings sits in the current tab's stack (nil: not open).
     @State private var settingsDepth: Int?
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(FavoritesStore.self) private var favorites
     init(store: AppStore, api: TorrentTubeAPI, config: ServerConfig) {
         self.store = store; self.api = api; self.config = config
         _context = State(initialValue: MobileContext(api: api, config: config))
@@ -224,6 +222,10 @@ struct MobileRoot: View {
             .environment(\.mobileEdge, sizeClass == .regular ? 32 : 16)
             .environment(catalog)
             .environment(context)
+            .task(id: api.baseURL) { favorites.connect(api, config: config) }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { favorites.sync() }  // hearts added on another device
+            }
             .sheet(isPresented: $settings) {
                 MobileSettings(store: store, api: api, config: config)
                     .environment(catalog)

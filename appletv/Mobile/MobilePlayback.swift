@@ -221,9 +221,7 @@ struct MobilePlayer: View {
             Button { visible.toggle(); activity = Date() } label: { Color.clear.contentShape(Rectangle()) }
                 .hapticButtonStyle(PlainButtonStyle()).accessibilityLabel(L("Show playback controls"))
             if controller.buffering && controller.failure == nil {
-                MobilePlaybackLoading(title: title, message: L("Buffering…"))
-                    .padding(28).background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 24))
-                    .padding(24).allowsHitTesting(false)
+                PlaybackBufferingIndicator()
             }
             if let failure = controller.failure {
                 VStack(spacing: 16) {

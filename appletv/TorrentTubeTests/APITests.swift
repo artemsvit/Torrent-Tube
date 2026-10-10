@@ -6,6 +6,28 @@ import XCTest
 #endif
 
 final class APITests: XCTestCase {
+    @MainActor
+    func testOnlyRecognizedEpisodesContinueAutomatically() throws {
+        let decoder = JSONDecoder()
+        let movies = try decoder.decode([VideoFile].self, from: Data(#"[{"index":0,"name":"Feature.mkv","size":100},{"index":1,"name":"Behind the scenes.mkv","size":20}]"#.utf8))
+        XCTAssertNil(PlaybackCoordinator.nextFile(after: 0, in: movies))
+        let episodes = try decoder.decode([VideoFile].self, from: Data(#"[{"index":2,"name":"Show.S01E02.mkv","size":100},{"index":0,"name":"Show.S01E01.mkv","size":100},{"index":3,"name":"Bonus.mkv","size":20}]"#.utf8))
+        XCTAssertEqual(PlaybackCoordinator.nextFile(after: 0, in: episodes), 2)
+        XCTAssertNil(PlaybackCoordinator.nextFile(after: 2, in: episodes))
+        XCTAssertNil(PlaybackCoordinator.nextFile(after: 3, in: episodes))
+        let legacy = [VideoFile(index: 0, name: "Episode 1.mkv", size: 100), VideoFile(index: 1, name: "Episode 2.mkv", size: 100)]
+        XCTAssertEqual(PlaybackCoordinator.nextFile(after: 0, in: legacy), 1)
+    }
+    @MainActor
+    func testCompletedFileEndFallbackDoesNotFinishPausedOrIncompletePlayback() {
+        XCTAssertTrue(PlaybackCoordinator.reachedCompletedFileEnd(seconds: 99.8, duration: 100, stationaryTicks: 3, complete: true, paused: false))
+        XCTAssertFalse(PlaybackCoordinator.reachedCompletedFileEnd(seconds: 99.8, duration: 100, stationaryTicks: 3, complete: true, paused: true))
+        XCTAssertFalse(PlaybackCoordinator.reachedCompletedFileEnd(seconds: 99.8, duration: 100, stationaryTicks: 3, complete: false, paused: false))
+        XCTAssertFalse(PlaybackCoordinator.reachedCompletedFileEnd(seconds: 98, duration: 100, stationaryTicks: 3, complete: true, paused: false))
+        XCTAssertFalse(PlaybackCoordinator.reachedCompletedFileEnd(seconds: 99.8, duration: 100, stationaryTicks: 2, complete: true, paused: false))
+        XCTAssertFalse(PlaybackCoordinator.reachedCompletedFileEnd(seconds: 0, duration: 0, stationaryTicks: 3, complete: true, paused: false))
+    }
+
     func testAddressNormalizationPreservesProxyPrefix() throws {
         let base = try TorrentTubeAPI.serverURL(" 192.168.0.102:5058/tube ")
         XCTAssertEqual(base.absoluteString, "http://192.168.0.102:5058/tube/")

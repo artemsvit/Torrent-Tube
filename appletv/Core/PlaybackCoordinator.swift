@@ -79,16 +79,13 @@ final class PlaybackCoordinator {
     }
 
     /// The file to play after `current`: the next episode by season and
-    /// number when the names say so, else the next file in the list.
+    /// number. Films and unrecognized extra files never form a playback queue.
     static func nextFile(after current: Int, in files: [VideoFile]) -> Int? {
         guard files.count > 1 else { return nil }
         let episodes = files.compactMap { file in file.episodeIdentity.map { (file.index, $0) } }
-        if episodes.count > 1, let playing = episodes.first(where: { $0.0 == current })?.1 {
-            return episodes.filter { ($0.1.season, $0.1.episode) > (playing.season, playing.lastEpisode) }
-                .min { ($0.1.season, $0.1.episode) < ($1.1.season, $1.1.episode) }?.0
-        }
-        guard let position = files.firstIndex(where: { $0.index == current }), position + 1 < files.count else { return nil }
-        return files[position + 1].index
+        guard let playing = episodes.first(where: { $0.0 == current })?.1 else { return nil }
+        return episodes.filter { ($0.1.season, $0.1.episode) > (playing.season, playing.lastEpisode) }
+            .min { ($0.1.season, $0.1.episode) < ($1.1.season, $1.1.episode) }?.0
     }
 
     func prepare() async {
@@ -212,24 +209,35 @@ final class PlaybackCoordinator {
             progress?.cancel()
             progress = Task { [weak self] in
                 var ticks = 0
+                var previousPosition: Double?
+                var stationaryTicks = 0
                 while !Task.isCancelled {
                     guard let self else { return }
                     player.refresh(); ticks += 1
+                    if let previousPosition, abs(player.seconds - previousPosition) < 0.05 { stationaryTicks += 1 }
+                    else { stationaryTicks = 0 }
+                    previousPosition = player.seconds
+                    if Self.reachedCompletedFileEnd(seconds: player.seconds, duration: player.duration,
+                                                   stationaryTicks: stationaryTicks, complete: self.streamStatus.map { $0.done ?? ($0.progress >= 100) } == true,
+                                                   paused: player.player.state == .paused) {
+                        player.ended = true
+                    }
                     if ticks % 10 == 0 { self.savePosition() }
                     if player.ended {
                         self.savePosition(completed: true)
                         let finished = self.session?.file
-                        self.release()
                         let files = self.prepared?.files ?? []
                         if let finished, let next = Self.nextFile(after: finished, in: files) {
+                            self.release()
                             // A new task: this one was cancelled by release().
                             Task { await self.start(file: next, continuing: true) }
                         } else if let finished, let playing = files.first(where: { $0.index == finished })?.episodeIdentity,
                                   !self.request.seasonSources.isEmpty {
                             // The last episode of this folder: the next season may be in another.
-                            Task { if await !self.continueWithNextSeason(after: playing) { self.completed = true } }
+                            self.release()
+                            Task { if await !self.continueWithNextSeason(after: playing) { self.finishPlayback() } }
                         } else {
-                            self.completed = true
+                            self.finishPlayback()
                         }
                         return
                     }
@@ -237,6 +245,21 @@ final class PlaybackCoordinator {
                 }
             }
         } catch { self.error = error.localizedDescription }
+    }
+
+    private func finishPlayback() {
+        guard !closed, !suspended else { return }
+        // Dismiss the cover before tearing down the player. Its presentation
+        // must not fall back to preparation or offer the completed file again.
+        completed = true
+        close()
+    }
+
+    /// Some VLC HTTP inputs keep playing/buffering at the final frame instead
+    /// of emitting ended. Require a complete file and three unchanged samples.
+    static func reachedCompletedFileEnd(seconds: Double, duration: Double, stationaryTicks: Int, complete: Bool, paused: Bool) -> Bool {
+        complete && !paused && seconds.isFinite && duration.isFinite && duration > 0 &&
+            seconds >= max(0, duration - 0.5) && stationaryTicks >= 3
     }
 
     private func beginHeartbeat(_ session: PlaybackSession) {

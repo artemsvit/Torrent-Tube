@@ -1,6 +1,41 @@
 import SwiftUI
 import ImageIO
 
+/// A transparent player overlay, shared by iPhone, iPad, Mac and Apple TV.
+struct PlaybackBufferingIndicator: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    #if os(tvOS)
+    private let diameter: CGFloat = 64
+    #else
+    private let diameter: CGFloat = 44
+    #endif
+
+    var body: some View {
+        VStack(spacing: 16) {
+            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion)) { context in
+                let turn = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.1) / 1.1
+                ZStack {
+                    Circle().stroke(Color.torrentAccent.opacity(0.18), lineWidth: 4)
+                    Circle().trim(from: 0, to: 0.8)
+                        .stroke(AngularGradient(colors: [.torrentAccent.opacity(0.15), .torrentAccent], center: .center,
+                                                startAngle: .degrees(0), endAngle: .degrees(288)),
+                                style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                        .rotationEffect(.degrees(turn * 360 - 90))
+                }
+            }
+            .frame(width: diameter, height: diameter)
+            .accessibilityHidden(true)
+            Text(L("Buffering…"))
+                .font(.headline)
+                .foregroundStyle(.white)
+                .shadow(color: .black.opacity(0.8), radius: 3, y: 1)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("playback-buffering")
+        .allowsHitTesting(false)
+    }
+}
+
 /// Small artwork uses screen pixels, never points, and decodes outside the UI thread.
 actor PosterArtworkCache {
     static let shared: PosterArtworkCache = {
@@ -240,6 +275,7 @@ struct HeroBackdrop: View {
 /// The dark backdrop of the welcome screen on every device: near-black with a
 /// soft blue glow from the top, like the light behind the hero images.
 extension Color {
+    static let torrentAccent = Color(red: 0.23, green: 0.576, blue: 1)
     /// The near-black every page sits on; hero images fade into it.
     static let appBase = Color(red: 0.02, green: 0.03, blue: 0.05)
 }

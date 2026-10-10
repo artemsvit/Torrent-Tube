@@ -40,7 +40,7 @@ struct MacPlayer: View {
                 .onTapGesture(count: 2) { toggleFullScreen() }
                 .onTapGesture { controller.toggle(); reveal() }
             if controller.buffering && controller.failure == nil {
-                ProgressView().controlSize(.large).tint(.white).allowsHitTesting(false)
+                PlaybackBufferingIndicator()
             }
             if let failure = controller.failure { failureCard(failure) }
         }

@@ -36,6 +36,7 @@ struct MainView: View {
     let api: TorrentTubeAPI
     let config: ServerConfig
     @State private var catalog = CatalogStore()
+    @Environment(FavoritesStore.self) private var favorites
     @State private var shelfTitle: MediaItem?
     @State private var tab: MainTab = .home
     // Each tab's own stack of title pages. Leaving a tab resets it, so
@@ -84,8 +85,10 @@ struct MainView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 Task { await catalog.loadFeed("new", api: api, config: config, refresh: true) }
+                favorites.sync()  // hearts added on another device
             }
         }
+        .task(id: api.baseURL) { favorites.connect(api, config: config) }
         .onChange(of: store.shelfTitleID, initial: true) { _, id in
             guard let id, let snapshot = TopShelfStore.snapshot, snapshot.server == api.baseURL.absoluteString,
                   let title = snapshot.titles.first(where: { $0.id == id }) else { return }
