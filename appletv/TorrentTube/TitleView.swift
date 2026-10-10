@@ -133,8 +133,10 @@ struct TitleView: View {
                                         .focused($focusedEpisode, equals: episode.number)
                                         .overlay { if launchingEpisode == episode.number { ProgressView().tint(.white) } }
                                 }
-                            }.padding(.horizontal, TVLayout.edge).padding(.vertical, 18)
-                        }.focusSection()
+                            }.padding(.horizontal, TVLayout.edge).padding(.top, 18).padding(.bottom, 36)
+                        // A focused card grows: let it draw past the row, and leave room
+                        // below for a name on two or three lines.
+                        }.scrollClipDisabled().focusSection()
                     }
                 }
                 if let people = details?.people, !people.isEmpty {
