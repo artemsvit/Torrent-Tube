@@ -7,6 +7,8 @@
 // which can render enormous and misplaced (seen in Safari).
 const ICONS = {
   download: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M6 11l6 6 6-6"/><path d="M5 21h14"/></svg>`,
+  heart: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.5 8 3.6 4.5 7.2 4.5c2 0 3.6 1.1 4.8 2.8 1.2-1.7 2.8-2.8 4.8-2.8 3.6 0 5.7 3.5 4.5 6.8-1.8 4.6-9.3 9.2-9.3 9.2z"/></svg>`,
+  heartFilled: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.5 8 3.6 4.5 7.2 4.5c2 0 3.6 1.1 4.8 2.8 1.2-1.7 2.8-2.8 4.8-2.8 3.6 0 5.7 3.5 4.5 6.8-1.8 4.6-9.3 9.2-9.3 9.2z"/></svg>`,
   check: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>`,
   pause: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>`,
   play: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7-11-7z"/></svg>`,
@@ -2133,6 +2135,8 @@ function renderDetailsBody() {
     <button type="button" class="btn-primary btn-pill play-main" data-act="play"${!playable ? " disabled" : ""}>${playerLogo(playerId)}${PLAYERS[playerId].canOpen ? "Play in" : "Copy link for"} ${escapeHtml(PLAYERS[playerId].name)}</button>
     <button type="button" class="btn-primary btn-pill play-more" data-act="pick-player" title="Choose the player" aria-label="Choose the player">${CHEVRON_DOWN}</button>
   </div>`);
+  const saved = favorites.some(f => f.id === favoriteId(s));
+  actions.push(`<button type="button" class="btn-secondary dt-favorite${saved ? " is-saved" : ""}" data-act="favorite" aria-pressed="${saved}" title="${saved ? "Remove from Favorites" : "Add to Favorites"}">${saved ? ICONS.heartFilled : ICONS.heart}${saved ? "In Favorites" : "Favorite"}</button>`);
   if (!d.backdrop && !s.playing && !s.loading) {
     if (s.noTrailer) {
       const q = [d.title || item.title, d.year, "trailer"].filter(Boolean).join(" ");
@@ -2335,6 +2339,7 @@ detailsBody.addEventListener("click", (e) => {
     case "lib-season": s.librarySeason = Number(el.dataset.season); renderDetailsBody(); break;
     case "play-release": playRelease((s.showAllReleases ? s.releases : s.releases.slice(0, RELEASES_SHOWN))[Number(el.dataset.index)]); break;
     case "pick-player": openPlayerPicker(); break;
+    case "favorite": toggleFavorite(s); break;
     case "download-release": downloadRelease((s.showAllReleases ? s.releases : s.releases.slice(0, RELEASES_SHOWN))[Number(el.dataset.index)]); break;
     case "toggle-releases": s.showAllReleases = !s.showAllReleases; renderDetailsBody(); break;
     case "more": {
@@ -2381,9 +2386,68 @@ const libraryNote = document.getElementById("libraryNote");
 const layoutEl = document.getElementById("layout");
 const LIBRARY_KINDS = [["movie", "Movies"], ["tv", "TV Shows"], ["cartoon", "Cartoons"]];
 let libraryItems = [], libraryPending = 0, librarySection = null, libraryTimer = null, libraryLoaded = false;
+// Favorites: the server keeps one list for the apps and this page.
+let favorites = [];
 
 function libraryShown() {
   try { return localStorage.getItem("showLibrary") !== "0"; } catch (e) { return true; }
+}
+
+async function loadFavorites() {
+  try {
+    const d = await fetch("/api/favorites").then(r => r.json());
+    favorites = d.items || [];
+  } catch (e) { return; }
+  renderLibrary();
+  if (detailsState) renderDetailsBody();
+}
+
+async function sendFavorites(path, body) {
+  try {
+    const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.error || "Couldn't save favorites");
+    favorites = d.items || [];
+  } catch (e) { showToast(e.message || "Couldn't reach the server", true); }
+  renderLibrary();
+  if (detailsState) renderDetailsBody();
+}
+
+// The same id the apps give a title (MediaItem.id), so a heart set in one
+// place shows in all of them: the library folder, else the release.
+function favoriteId(s) {
+  if (s.library) return s.library.id;
+  const item = s.item;
+  return item.download_link ?? item.magnet ?? item.title;
+}
+
+function favoriteEntry(s) {
+  const item = s.item, d = s.data || {};
+  const type = d.media_type || item.media_type || (s.library && s.library.kind === "tv" ? "tv" : "movie");
+  const kind = s.library ? s.library.kind : d.kind === "Cartoon" ? "cartoon" : type === "tv" ? "tv" : "movie";
+  const entry = {
+    id: favoriteId(s), title: s.library ? s.library.name : item.title,
+    clean_title: d.title || item.clean_title || item.title, poster: item.poster || d.poster,
+    tmdb_id: d.tmdb_id || item.tmdb_id, media_type: type, kind, added_at: Date.now() / 1000,
+  };
+  if (s.library) entry.source_override = s.library.is_torrent ? { id: s.library.id } : { path: s.library.id };
+  else Object.assign(entry, { magnet: item.magnet, download_link: item.download_link });
+  return entry;
+}
+
+function toggleFavorite(s) {
+  const id = favoriteId(s);
+  if (favorites.some(f => f.id === id)) sendFavorites("/api/favorites/remove", { ids: [id] });
+  else sendFavorites("/api/favorites", { items: [favoriteEntry(s)] });
+}
+
+function openFavorite(f) {
+  const source = f.source_override || {};
+  const path = source.path || source.id;
+  const library = path && libraryItems.find(i => i.id === path);
+  if (library) return openLibraryTitle(library);
+  openDetails({ title: f.title, clean_title: f.clean_title, poster: f.poster, tmdb_id: f.tmdb_id,
+                media_type: f.media_type, magnet: f.magnet, download_link: f.download_link });
 }
 
 async function loadLibrary(refresh = false) {
@@ -2403,7 +2467,7 @@ async function loadLibrary(refresh = false) {
 function libraryTitle(item) { return item.display_title || item.title || item.name; }
 
 function renderLibrary() {
-  const show = libraryItems.length > 0 && libraryShown();
+  const show = (libraryItems.length > 0 || favorites.length > 0) && libraryShown();
   libraryPanel.hidden = !show;
   layoutEl.classList.toggle("has-library", show);
   if (!show) return;
@@ -2412,15 +2476,23 @@ function renderLibrary() {
     const hay = " " + plainText([item.display_title, item.title, item.name, item.original_title].filter(Boolean).join(" ")) + " ";
     return words.every(w => hay.includes(" " + w));
   }) : libraryItems;
+  const saved = words.length ? favorites.filter(f => {
+    const hay = " " + plainText([f.clean_title, f.title].filter(Boolean).join(" ")) + " ";
+    return words.every(w => hay.includes(" " + w));
+  }) : favorites;
   const counts = Object.fromEntries(LIBRARY_KINDS.map(([k]) => [k, items.filter(i => i.kind === k).length]));
-  if (!librarySection || !counts[librarySection]) librarySection = (LIBRARY_KINDS.find(([k]) => counts[k]) || [librarySection || "movie"])[0];
-  libraryKinds.innerHTML = LIBRARY_KINDS.filter(([k]) => counts[k]).map(([k, label]) =>
+  counts.favorites = saved.length;
+  // Favorites comes after Cartoons, as in the apps.
+  const tabs = [...LIBRARY_KINDS, ["favorites", "Favorites"]];
+  if (!librarySection || !counts[librarySection]) librarySection = (tabs.find(([k]) => counts[k]) || [librarySection || "movie"])[0];
+  libraryKinds.innerHTML = tabs.filter(([k]) => counts[k]).map(([k, label]) =>
     `<button type="button" class="library-chip${k === librarySection ? " is-active" : ""}" data-kind="${k}">${label} · ${counts[k]}</button>`).join("");
   libraryNote.hidden = !libraryPending;
   libraryNote.textContent = libraryPending ? `Matching ${libraryPending} new title${libraryPending === 1 ? "" : "s"} on TMDB…` : "";
   libraryGrid.innerHTML = "";
-  items.filter(i => i.kind === librarySection).forEach(item => libraryGrid.appendChild(buildLibraryCard(item)));
-  if (!items.length) libraryGrid.innerHTML = `<div class="library-empty">Nothing in your library matches “${escapeHtml(libraryFilter.value.trim())}”.</div>`;
+  if (librarySection === "favorites") saved.forEach(f => libraryGrid.appendChild(buildFavoriteCard(f)));
+  else items.filter(i => i.kind === librarySection).forEach(item => libraryGrid.appendChild(buildLibraryCard(item)));
+  if (!items.length && !saved.length) libraryGrid.innerHTML = `<div class="library-empty">Nothing in your library matches “${escapeHtml(libraryFilter.value.trim())}”.</div>`;
 }
 
 function buildLibraryCard(item) {
@@ -2435,6 +2507,20 @@ function buildLibraryCard(item) {
       : `<div class="lib-fallback">${escapeHtml(libraryTitle(item))}</div>`}${badge ? `<span class="lib-badge">${badge}</span>` : ""}</div>
     <div class="lib-title">${escapeHtml(libraryTitle(item))}</div>${sub ? `<div class="lib-sub">${escapeHtml(sub)}</div>` : ""}`;
   card.addEventListener("click", () => openLibraryTitle(item));
+  return card;
+}
+
+function buildFavoriteCard(f) {
+  const card = document.createElement("button");
+  card.type = "button";
+  card.className = "lib-card";
+  const title = f.clean_title || f.title;
+  const kind = { movie: "Movie", tv: "TV show", cartoon: "Cartoon" }[f.kind] || "";
+  card.innerHTML = `<div class="lib-poster">${f.poster
+      ? `<img src="${escapeHtml(f.poster.replace("/w200/", "/w342/"))}" alt="" loading="lazy">`
+      : `<div class="lib-fallback">${escapeHtml(title)}</div>`}</div>
+    <div class="lib-title">${escapeHtml(title)}</div>${kind ? `<div class="lib-sub">${kind}</div>` : ""}`;
+  card.addEventListener("click", () => openFavorite(f));
   return card;
 }
 
@@ -2636,6 +2722,9 @@ async function init() {
   loadConfig();
   loadLimits();
   loadLibrary();
+  loadFavorites();
+  // Hearts set on another device show when the page is looked at again.
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) loadFavorites(); });
   await loadDiscoverFeeds();
   // Discover is the main screen whenever it's actually usable; if search
   // isn't configured on this server there's nothing to discover, so stay

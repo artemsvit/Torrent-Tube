@@ -312,6 +312,7 @@
     white-space: nowrap;
   }
   .btn-secondary svg { width: 14px; height: 14px; }
+  .dt-favorite.is-saved { color: #ff4d6d; }
   .btn-secondary:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); background: var(--surface-hover); }
 
   .icon-btn {

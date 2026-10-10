@@ -22,6 +22,7 @@ from persistent_cache import PersistentCache
 from release_titles import SERIES_NAME_RE, extract_title_and_year
 from intro_detection import IntroDetector
 from playback_sessions import PlaybackSessions
+from favorites import Favorites
 from trailer_streams import TrailerError, TrailerStreams
 from flask import Flask, Response, jsonify, redirect, render_template, request, send_file, url_for
 
@@ -427,7 +428,8 @@ def config():
     return jsonify({
         "server": "torrenttube",
         "api_version": 1,
-        "capabilities": {"file_selection": True, "playback_sessions": True, "library": True, "top_shelf_previews": True},
+        "capabilities": {"file_selection": True, "playback_sessions": True, "library": True, "top_shelf_previews": True,
+                         "favorites": True},
         "download_dir": str(DOWNLOAD_DIR),
         # The same folder as the server's own path (None when it isn't
         # known) - what Settings shows, as /downloads means little.
@@ -2433,6 +2435,36 @@ def list_library():
     # max-age=0: the apps poll this while matches are pending and after a
     # rescan, so their URL cache must ask every time (a 304 when unchanged).
     return make_etag_response({"items": items, "metadata_pending": pending}, max_age=0, stale_revalidate=0)
+
+
+# Favorites: the heart in the apps and the web page, one list per server.
+FAVORITES = Favorites(STATE_DIR / "favorites.json")
+
+
+@app.route("/api/favorites", methods=["GET"])
+def list_favorites():
+    return jsonify({"items": FAVORITES.items()})
+
+
+@app.route("/api/favorites", methods=["POST"])
+def add_favorites():
+    """{"items": [...]}: adds or updates; the apps also send their old,
+    device-only list here once."""
+    items = (request.get_json(silent=True) or {}).get("items")
+    if not isinstance(items, list):
+        return jsonify({"error": "Send a list of favorites"}), 400
+    FAVORITES.add(items)
+    return jsonify({"items": FAVORITES.items()})
+
+
+@app.route("/api/favorites/remove", methods=["POST"])
+def remove_favorites():
+    """{"ids": [...]} - in the body, as ids are magnets, links and paths."""
+    ids = (request.get_json(silent=True) or {}).get("ids")
+    if not isinstance(ids, list):
+        return jsonify({"error": "Send a list of ids"}), 400
+    FAVORITES.remove(ids)
+    return jsonify({"items": FAVORITES.items()})
 
 
 @app.route("/api/intro")
