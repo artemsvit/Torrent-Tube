@@ -220,6 +220,10 @@ struct MobileRoot: View {
     #endif
     var body: some View {
         root
+            #if os(iOS)
+            // No scroll bars anywhere on iPhone and iPad; covers and sheets too.
+            .scrollIndicators(.hidden)
+            #endif
             .environment(\.mobileEdge, sizeClass == .regular ? 32 : 16)
             .environment(catalog)
             .environment(context)
@@ -231,12 +235,14 @@ struct MobileRoot: View {
             .sheet(isPresented: $settings) {
                 MobileSettings(store: store, api: api, config: config)
                     .environment(catalog)
+                    .scrollIndicators(.hidden)
                     .presentationBackground { AppBackground() }
             }
             .fullScreenCover(isPresented: $searching) {
                 MobileSearch(api: api, config: config)
                     .environment(catalog)
                     .environment(context)
+                    .scrollIndicators(.hidden)
             }
             #if os(macOS)
             // Outermost, so every cover in the window (Search's too) can reach it.
