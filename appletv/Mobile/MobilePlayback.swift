@@ -104,6 +104,9 @@ struct MobilePlayback: View {
                             statusIcon("exclamationmark.circle")
                             Text(error).font(.body).multilineTextAlignment(.center).foregroundStyle(.white.opacity(0.8))
                             primaryAction("Try again", icon: "arrow.clockwise") { Task { await model.prepare() } }
+                        } else if model.switchingEpisode {
+                            // One episode ended, the next is starting: nothing to choose here.
+                            MobilePlaybackLoading(title: request.title, message: L("Next episode…"))
                         } else if model.loading {
                             MobilePlaybackLoading(title: request.title, message: L("Preparing your stream…"))
                         } else if let resume = model.resumeEntry {
