@@ -846,7 +846,9 @@ struct ChipRow: View {
                     .buttonStyle(ChipStyle(selected: current))
                     .accessibilityAddTraits(current ? .isSelected : [])
             }
-        }.focusSection()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)  // Up from any poster reaches the chips
+        .focusSection()
     }
 }
 
@@ -883,6 +885,11 @@ struct FilmGrid: View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 230, maximum: 280), spacing: 36)], alignment: .leading, spacing: 36) {
             ForEach(items) { item in FilmCard(item: item, api: api, config: config, onFocus: onFocus) }
         }.padding(.vertical, 16)
+        // As wide as the screen and its own section: Down from a chip or a
+        // poster with nothing right below it (a short row above) still comes
+        // in, to the nearest poster.
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .focusSection()
     }
 }
 

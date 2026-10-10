@@ -506,7 +506,13 @@ struct PlayerView: View {
         if let position = pausedSeekPosition {
             controller.seek(to: position)
             pausedSeekPosition = nil
-            controller.player.play()
+            controller.play()
+        } else if let target = scrubTarget {
+            // A click right after a swipe while playing confirms the new
+            // place: seek now and keep playing (it used to pause instead).
+            scrubTarget = nil; panStart = nil
+            controller.seek(to: target)
+            if !controller.player.isPlaying { controller.play() }
         } else {
             controller.toggle()
         }

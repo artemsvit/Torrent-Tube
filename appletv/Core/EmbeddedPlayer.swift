@@ -33,6 +33,9 @@ final class EmbeddedPlayer {
     @ObservationIgnored private var resumePosition: Double
     @ObservationIgnored private var didResume = false
     @ObservationIgnored private var started = false
+    /// Paused by the viewer: VLC can say "buffering" after a seek while
+    /// paused, but nothing is loading that the viewer waits for.
+    @ObservationIgnored private var userPaused = false
 
     @ObservationIgnored private let subtitleURL: URL?
     /// The subtitle file, saved on the device, and whether VLC has it yet.
@@ -91,7 +94,7 @@ final class EmbeddedPlayer {
         seconds = max(0, Double(player.time.intValue) / 1000)
         duration = max(0, Double(player.media?.length.intValue ?? 0) / 1000)
         playing = player.isPlaying
-        buffering = player.state == .opening || (player.state == .buffering && !player.isPlaying)
+        buffering = !userPaused && (player.state == .opening || (player.state == .buffering && !player.isPlaying))
         if player.state == .error { failure = L("This file could not be played. Try another release.") }
         ended = player.state == .ended
         if !didResume && duration > 0 && player.isSeekable {
@@ -99,8 +102,9 @@ final class EmbeddedPlayer {
             if resumePosition > 0 { seek(to: resumePosition) }
         }
     }
-    func pause() { player.pause(); playing = false }
-    func toggle() { if player.isPlaying { player.pause() } else { player.play() } }
+    func pause() { player.pause(); playing = false; userPaused = true; buffering = false }
+    func play() { userPaused = false; player.play() }
+    func toggle() { if player.isPlaying { pause() } else { play() } }
     func seek(by offset: Double) { seek(to: seconds + offset) }
     func seek(to value: Double) {
         guard duration > 0, player.isSeekable else { return }
