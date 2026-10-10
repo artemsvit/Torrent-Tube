@@ -35,6 +35,9 @@ if [ "${streams:-0}" -gt 0 ]; then
   exit 0
 fi
 
+# Remove the old container first: a plain recreate first renames it to
+# <id>_torrenttube, and Container Manager keeps showing that name.
+$COMPOSE rm -s -f "$SERVICE" > /dev/null 2>&1
 if $COMPOSE up -d "$SERVICE" > /dev/null 2>&1; then
   log "Updated to ${latest#sha256:}"
   [ -n "$running" ] && $DOCKER rmi "$running" > /dev/null 2>&1
