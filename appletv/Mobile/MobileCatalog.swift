@@ -230,6 +230,14 @@ private struct PulledFill<Art: View>: ViewModifier {
     }
 }
 
+extension View {
+    /// iPadOS 26: the banner goes on under the glass sidebar, mirrored and
+    /// blurred - as in Apple's TV app. Earlier systems keep the plain banner.
+    @ViewBuilder func extendsUnderSidebar() -> some View {
+        if #available(iOS 26.0, macOS 26.0, *) { backgroundExtensionEffect() } else { self }
+    }
+}
+
 struct MobileBackdrop: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     let url: String?
@@ -239,6 +247,7 @@ struct MobileBackdrop: View {
         HeroBackdrop(url: url.flatMap { URL(string: higherResolution($0, backdrop: true)) },
                      nextURL: nextURL.flatMap { URL(string: higherResolution($0, backdrop: true)) }, alignment: sizeClass == .compact ? .center : .top,
                      placeholder: placeholder)
+            .extendsUnderSidebar()
     }
 }
 
