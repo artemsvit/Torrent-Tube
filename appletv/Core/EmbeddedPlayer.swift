@@ -8,6 +8,12 @@ import VLCKit
 import MobileVLCKit
 #endif
 
+/// The player and its view, handed to the stop queue.
+private struct StoppingPlayer: @unchecked Sendable {
+    let player: VLCMediaPlayer
+    let view: Any?
+}
+
 struct PlaybackRequest: Identifiable {
     let id = UUID()
     let source: PlaybackSource
@@ -35,7 +41,7 @@ final class EmbeddedPlayer {
     @ObservationIgnored private var started = false
     /// Paused by the viewer: VLC can say "buffering" after a seek while
     /// paused, but nothing is loading that the viewer waits for.
-    @ObservationIgnored private var userPaused = false
+    @ObservationIgnored private(set) var userPaused = false
 
     @ObservationIgnored private let subtitleURL: URL?
     /// The subtitle file, saved on the device, and whether VLC has it yet.
@@ -112,8 +118,16 @@ final class EmbeddedPlayer {
         seconds = max(0, min(duration - 1, value))
         player.time = VLCTime(int: Int32(min(Double(Int32.max), seconds * 1000)))
     }
+    /// VLC's stop waits for its own threads; near the end of a file they can
+    /// wait for the main thread to draw a frame, and both waited forever (the
+    /// picture froze a second before the end, no next episode). Stop it here,
+    /// one at a time, and let go of the view once VLC is done with it.
+    private static let stopQueue = DispatchQueue(label: "TorrentTube.vlc-stop", qos: .userInitiated)
     func stop() {
-        player.stop(); player.drawable = nil
+        let stopping = StoppingPlayer(player: player, view: player.drawable)
+        Self.stopQueue.async {
+            stopping.player.stop()
+        }
         if let subtitleFile { try? FileManager.default.removeItem(at: subtitleFile.deletingLastPathComponent()) }
     }
 

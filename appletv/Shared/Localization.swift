@@ -193,6 +193,7 @@ private let ukrainian: [String: String] = [
 
     // Playback
     "Preparing your stream…": "Готуємо відео…",
+    "Next episode…": "Наступна серія…",
     "Continue from %@?": "Продовжити з %@?",
     "Resume": "Продовжити",
     "Start from beginning": "Почати спочатку",

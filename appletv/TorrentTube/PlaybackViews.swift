@@ -18,6 +18,16 @@ struct PlaybackLauncher: View {
                 PlayerView(controller: controller, title: request.title, streamStatus: model.streamStatus, episodeLabel: model.episodeLabel, intro: model.intro) { close() }
                     .id(ObjectIdentifier(controller))
 
+            } else if model.switchingEpisode && model.error == nil {
+                // One episode ended, the next is starting: nothing to choose here.
+                ZStack {
+                    Color.black.ignoresSafeArea()
+                    VStack(spacing: 24) {
+                        ProgressView().progressViewStyle(.circular).tint(.white).scaleEffect(1.4)
+                        Text(L("Next episode…")).font(.system(size: 28, weight: .semibold)).foregroundStyle(.white.opacity(0.9))
+                    }
+                }
+                .accessibilityIdentifier("next-episode")
             } else {
                 ZStack(alignment: .leading) {
                     ArtworkView(url: request.artwork, background: true, fill: true)

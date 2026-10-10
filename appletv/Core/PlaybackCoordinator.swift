@@ -18,6 +18,9 @@ final class PlaybackCoordinator {
     var streamStatus: StreamStatus?
     var suspended = false
     var completed = false
+    /// Between one episode's end and the next one's player: the screen shows
+    /// only that the next episode is coming, never the file list.
+    var switchingEpisode = false
     /// The opening of this episode, when the server found one: the player
     /// offers "Skip intro" while it plays.
     var intro: ClosedRange<Double>?
@@ -147,13 +150,14 @@ final class PlaybackCoordinator {
             loadIntro(file: file, source: source)
             if let prior = history?.entry(server: api.baseURL, torrentID: result.id, file: result.file) {
                 #if os(tvOS)
-                resumeEntry = prior
+                // Apple TV: the next episode simply plays, from its beginning.
+                if continuing { openPlayer(at: 0) } else { resumeEntry = prior }
                 #else
                 if continuing { openPlayer(at: prior.seconds) } else { resumeEntry = prior }
                 #endif
             } else { openPlayer(at: 0) }
         } catch is CancellationError {} catch {
-            if current == operation { self.error = error.localizedDescription }
+            if current == operation { self.error = error.localizedDescription; switchingEpisode = false }
         }
     }
 
@@ -210,7 +214,7 @@ final class PlaybackCoordinator {
         guard let session, !closed, !suspended else { return }
         do {
             let player = EmbeddedPlayer(url: try api.mediaURL(session.url), resumePosition: seconds)
-            controller = player; resumeEntry = nil
+            controller = player; resumeEntry = nil; switchingEpisode = false
             progress?.cancel()
             progress = Task { [weak self] in
                 var ticks = 0
@@ -224,7 +228,7 @@ final class PlaybackCoordinator {
                     previousPosition = player.seconds
                     if Self.reachedCompletedFileEnd(seconds: player.seconds, duration: player.duration,
                                                    stationaryTicks: stationaryTicks, complete: self.streamStatus.map { $0.done ?? ($0.progress >= 100) } == true,
-                                                   paused: player.player.state == .paused) {
+                                                   paused: player.userPaused) {
                         player.ended = true
                     }
                     if ticks % 10 == 0 { self.savePosition() }
@@ -233,12 +237,13 @@ final class PlaybackCoordinator {
                         let finished = self.session?.file
                         let files = self.prepared?.files ?? []
                         if let finished, let next = Self.nextFile(after: finished, in: files) {
+                            self.switchingEpisode = true
                             self.release()
                             // A new task: this one was cancelled by release().
-                            Task { await self.start(file: next, continuing: true) }
                         } else if let finished, let playing = files.first(where: { $0.index == finished })?.episodeIdentity,
                                   !self.request.seasonSources.isEmpty {
                             // The last episode of this folder: the next season may be in another.
+                            self.switchingEpisode = true
                             self.release()
                             Task { if await !self.continueWithNextSeason(after: playing) { self.finishPlayback() } }
                         } else {
@@ -249,7 +254,7 @@ final class PlaybackCoordinator {
                     do { try await Task.sleep(for: .seconds(1)) } catch { return }
                 }
             }
-        } catch { self.error = error.localizedDescription }
+        } catch { self.error = error.localizedDescription; switchingEpisode = false }
     }
 
     private func finishPlayback() {
@@ -261,10 +266,12 @@ final class PlaybackCoordinator {
     }
 
     /// Some VLC HTTP inputs keep playing/buffering at the final frame instead
-    /// of emitting ended. Require a complete file and three unchanged samples.
+    /// of emitting ended - and stop up to a second or so short of the length
+    /// the file states. Require a complete file and three unchanged samples
+    /// within two seconds of the end. `paused`: by the viewer, not by VLC.
     static func reachedCompletedFileEnd(seconds: Double, duration: Double, stationaryTicks: Int, complete: Bool, paused: Bool) -> Bool {
         complete && !paused && seconds.isFinite && duration.isFinite && duration > 0 &&
-            seconds >= max(0, duration - 0.5) && stationaryTicks >= 3
+            seconds >= max(0, duration - 2) && stationaryTicks >= 3
     }
 
     private func beginHeartbeat(_ session: PlaybackSession) {

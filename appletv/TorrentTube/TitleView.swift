@@ -14,7 +14,13 @@ struct TitleView: View {
     @State private var episodePlaybackError: String?
     @State private var trailerError: String?
     @State private var season = 1
+    /// Set once: the page appears again when the player closes, and must keep
+    /// the season the viewer was in instead of going back to the first.
+    @State private var seasonPicked = false
     @State private var launchingEpisode: Int?
+    /// The episode card with focus: given back when the player closes, so the
+    /// page stays at the episodes instead of jumping up to Play.
+    @FocusState private var focusedEpisode: Int?
     @State private var selectedEpisode: Int?
     @State private var episodes: [Episode] = []
     @State private var episodeLoading = false
@@ -82,7 +88,7 @@ struct TitleView: View {
                                 HStack(spacing: 18) {
                                     ForEach(seasons) { selection in
                                         let current = selection.number == season
-                                        Button { season = selection.number } label: {
+                                        Button { season = selection.number; seasonPicked = true } label: {
                                             Text(selection.name.isEmpty ? L("Season %ld", selection.number) : selection.name)
                                         }
                                         .buttonStyle(ChipStyle(selected: current))
@@ -111,6 +117,7 @@ struct TitleView: View {
                                             if let overview = episode.overview { Text(overview).font(.system(size: 22)).foregroundStyle(.secondary).lineLimit(3) }
                                         }.frame(width: 380, alignment: .leading)
                                     }.buttonStyle(CinemaCardStyle())
+                                        .focused($focusedEpisode, equals: episode.number)
                                         .overlay { if launchingEpisode == episode.number { ProgressView().tint(.white) } }
                                 }
                             }.padding(.horizontal, TVLayout.edge).padding(.vertical, 18)
@@ -202,11 +209,17 @@ struct TitleView: View {
         .alert(L("No trailer"), isPresented: Binding(get: { trailerError != nil }, set: { if !$0 { trailerError = nil } })) {
             Button(L("OK"), role: .cancel) {}
         } message: { Text(trailerError ?? "") }
-        .fullScreenCover(item: $playback) { request in PlaybackLauncher(request: request, api: api) }
+        .fullScreenCover(item: $playback, onDismiss: {
+            guard let episode = selectedEpisode else { return }
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(100))
+                focusedEpisode = episode
+            }
+        }) { request in PlaybackLauncher(request: request, api: api) }
         .task {
             await catalog.enrich([item], api: api, config: config)
             await catalog.loadDetails(item, api: api, config: config)
-            if let first = details?.seasonList?.first { season = first.number }
+            if !seasonPicked, let first = details?.seasonList?.first { season = first.number; seasonPicked = true }
         }
         .task(id: "\(details?.tmdbId ?? 0):\(season)") { await loadEpisodes() }
         .onChange(of: season) { launchingEpisode = nil }

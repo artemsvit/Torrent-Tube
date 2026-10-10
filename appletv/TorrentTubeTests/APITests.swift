@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 #if os(tvOS)
 @testable import TorrentTubeTV
 #else
@@ -23,7 +24,9 @@ final class APITests: XCTestCase {
         XCTAssertTrue(PlaybackCoordinator.reachedCompletedFileEnd(seconds: 99.8, duration: 100, stationaryTicks: 3, complete: true, paused: false))
         XCTAssertFalse(PlaybackCoordinator.reachedCompletedFileEnd(seconds: 99.8, duration: 100, stationaryTicks: 3, complete: true, paused: true))
         XCTAssertFalse(PlaybackCoordinator.reachedCompletedFileEnd(seconds: 99.8, duration: 100, stationaryTicks: 3, complete: false, paused: false))
-        XCTAssertFalse(PlaybackCoordinator.reachedCompletedFileEnd(seconds: 98, duration: 100, stationaryTicks: 3, complete: true, paused: false))
+        XCTAssertFalse(PlaybackCoordinator.reachedCompletedFileEnd(seconds: 97.5, duration: 100, stationaryTicks: 3, complete: true, paused: false))
+        // VLC stops about a second short of the stated length (Friends S8E4: 22:26 of 22:27).
+        XCTAssertTrue(PlaybackCoordinator.reachedCompletedFileEnd(seconds: 1346.2, duration: 1347.3, stationaryTicks: 3, complete: true, paused: false))
         XCTAssertFalse(PlaybackCoordinator.reachedCompletedFileEnd(seconds: 99.8, duration: 100, stationaryTicks: 2, complete: true, paused: false))
         XCTAssertFalse(PlaybackCoordinator.reachedCompletedFileEnd(seconds: 0, duration: 0, stationaryTicks: 3, complete: true, paused: false))
     }
@@ -120,3 +123,4 @@ final class TrailerModelTests: XCTestCase {
         XCTAssertFalse(Trailer(key: "invalid/link", name: "Invalid", lang: nil).isValid)
     }
 }
+

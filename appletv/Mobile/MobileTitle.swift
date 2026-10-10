@@ -10,6 +10,8 @@ struct MobileTitle: View {
     @State private var expanded = false
     @State private var heroGrowth: CGFloat = 0
     @State private var season = 1
+    /// Set once, so the season stays when the page appears again.
+    @State private var seasonPicked = false
     @State private var launchingEpisode: Int?
     @State private var episode: Int?
     @State private var episodes: [Episode] = []
@@ -70,7 +72,7 @@ struct MobileTitle: View {
         .task {
             await catalog.enrich([item], api: api, config: config)
             await catalog.loadDetails(item, api: api, config: config)
-            if let first = details?.seasonList?.first { season = first.number }
+            if !seasonPicked, let first = details?.seasonList?.first { season = first.number; seasonPicked = true }
         }
         .task(id: "\(details?.tmdbId ?? 0):\(season)") { await loadEpisodes() }
         .onChange(of: season) { launchingEpisode = nil }
@@ -165,7 +167,7 @@ struct MobileTitle: View {
                     HStack(spacing: 8) {
                         ForEach(seasons) { selection in
                             let current = selection.number == season
-                            Button { withAnimation(.snappy) { season = selection.number } } label: {
+                            Button { withAnimation(.snappy) { season = selection.number; seasonPicked = true } } label: {
                                 Text(selection.name.isEmpty ? L("Season %ld", selection.number) : selection.name)
                                     .font(HeroFont.chip)
                                     .padding(HeroFont.chipPadding)
