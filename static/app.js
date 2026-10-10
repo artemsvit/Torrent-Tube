@@ -2138,7 +2138,7 @@ function renderDetailsBody() {
     <button type="button" class="btn-primary btn-pill play-more" data-act="pick-player" title="Choose the player" aria-label="Choose the player">${CHEVRON_DOWN}</button>
   </div>`);
   const saved = favorites.some(f => f.id === favoriteId(s));
-  actions.push(`<button type="button" class="btn-secondary dt-favorite${saved ? " is-saved" : ""}" data-act="favorite" aria-pressed="${saved}" title="${saved ? "Remove from Favorites" : "Add to Favorites"}">${saved ? ICONS.heartFilled : ICONS.heart}${saved ? "In Favorites" : "Favorite"}</button>`);
+  actions.push(`<button type="button" class="btn-secondary dt-favorite${saved ? " is-saved" : ""}" data-act="favorite" aria-pressed="${saved}" title="${saved ? "Remove from Favorites" : "Add to Favorites"}">${saved ? ICONS.heartFilled : ICONS.heart}${saved ? "Unfavorite" : "Favorite"}</button>`);
   if (!d.backdrop && !s.playing && !s.loading) {
     if (s.noTrailer) {
       const q = [d.title || item.title, d.year, "trailer"].filter(Boolean).join(" ");

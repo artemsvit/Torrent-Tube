@@ -312,11 +312,10 @@
     white-space: nowrap;
   }
   .btn-secondary svg { width: 14px; height: 14px; }
-  .dt-favorite.is-saved { color: #ff4d6d; }
   .poster-wrap { position: relative; flex-shrink: 0; display: flex; }
   .fav-badge {
     display: none; position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border-radius: 50%;
-    align-items: center; justify-content: center; background: rgba(0,0,0,.62); color: #ff4d6d; pointer-events: none;
+    align-items: center; justify-content: center; background: rgba(0,0,0,.55); color: #fff; pointer-events: none;
   }
   .fav-badge svg { width: 13px; height: 13px; }
   .lib-card .fav-badge { top: 7px; right: 7px; width: 28px; height: 28px; }
