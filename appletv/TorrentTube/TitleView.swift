@@ -18,6 +18,8 @@ struct TitleView: View {
     /// the season the viewer was in instead of going back to the first.
     @State private var seasonPicked = false
     @State private var launchingEpisode: Int?
+    /// Which show and season `episodes` holds.
+    @State private var episodesKey: String?
     /// The episode card with focus: given back when the player closes, so the
     /// page stays at the episodes instead of jumping up to Play.
     @FocusState private var focusedEpisode: Int?
@@ -256,10 +258,15 @@ struct TitleView: View {
     private func loadEpisodes() async {
         guard let id = details?.tmdbId, details?.mediaType == "tv" else { return }
         let requestedSeason = season
+        // The page appears again when the player closes. Emptying the row then
+        // made the page shorter, so it scrolled up and back down: keep it.
+        let key = "\(id):\(requestedSeason)"
+        guard key != episodesKey || episodes.isEmpty else { return }
         episodeLoading = true; episodes = []
         defer { if requestedSeason == season { episodeLoading = false } }
         if let response: EpisodeResponse = try? await api.request("api/episodes", query: [.init(name: "id", value: String(id)), .init(name: "season", value: String(requestedSeason))]), !Task.isCancelled, requestedSeason == season {
             episodes = response.episodes
+            episodesKey = key
         }
     }
 }
