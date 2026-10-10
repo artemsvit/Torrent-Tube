@@ -128,6 +128,12 @@ struct MainView: View {
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity)
         .focusSection()
+        .defaultFocus($navigationFocus, tab)
+        // Up from the page lands on the nearest item (often Home); coming
+        // into the bar should land on the open tab instead.
+        .onChange(of: navigationFocus) { old, new in
+            if old == nil, let new, new != tab { navigationFocus = tab }
+        }
     }
 
     private func navigationButton(_ destination: MainTab, title: String, icon: String?, iconOnly: Bool = false) -> some View {
