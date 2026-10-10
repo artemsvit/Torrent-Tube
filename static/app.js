@@ -1076,7 +1076,7 @@ function buildResultCard(r, container, allResults, emptyMessage) {
   div.className = "item";
   const poster = `<div class="poster-wrap">${r.poster
     ? `<img class="result-poster" src="${escapeHtml(r.poster)}" alt="" loading="lazy">`
-    : `<div class="result-poster-fallback">${ICONS.download}</div>`}${FAVORITE_BADGE}</div>`;
+    : `<div class="result-poster-fallback brand-host">${brandArt(r.clean_title || r.title)}</div>`}${FAVORITE_BADGE}</div>`;
   div.dataset.favId = r.download_link ?? r.magnet ?? r.title;
   if (isFavorite(div.dataset.favId)) div.classList.add("is-favorite");
   const rating = (r.rating && r.rating > 0) ? `<span class="rating-badge">${ICONS.star}${r.rating.toFixed(1)}</span>` : "";
@@ -1846,6 +1846,7 @@ function openDetails(item, torrent = null, { push = false } = {}) {
       detailsCache.delete(cacheKey);
       if (requestId !== detailsRequestId) return;
       Object.assign(detailsState, { loading: false, error: e.message || "Couldn't load details" });
+      renderDetailsHero();  // the branded banner
       renderDetailsBody();
       loadReleases(item.clean_title || roughTitle(item.title), requestId);
     });
@@ -2071,6 +2072,8 @@ async function prepareTrailerPlayer(key) {
   });
 }
 
+function detailsHasBanner(s) { return !!s.data.backdrop || !s.loading; }
+
 function renderDetailsHero() {
   const { data: d, playing } = detailsState;
   // Built once per title, then only its parts are updated - the player
@@ -2096,7 +2099,13 @@ function renderDetailsHero() {
   if (d.kind) meta.push(`<span>${escapeHtml(d.kind)}</span>`);
 
   const s = detailsState;
-  const hasBackdrop = !!d.backdrop;
+  // Once details are in, a title without a backdrop gets the branded banner.
+  const hasBackdrop = detailsHasBanner(s);
+  const media = hero.querySelector(".dt-media");
+  const brand = media.querySelector(".brand-art");
+  if (hasBackdrop && !d.backdrop && !playing) {
+    if (!brand || brand.dataset.seed !== (d.title || "")) { brand?.remove(); media.insertAdjacentHTML("afterbegin", brandArt(d.title, true)); }
+  } else brand?.remove();
   hero.className = `dt-hero ${hasBackdrop ? "has-backdrop" : "no-backdrop"}${playing ? " is-playing" : ""}${s.playerReady ? " player-ready" : ""}`;
   detailsModal.querySelector(".details-box").classList.toggle("has-banner", hasBackdrop);
 
@@ -2110,11 +2119,11 @@ function renderDetailsHero() {
     overlay = `<button type="button" class="dt-hero-play" data-act="trailer"${s.findingTrailer ? " disabled" : ""} aria-label="Play trailer">
       <span class="dt-hero-play-icon">${s.findingTrailer ? `<span class="spinner-ring"></span>` : PLAY_ICON}</span>${s.findingTrailer ? "Finding trailer…" : "Trailer"}</button>`;
   }
-  const showBackdrop = hasBackdrop && !playing;
-  hero.querySelector(".dt-media").style.backgroundImage = showBackdrop ? `url('${d.backdrop.replace(/'/g, "%27")}')` : "";
+  const showBackdrop = !!d.backdrop && !playing;
+  media.style.backgroundImage = showBackdrop ? `url('${d.backdrop.replace(/'/g, "%27")}')` : "";
   hero.querySelector(".dt-media-overlay").innerHTML = overlay;
   hero.querySelector(".dt-hero-rest").innerHTML = `
-    ${d.poster ? `<img class="dt-poster" src="${escapeHtml(d.poster)}" alt="">` : `<div class="dt-poster result-poster-fallback">${ICONS.download}</div>`}
+    ${d.poster ? `<img class="dt-poster" src="${escapeHtml(d.poster)}" alt="">` : `<div class="dt-poster result-poster-fallback brand-host">${brandArt(d.title)}</div>`}
     <div class="dt-info">
       <h2 class="dt-title">${escapeHtml(d.title)}</h2>
       ${d.original_title && d.original_title !== d.title ? `<div class="dt-sub">${escapeHtml(d.original_title)}</div>` : ""}
@@ -2139,7 +2148,7 @@ function renderDetailsBody() {
   </div>`);
   const saved = favorites.some(f => f.id === favoriteId(s));
   actions.push(`<button type="button" class="btn-secondary dt-favorite${saved ? " is-saved" : ""}" data-act="favorite" aria-pressed="${saved}" title="${saved ? "Remove from Favorites" : "Add to Favorites"}">${saved ? ICONS.heartFilled : ICONS.heart}${saved ? "Unfavorite" : "Favorite"}</button>`);
-  if (!d.backdrop && !s.playing && !s.loading) {
+  if (!detailsHasBanner(s) && !s.playing && !s.loading) {
     if (s.noTrailer) {
       const q = [d.title || item.title, d.year, "trailer"].filter(Boolean).join(" ");
       actions.push(`<a class="btn-secondary" href="${escapeHtml(youtubeSearchUrl(q))}" target="_blank" rel="noopener">${PLAY_ICON}Search YouTube</a>`);
@@ -2405,6 +2414,35 @@ async function loadFavorites() {
   if (detailsState) renderDetailsBody();
 }
 
+// What a title shows without a poster or banner: the play mark and the Top
+// Shelf rings on one of a few deep brand colors, picked from the title - the
+// same hash and colors as the apps (BrandPlaceholder), so a title keeps its
+// color everywhere.
+const BRAND_PALETTES = [
+  ["#1a3d85", "#08122e"], ["#452985", "#120a2e"], ["#0d5c66", "#051a21"],
+  ["#7a2154", "#26081a"], ["#854d14", "#2b1405"], ["#1f6138", "#081c0f"],
+];
+function brandPaletteIndex(seed) {
+  let hash = 2166136261;  // FNV-1a over the UTF-8 bytes
+  for (const byte of new TextEncoder().encode(seed || "")) hash = Math.imul(hash ^ byte, 16777619) >>> 0;
+  return hash % BRAND_PALETTES.length;
+}
+function brandArt(seed, wide = false) {
+  const [a, b] = BRAND_PALETTES[brandPaletteIndex(seed)];
+  // A banner keeps its centre for the trailer button and its left for the
+  // title: the rings and the mark sit to the right.
+  const w = wide ? 320 : 200, h = wide ? 180 : 300, cx = wide ? w * 0.74 : w / 2, cy = h / 2;
+  const side = Math.min(w, h), step = side * 0.38;
+  const rings = Math.max(1, Math.ceil(2 * Math.hypot(Math.max(cx, w - cx), h / 2) / step));
+  let circles = "";
+  for (let i = 1; i <= rings; i++) circles += `<circle cx="${cx}" cy="${cy}" r="${((step * i + side * 0.2) / 2).toFixed(1)}"/>`;
+  const mh = side * (wide ? 0.16 : 0.2), mw = mh * 91 / 102, sw = mw * 10.4 / 91, x = cx + mh * 0.05;
+  const mark = `M${(x - mw / 2 + sw / 2).toFixed(1)} ${(cy - mh / 2 + sw / 2).toFixed(1)}V${(cy + mh / 2 - sw / 2).toFixed(1)}L${(x + mw / 2 - sw / 2).toFixed(1)} ${cy}Z`;
+  return `<div class="brand-art" data-seed="${escapeHtml(seed || "")}" style="background:linear-gradient(135deg,${a},${b})" aria-hidden="true">
+    <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid slice"><g fill="none" stroke="#fff" stroke-opacity=".07" stroke-width="${(side * 0.035).toFixed(1)}">${circles}</g>
+    <path d="${mark}" fill="none" stroke="#fff" stroke-opacity="${wide ? 0.5 : 0.9}" stroke-width="${sw.toFixed(1)}" stroke-linejoin="round"/></svg></div>`;
+}
+
 // The heart in a poster's top right corner, shown only on favorites (as
 // in the apps). Cards carry their id, so a change only flips a class.
 const FAVORITE_BADGE = `<span class="fav-badge" aria-label="In Favorites">${ICONS.heartFilled}</span>`;
@@ -2519,7 +2557,7 @@ function buildLibraryCard(item) {
   const sub = [item.year, item.rating > 0 ? `★ ${item.rating.toFixed(1)}` : ""].filter(Boolean).join(" · ");
   card.innerHTML = `<div class="lib-poster">${item.poster
       ? `<img src="${escapeHtml(item.poster.replace("/w200/", "/w342/"))}" alt="" loading="lazy">`
-      : `<div class="lib-fallback">${escapeHtml(libraryTitle(item))}</div>`}${badge ? `<span class="lib-badge">${badge}</span>` : ""}${FAVORITE_BADGE}</div>
+      : brandArt(libraryTitle(item))}${badge ? `<span class="lib-badge">${badge}</span>` : ""}${FAVORITE_BADGE}</div>
     <div class="lib-title">${escapeHtml(libraryTitle(item))}</div>${sub ? `<div class="lib-sub">${escapeHtml(sub)}</div>` : ""}`;
   card.addEventListener("click", () => openLibraryTitle(item));
   return card;
@@ -2533,7 +2571,7 @@ function buildFavoriteCard(f) {
   const kind = { movie: "Movie", tv: "TV show", cartoon: "Cartoon" }[f.kind] || "";
   card.innerHTML = `<div class="lib-poster">${f.poster
       ? `<img src="${escapeHtml(f.poster.replace("/w200/", "/w342/"))}" alt="" loading="lazy">`
-      : `<div class="lib-fallback">${escapeHtml(title)}</div>`}${FAVORITE_BADGE}</div>
+      : brandArt(title)}${FAVORITE_BADGE}</div>
     <div class="lib-title">${escapeHtml(title)}</div>${kind ? `<div class="lib-sub">${kind}</div>` : ""}`;
   card.addEventListener("click", () => openFavorite(f));
   return card;
