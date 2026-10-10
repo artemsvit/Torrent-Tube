@@ -773,6 +773,14 @@ struct FilmCard: View {
                 ArtworkView(url: value.poster, seed: value.displayTitle).aspectRatio(2.0 / 3.0, contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                     .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.white.opacity(focused ? 0.9 : 0.08), lineWidth: focused ? 3 : 1) }
+                    // A favorite, in every grid and shelf - as on iPhone and iPad.
+                    .overlay(alignment: .topTrailing) {
+                        if favorites.contains(item, server: api.baseURL) {
+                            Image(systemName: "heart.fill").font(.system(size: 20, weight: .semibold)).foregroundStyle(.white)
+                                .padding(10).background(.black.opacity(0.55), in: Circle()).padding(12)
+                                .accessibilityHidden(true)
+                        }
+                    }
                 Text(value.displayTitle).font(.system(size: 21, weight: .semibold)).foregroundStyle(focused ? .white : .white.opacity(0.6)).lineLimit(2)
                     .frame(maxWidth: .infinity, minHeight: 54, alignment: .topLeading).padding(.horizontal, 4)
             }
