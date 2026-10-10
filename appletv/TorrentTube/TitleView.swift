@@ -209,13 +209,10 @@ struct TitleView: View {
         .alert(L("No trailer"), isPresented: Binding(get: { trailerError != nil }, set: { if !$0 { trailerError = nil } })) {
             Button(L("OK"), role: .cancel) {}
         } message: { Text(trailerError ?? "") }
-        .fullScreenCover(item: $playback, onDismiss: {
-            guard let episode = selectedEpisode else { return }
-            Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(100))
-                focusedEpisode = episode
-            }
-        }) { request in PlaybackLauncher(request: request, api: api) }
+        .fullScreenCover(item: $playback) { request in PlaybackLauncher(request: request, api: api) }
+        // Back from the player: focus comes back straight to the episode that
+        // played, so the page does not jump up to Play and down again.
+        .defaultFocus($focusedEpisode, selectedEpisode, priority: .userInitiated)
         .task {
             await catalog.enrich([item], api: api, config: config)
             await catalog.loadDetails(item, api: api, config: config)
