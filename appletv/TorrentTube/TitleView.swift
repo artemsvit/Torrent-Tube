@@ -114,7 +114,8 @@ struct TitleView: View {
                                     } label: {
                                         VStack(alignment: .leading, spacing: 14) {
                                             ArtworkView(url: episode.still, seed: "\(value.displayTitle) \(episode.number)").frame(width: 380, height: 215).clipShape(RoundedRectangle(cornerRadius: 12))
-                                            Text("\(episode.number). \(episode.name)").font(.system(size: 25, weight: .semibold)).lineLimit(2)
+                                            Text("\(episode.number). \(episode.name)").font(.system(size: 25, weight: .semibold))
+                                                .fixedSize(horizontal: false, vertical: true)  // the whole name, on as many lines as it needs
                                             if let runtime = episode.runtime { Text(L("%ld min", runtime)).font(.system(size: 21)).foregroundStyle(.secondary) }
                                             if let overview = episode.overview { Text(overview).font(.system(size: 22)).foregroundStyle(.secondary).lineLimit(3) }
                                         }.frame(width: 380, alignment: .leading)
