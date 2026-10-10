@@ -1,0 +1,7 @@
+{
+    "permissions": {
+      "allow": [
+        "Bash(scp -i ~/.ssh/synology_musictube -P 285 :*)"
+      ]
+    }
+  }
