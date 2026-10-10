@@ -187,6 +187,8 @@ struct HeroArtFrame<Art: View>: View {
                 LinearGradient(colors: [.clear, .white], startPoint: .top, endPoint: .bottom).frame(height: Self.feather)
                 Color.white
             })
+            // After the mask: the mask clipped the copy drawn under the sidebar.
+            .extendsUnderSidebar()
     }
 }
 
@@ -247,7 +249,6 @@ struct MobileBackdrop: View {
         HeroBackdrop(url: url.flatMap { URL(string: higherResolution($0, backdrop: true)) },
                      nextURL: nextURL.flatMap { URL(string: higherResolution($0, backdrop: true)) }, alignment: sizeClass == .compact ? .center : .top,
                      placeholder: placeholder)
-            .extendsUnderSidebar()
     }
 }
 
