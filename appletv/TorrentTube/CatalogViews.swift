@@ -317,7 +317,7 @@ struct HomeView: View {
                                     Button { playback = PlaybackRequest(source: entry.source, title: entry.title, artwork: entry.artwork) } label: {
                                         VStack(alignment: .leading, spacing: 14) {
                                             // Progress sits on the artwork, like the TV app's Up Next.
-                                            ArtworkView(url: entry.artwork).frame(width: 400, height: 225)
+                                            ArtworkView(url: entry.artwork, seed: entry.title).frame(width: 400, height: 225)
                                                 .overlay(alignment: .bottom) {
                                                     LinearGradient(colors: [.clear, .black.opacity(0.75)], startPoint: .top, endPoint: .bottom).frame(height: 70)
                                                 }
@@ -492,7 +492,8 @@ struct CinemaHero<Actions: View>: View {
         ZStack(alignment: .bottomLeading) {
             ZStack {
                 HeroBackdrop(url: (details?.backdrop ?? item.poster).flatMap { URL(string: higherResolution($0, backdrop: true)) },
-                             nextURL: nextArtwork.flatMap { URL(string: higherResolution($0, backdrop: true)) })
+                             nextURL: nextArtwork.flatMap { URL(string: higherResolution($0, backdrop: true)) },
+                             placeholder: item.displayTitle)
                 if let preview {
                     VideoSurface(controller: preview)
                         .opacity(preview.playing && !preview.buffering ? 1 : 0)
@@ -584,6 +585,8 @@ struct ArtworkView: View {
     /// Fill the frame edge to edge (the hero) instead of fitting a backdrop
     /// to the right side.
     var fill = false
+    /// The title: it picks the branded placeholder's color.
+    var seed = ""
     var body: some View {
         GeometryReader { geometry in
             ZStack {
@@ -592,7 +595,7 @@ struct ArtworkView: View {
                 }
                 if let url, let address = URL(string: higherResolution(url, backdrop: background)) {
                     if !background {
-                        PosterArtwork(url: address)
+                        PosterArtwork(url: address, seed: seed)
                     } else {
                         AsyncImage(url: address, transaction: Transaction(animation: .easeOut(duration: 0.25))) { phase in
                             if let image = phase.image {  // fades in instead of popping in
@@ -603,7 +606,7 @@ struct ArtworkView: View {
                             .clipped()
                     }
                 } else if !background {
-                    Image(systemName: "film").font(.system(size: 45)).foregroundStyle(.white.opacity(0.35)).accessibilityHidden(true)
+                    BrandPlaceholder(seed: seed)
                 }
             }
         }.clipped()
@@ -761,7 +764,7 @@ struct FilmCard: View {
         let value = catalog.resolved(item)
         NavigationLink(value: item) {
             VStack(alignment: .leading, spacing: 14) {
-                ArtworkView(url: value.poster).aspectRatio(2.0 / 3.0, contentMode: .fit)
+                ArtworkView(url: value.poster, seed: value.displayTitle).aspectRatio(2.0 / 3.0, contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                     .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.white.opacity(focused ? 0.9 : 0.08), lineWidth: focused ? 3 : 1) }
                 Text(value.displayTitle).font(.system(size: 21, weight: .semibold)).foregroundStyle(focused ? .white : .white.opacity(0.6)).lineLimit(2)

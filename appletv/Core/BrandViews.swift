@@ -105,9 +105,12 @@ actor PosterArtworkCache {
 struct PosterArtwork: View {
     let url: URL?
     var fit = false
+    /// The title: it picks the placeholder's color when there is no image.
+    var seed = ""
     @Environment(\.displayScale) private var displayScale
     @State private var image: PlatformImage?
     @State private var loadedURL: URL?
+    @State private var failed = false
     private struct Request: Hashable {
         let url: URL?
         let width: Int
@@ -123,21 +126,22 @@ struct PosterArtwork: View {
             ZStack {
                 if let image {
                     Image(platformImage: image).resizable().aspectRatio(contentMode: fit ? .fit : .fill)
-                } else {
-                    Image(systemName: "film").font(.largeTitle).foregroundStyle(.secondary)
+                } else if url == nil || failed {
+                    BrandPlaceholder(seed: seed)
                 }
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
             .clipped()
             .task(id: request) {
                 guard let url = request.url, request.width > 0, request.height > 0 else { image = nil; return }
-                if loadedURL != url { image = nil }
+                if loadedURL != url { image = nil; failed = false }
                 do {
                     let decoded = try await PosterArtworkCache.shared.image(url: url, width: request.width, height: request.height, fit: fit)
                     try Task.checkCancellation()
                     image = decoded
+                    failed = decoded == nil
                     loadedURL = url
-                } catch { if !Task.isCancelled { image = nil } }
+                } catch { if !Task.isCancelled { image = nil; failed = true } }
             }
         }
         .accessibilityHidden(true)
@@ -200,6 +204,9 @@ struct HeroBackdrop: View {
     let url: URL?
     var nextURL: URL? = nil
     var alignment: Alignment = .center
+    /// The title, for the branded banner when there is no image. Nil: none.
+    var placeholder: String? = nil
+    @State private var failed = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var current: PlatformImage?
     @State private var outgoing: PlatformImage?
@@ -209,6 +216,9 @@ struct HeroBackdrop: View {
         GeometryReader { geometry in
             ZStack {
                 Color.clear
+                if let placeholder, current == nil, outgoing == nil, url == nil || failed {
+                    BrandPlaceholder(seed: placeholder)
+                }
                 if let outgoing { artwork(outgoing, size: geometry.size) }
                 if let current { artwork(current, size: geometry.size).opacity(blend) }
             }
@@ -232,11 +242,12 @@ struct HeroBackdrop: View {
     }
 
     private func load() async {
+        failed = false
         guard let url else { reset(); return }
         do {
             let decoded = try await HeroArtworkCache.shared.image(for: url)
             try Task.checkCancellation()
-            guard let decoded else { reset(); return }
+            guard let decoded else { reset(); failed = true; return }
             var transaction = Transaction(animation: nil)
             transaction.disablesAnimations = true
             withTransaction(transaction) {
@@ -250,7 +261,7 @@ struct HeroBackdrop: View {
             }
             outgoing = nil
         } catch is CancellationError {} catch {
-            if !Task.isCancelled { reset() }
+            if !Task.isCancelled { reset(); failed = true }
         }
     }
 
@@ -469,3 +480,56 @@ enum HeroLayout {
     }
 }
 #endif
+
+/// What a title shows when it has no poster or banner: the play mark and the
+/// Top Shelf rings on one of a few deep brand colors. The color comes from
+/// the title, so a title keeps its color everywhere (the web page uses the
+/// same hash and colors).
+struct BrandPlaceholder: View {
+    var seed: String = ""
+    static let palettes: [(Color, Color)] = [
+        (Color(red: 0.10, green: 0.24, blue: 0.52), Color(red: 0.03, green: 0.07, blue: 0.18)),  // blue
+        (Color(red: 0.27, green: 0.16, blue: 0.52), Color(red: 0.07, green: 0.04, blue: 0.18)),  // violet
+        (Color(red: 0.05, green: 0.36, blue: 0.40), Color(red: 0.02, green: 0.10, blue: 0.13)),  // teal
+        (Color(red: 0.48, green: 0.13, blue: 0.33), Color(red: 0.15, green: 0.03, blue: 0.10)),  // rose
+        (Color(red: 0.52, green: 0.30, blue: 0.08), Color(red: 0.17, green: 0.08, blue: 0.02)),  // amber
+        (Color(red: 0.12, green: 0.38, blue: 0.22), Color(red: 0.03, green: 0.11, blue: 0.06)),  // green
+    ]
+    /// FNV-1a over the UTF-8 bytes: the same on every launch and device
+    /// (Swift's own hashValue changes each launch).
+    static func paletteIndex(_ seed: String) -> Int {
+        var hash: UInt32 = 2166136261
+        for byte in seed.utf8 { hash = (hash ^ UInt32(byte)) &* 16777619 }
+        return Int(hash % UInt32(palettes.count))
+    }
+    var body: some View {
+        let colors = Self.palettes[Self.paletteIndex(seed)]
+        GeometryReader { geometry in
+            let side = min(geometry.size.width, geometry.size.height)
+            // A banner keeps its centre and left for the title and buttons:
+            // the rings and the mark sit to the right.
+            let wide = geometry.size.width > geometry.size.height * 1.4
+            let center = CGPoint(x: geometry.size.width * (wide ? 0.74 : 0.5), y: geometry.size.height / 2)
+            let cover = 2 * hypot(max(center.x, geometry.size.width - center.x), geometry.size.height / 2)
+            let step = side * 0.38
+            let rings = max(1, Int(ceil(cover / step)))
+            let markHeight = side * (wide ? 0.16 : 0.2)
+            ZStack {
+                LinearGradient(colors: [colors.0, colors.1], startPoint: .topLeading, endPoint: .bottomTrailing)
+                ForEach(1...rings, id: \.self) { ring in
+                    Circle().stroke(.white.opacity(0.07), lineWidth: side * 0.035)
+                        .frame(width: step * CGFloat(ring) + side * 0.2, height: step * CGFloat(ring) + side * 0.2)
+                        .position(center)
+                }
+                RoundedPlayShape()
+                    .stroke(style: StrokeStyle(lineWidth: markHeight * (91.0 / 102.0) * (10.4 / 91.0), lineCap: .round, lineJoin: .round))
+                    .foregroundStyle(.white.opacity(wide ? 0.5 : 0.9))  // on a banner: decoration, not a button
+                    .frame(width: markHeight * (91.0 / 102.0), height: markHeight)
+                    .position(x: center.x + markHeight * 0.05, y: center.y)
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height)
+            .clipped()
+        }
+        .accessibilityHidden(true)
+    }
+}

@@ -163,10 +163,12 @@ struct MobileArtwork: View {
     let url: String?
     var ratio: CGFloat = 2 / 3
     var fit = false
+    /// The title: it picks the branded placeholder's color.
+    var seed = ""
     var body: some View {
         Color(white: 0.12).aspectRatio(ratio, contentMode: .fit)
             .overlay {
-                PosterArtwork(url: url.map { higherResolution($0, backdrop: ratio > 1) }.flatMap(URL.init(string:)), fit: fit)
+                PosterArtwork(url: url.map { higherResolution($0, backdrop: ratio > 1) }.flatMap(URL.init(string:)), fit: fit, seed: seed)
             }
             .clipped()
             .accessibilityHidden(true)
@@ -232,9 +234,11 @@ struct MobileBackdrop: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     let url: String?
     var nextURL: String? = nil
+    var placeholder: String? = nil
     var body: some View {
         HeroBackdrop(url: url.flatMap { URL(string: higherResolution($0, backdrop: true)) },
-                     nextURL: nextURL.flatMap { URL(string: higherResolution($0, backdrop: true)) }, alignment: sizeClass == .compact ? .center : .top)
+                     nextURL: nextURL.flatMap { URL(string: higherResolution($0, backdrop: true)) }, alignment: sizeClass == .compact ? .center : .top,
+                     placeholder: placeholder)
     }
 }
 
@@ -280,7 +284,7 @@ struct MobileCard: View {
         let value = catalog.resolved(item)
         NavigationLink(value: item) {
             VStack(alignment: .leading, spacing: 8) {
-                MobileArtwork(url: value.poster)
+                MobileArtwork(url: value.poster, seed: value.displayTitle)
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay { RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(.white.opacity(0.08)) }
                     .overlay(alignment: .topTrailing) {
@@ -507,7 +511,7 @@ struct MobileHome: View {
 
     private func homeHeroArt(_ item: MediaItem, details: Details?) -> some View {
         ZStack {
-            MobileBackdrop(url: details?.backdrop ?? item.poster, nextURL: nextHeroArtwork)
+            MobileBackdrop(url: details?.backdrop ?? item.poster, nextURL: nextHeroArtwork, placeholder: item.displayTitle)
             LinearGradient(stops: [.init(color: .black.opacity(0.6), location: 0), .init(color: .clear, location: 0.22),
                                    .init(color: .black.opacity(0.75), location: 0.8),
                                    .init(color: .black, location: 1.0)], startPoint: .top, endPoint: .bottom)
@@ -613,7 +617,7 @@ struct MobileHome: View {
                         ForEach(entries) { entry in
                             Button { playback = PlaybackRequest(source: entry.source, title: entry.title, artwork: entry.artwork) } label: {
                                 VStack(alignment: .leading, spacing: 8) {
-                                    MobileArtwork(url: entry.artwork, ratio: 16 / 9)
+                                    MobileArtwork(url: entry.artwork, ratio: 16 / 9, seed: entry.title)
                                         .overlay(alignment: .bottom) {
                                             LinearGradient(colors: [.clear, .black.opacity(0.8)], startPoint: .top, endPoint: .bottom).frame(height: 44)
                                         }

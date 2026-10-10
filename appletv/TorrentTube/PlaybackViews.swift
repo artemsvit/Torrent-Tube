@@ -105,7 +105,7 @@ struct PlaybackLauncher: View {
                                                 let episode = identity.flatMap { identity in model.episodeMetadata[identity.season]?.first { $0.number == identity.episode } }
                                                 Button { Task { await model.start(file: file.index) } } label: {
                                                     VStack(alignment: .leading, spacing: 16) {
-                                                        ArtworkView(url: episode?.still ?? request.artwork).frame(width: 380, height: 214).clipShape(RoundedRectangle(cornerRadius: 12))
+                                                        ArtworkView(url: episode?.still ?? request.artwork, seed: "\(request.title) \(episode?.number ?? 0)").frame(width: 380, height: 214).clipShape(RoundedRectangle(cornerRadius: 12))
                                                         Text(episode.map { "\($0.number). \($0.name)" } ?? file.name).font(.system(size: 26, weight: .semibold)).lineLimit(2)
                                                         if let identity { Text(identity.label).font(.system(size: 22)).foregroundStyle(.secondary) }
                                                     }.frame(width: 380, alignment: .leading)

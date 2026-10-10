@@ -258,6 +258,12 @@ final class SharedStateTests: XCTestCase {
         XCTAssertEqual(PlaybackCoordinator.selectedFile(request: request, prepared: PreparedPlayback(id: "t", selected: 0, files: files)), 1)
     }
 
+    /// The web page (brandPaletteIndex in app.js) picks the same color for a title.
+    func testBrandPlaceholderColorMatchesWebPage() {
+        let expected = ["Dune": 5, "Amélie": 3, "1+1: Нова історія": 3, "Vacation": 0, "Friends": 2, "Sherlock": 4]
+        for (title, index) in expected { XCTAssertEqual(BrandPlaceholder.paletteIndex(title), index, title) }
+    }
+
     func testFavoritesPersistAndStayScopedToServer() throws {
         let server = URL(string: "http://nas/tube/")!
         let other = URL(string: "http://other/")!

@@ -98,12 +98,12 @@ struct MobileTitle: View {
     private func heroArt(regular: Bool) -> some View {
         ZStack {
             if regular {
-                MobileBackdrop(url: details?.backdrop ?? value.poster)
+                MobileBackdrop(url: details?.backdrop ?? value.poster, placeholder: value.displayTitle)
             } else if let poster = value.poster.map({ higherResolution($0, backdrop: false).replacingOccurrences(of: "/w500/", with: "/w780/") }) {
                 // A phone is tall: the poster fits it better than the wide backdrop.
-                HeroBackdrop(url: URL(string: poster), alignment: .top)
+                HeroBackdrop(url: URL(string: poster), alignment: .top, placeholder: value.displayTitle)
             } else {
-                MobileBackdrop(url: details?.backdrop)
+                MobileBackdrop(url: details?.backdrop, placeholder: value.displayTitle)
             }
             LinearGradient(stops: [.init(color: .black.opacity(0.55), location: 0), .init(color: .clear, location: 0.22),
                                    .init(color: .black.opacity(0.75), location: 0.8),
@@ -189,7 +189,7 @@ struct MobileTitle: View {
                         ForEach(episodes) { ep in
                             episodeButton(ep) {
                                 VStack(alignment: .leading, spacing: 8) {
-                                    MobileArtwork(url: ep.still, ratio: 16 / 9).clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                    MobileArtwork(url: ep.still, ratio: 16 / 9, seed: "\(value.displayTitle) \(ep.number)").clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                                     Text("\(ep.number). \(ep.name)").font(MobileStyle.itemTitle(.headline, weight: .semibold)).lineLimit(1)
                                     if let overview = ep.overview { Text(overview).font(.subheadline).foregroundStyle(.secondary).lineLimit(3) }
                                 }.frame(width: 300)
@@ -203,7 +203,7 @@ struct MobileTitle: View {
                     ForEach(episodes) { ep in
                         episodeButton(ep) {
                             HStack(alignment: .top, spacing: 12) {
-                                MobileArtwork(url: ep.still, ratio: 16 / 9).frame(width: 150).clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                MobileArtwork(url: ep.still, ratio: 16 / 9, seed: "\(value.displayTitle) \(ep.number)").frame(width: 150).clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("\(ep.number). \(ep.name)").font(MobileStyle.itemTitle(.subheadline.weight(.semibold), weight: .semibold)).lineLimit(2)
                                     if let runtime = ep.runtime { Text(L("%ld min", runtime)).font(.caption).foregroundStyle(.secondary) }
