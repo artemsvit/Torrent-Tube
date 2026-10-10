@@ -13,6 +13,8 @@ private struct StoppingPlayer: @unchecked Sendable {
     let player: VLCMediaPlayer
     let view: Any?
 }
+/// The view, handed back to the main thread to be freed there.
+private struct ViewToRelease: @unchecked Sendable { let view: Any? }
 
 struct PlaybackRequest: Identifiable {
     let id = UUID()
@@ -118,15 +120,22 @@ final class EmbeddedPlayer {
         seconds = max(0, min(duration - 1, value))
         player.time = VLCTime(int: Int32(min(Double(Int32.max), seconds * 1000)))
     }
-    /// VLC's stop waits for its own threads; near the end of a file they can
-    /// wait for the main thread to draw a frame, and both waited forever (the
-    /// picture froze a second before the end, no next episode). Stop it here,
-    /// one at a time, and let go of the view once VLC is done with it.
+    /// VLC stops in the background, and freeing a player that is still
+    /// stopping waits for that - while VLC's shutdown needs the main thread.
+    /// Done on the main thread, the app froze between episodes (Apple TV).
+    /// So: stop here, wait until VLC says it stopped, detach the view, and
+    /// free the player on this queue; the view is let go on the main thread.
     private static let stopQueue = DispatchQueue(label: "TorrentTube.vlc-stop", qos: .userInitiated)
     func stop() {
-        let stopping = StoppingPlayer(player: player, view: player.drawable)
+        var stopping: StoppingPlayer? = StoppingPlayer(player: player, view: player.drawable)
         Self.stopQueue.async {
-            stopping.player.stop()
+            guard let current = stopping else { return }
+            current.player.stop()
+            for _ in 0..<100 where current.player.state != .stopped { Thread.sleep(forTimeInterval: 0.05) }
+            current.player.drawable = nil
+            let view = ViewToRelease(view: current.view)
+            DispatchQueue.main.async { _ = view }
+            stopping = nil  // the player is freed here, off the main thread
         }
         if let subtitleFile { try? FileManager.default.removeItem(at: subtitleFile.deletingLastPathComponent()) }
     }
