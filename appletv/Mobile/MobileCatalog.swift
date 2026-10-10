@@ -247,15 +247,16 @@ final class SidebarArt {
     var url: String?
 }
 
-/// The iPad sidebar's background: the current banner, blurred and darkened.
+/// The iPad sidebar's background: the current banner, blurred and faint.
 struct SidebarArtBackground: View {
     @Environment(SidebarArt.self) private var art
     var body: some View {
         ZStack {
             AppBackground()
             HeroBackdrop(url: art.url.flatMap { URL(string: higherResolution($0, backdrop: true)) })
-                .blur(radius: 50)
-                .overlay(Color.black.opacity(0.4))
+                // Ambient: a soft wash of the banner's colors, not the picture.
+                .blur(radius: 80)
+                .opacity(0.45)
         }
         .ignoresSafeArea()
         .accessibilityHidden(true)
