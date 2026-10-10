@@ -350,7 +350,8 @@ struct PlayerView: View {
         .task(id: [scrubTarget, panStart]) {
             guard let target = scrubTarget, panStart == nil else { return }
             do { try await Task.sleep(for: .milliseconds(450)) } catch { return }
-            controller.seek(to: target)
+            // Back where it already is: no seek, so no pause to read again.
+            if abs(target - controller.seconds) >= 2 { controller.seek(to: target) }
             // Keep showing the target until the player reports the new time.
             do { try await Task.sleep(for: .milliseconds(800)) } catch { return }
             scrubTarget = nil
@@ -457,8 +458,11 @@ struct PlayerView: View {
             RemotePanCatcher(enabled: focused && trackMenu == nil && controller.duration > 0,
                              began: { panStart = displayedPosition; activity = Date() },
                              changed: { fraction in
-                                 guard let start = panStart else { return }
-                                 move(to: start + Double(fraction) * scrubSpan)
+                                 // A resting or clicking thumb moves a little: that must
+                                 // not seek (each seek makes VLC read the file again).
+                                 guard let start = panStart, abs(fraction) >= Self.panDeadZone else { return }
+                                 let travel = fraction - (fraction > 0 ? Self.panDeadZone : -Self.panDeadZone)
+                                 move(to: start + Double(travel) * scrubSpan)
                              },
                              ended: { panStart = nil; panEnded = Date() })
         }
@@ -478,6 +482,8 @@ struct PlayerView: View {
     /// Remote clicks on the timeline jump like the system player, whatever
     /// the setting for the two seek buttons is.
     private static let clickStep = 10.0
+    /// The share of the touchpad a swipe must cross before it scrubs.
+    private static let panDeadZone: CGFloat = 0.06
     /// The seconds one swipe across the whole touchpad covers: a quarter of
     /// the video, but at least 2 and at most 30 minutes.
     private var scrubSpan: Double { min(1800, max(120, controller.duration / 4)) }
@@ -605,6 +611,9 @@ private struct RemotePanCatcher: UIViewRepresentable {
         required init?(coder: NSCoder) { fatalError() }
 
         override func willMove(toWindow newWindow: UIWindow?) {
+            // Leaving mid-swipe (the controls hid): finish it, or the timeline
+            // would wait for its end forever and never seek.
+            if pan.state == .began || pan.state == .changed { ended() }
             pan.view?.removeGestureRecognizer(pan)
             newWindow?.addGestureRecognizer(pan)
         }

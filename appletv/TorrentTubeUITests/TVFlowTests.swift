@@ -1005,6 +1005,21 @@ final class TVFlowTests: XCTestCase {
         add(keep(app, "Library"))
     }
 
+    /// Up from a scrolled tab lands on that tab in the bar, not on Home.
+    func testUpFromScrolledTabFocusesThatTab() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-appLanguage", "en", "-serverAddress", "http://192.168.0.102:5058", "-autoplayHomeTrailers", "NO"]
+        app.launch()
+        XCTAssertTrue(app.buttons["hero-play"].waitForExistence(timeout: 30))
+        openTab(app, "Movies")
+        for _ in 0..<4 { XCUIRemote.shared.press(.down); usleep(400_000) }
+        let tabs = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "main-tab-"))
+        for _ in 0..<8 where !tabs.allElementsBoundByIndex.contains(where: { $0.hasFocus }) {
+            XCUIRemote.shared.press(.up); usleep(400_000)
+        }
+        XCTAssertTrue(app.buttons["main-tab-movies"].hasFocus, app.debugDescription)
+    }
+
     private func keep(_ app: XCUIApplication, _ name: String) -> XCTAttachment {
         let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = name; shot.lifetime = .keepAlways; return shot
     }
