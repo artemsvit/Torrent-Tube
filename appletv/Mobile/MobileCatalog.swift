@@ -240,8 +240,31 @@ extension View {
     }
 }
 
+/// The banner on screen now: the iPad's sidebar shows it, blurred - as in
+/// Apple's TV app.
+@MainActor @Observable
+final class SidebarArt {
+    var url: String?
+}
+
+/// The iPad sidebar's background: the current banner, blurred and darkened.
+struct SidebarArtBackground: View {
+    @Environment(SidebarArt.self) private var art
+    var body: some View {
+        ZStack {
+            AppBackground()
+            HeroBackdrop(url: art.url.flatMap { URL(string: higherResolution($0, backdrop: true)) })
+                .blur(radius: 50)
+                .overlay(Color.black.opacity(0.4))
+        }
+        .ignoresSafeArea()
+        .accessibilityHidden(true)
+    }
+}
+
 struct MobileBackdrop: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(SidebarArt.self) private var sidebarArt: SidebarArt?
     let url: String?
     var nextURL: String? = nil
     var placeholder: String? = nil
@@ -249,6 +272,9 @@ struct MobileBackdrop: View {
         HeroBackdrop(url: url.flatMap { URL(string: higherResolution($0, backdrop: true)) },
                      nextURL: nextURL.flatMap { URL(string: higherResolution($0, backdrop: true)) }, alignment: sizeClass == .compact ? .center : .top,
                      placeholder: placeholder)
+            // The iPad's sidebar shows this banner, blurred.
+            .onAppear { if sizeClass == .regular { sidebarArt?.url = url } }
+            .onChange(of: url) { _, new in if sizeClass == .regular { sidebarArt?.url = new } }
     }
 }
 

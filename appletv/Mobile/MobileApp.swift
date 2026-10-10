@@ -191,6 +191,7 @@ struct MobileRoot: View {
     let api: TorrentTubeAPI
     let config: ServerConfig
     @State private var catalog = CatalogStore()
+    @State private var sidebarArt = SidebarArt()
     @State private var context: MobileContext
     @State private var settings = false
     @State private var searching = false
@@ -222,6 +223,7 @@ struct MobileRoot: View {
             .environment(\.mobileEdge, sizeClass == .regular ? 32 : 16)
             .environment(catalog)
             .environment(context)
+            .environment(sidebarArt)
             .task(id: api.baseURL) { favorites.connect(api, config: config) }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active { favorites.sync() }  // hearts added on another device
@@ -387,7 +389,42 @@ struct MobileRoot: View {
         }
     }
     #else
-    private var root: some View {
+    /// iPad: a sidebar with the current banner behind its glass, as in Apple's
+    /// TV app (a tab view's sidebar cannot take a background). iPhone: tabs.
+    @ViewBuilder private var root: some View {
+        if sizeClass == .regular { splitRoot } else { tabRoot }
+    }
+    private var splitRoot: some View {
+        let tabs: [(key: String, title: String, symbol: String)] = [("home", "Home", "house")]
+            + (config.searchEnabled ? [("movies", "Movies", "film"), ("tv", "TV Shows", "tv"), ("cartoons", "Cartoons", "face.smiling.fill")] : [])
+            + [("library", "Library", "folder")]
+        return NavigationSplitView {
+            List(selection: Binding<String?>(get: { tab }, set: { if let key = $0 { select(key) } })) {
+                ForEach(tabs, id: \.key) { item in
+                    TabIcon(title: item.title, symbol: item.symbol).tag(item.key)
+                        .accessibilityIdentifier("sidebar-\(item.key)")
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background { SidebarArtBackground() }
+            .navigationSplitViewColumnWidth(min: 240, ideal: 280, max: 320)
+        } detail: {
+            splitPage(tab).id(tab)
+        }
+    }
+    @ViewBuilder private func splitPage(_ key: String) -> some View {
+        switch key {
+        case "movies":
+            destination("movies", title: "Movies") {
+                MobileCategory(options: [("movies", "All"), ("docs", "Documentaries"), ("ukrainian", "Ukrainian")], api: api, config: config)
+            }
+        case "tv": destination("tv", title: "TV Shows") { MobileCategory(options: [("tv", "TV Shows")], api: api, config: config) }
+        case "cartoons": destination("cartoons", title: "Cartoons") { MobileCategory(options: [("cartoons", "Cartoons")], api: api, config: config) }
+        case "library": destination("library", title: "Library") { MobileLibrary(api: api) }
+        default: destination("home", title: nil) { MobileHome(api: api, config: config) }
+        }
+    }
+    private var tabRoot: some View {
         TabView(selection: Binding(get: { tab }, set: { select($0) })) {
             // Outlined icons, the same as the Apple TV tab bar (tab bars fill them by default).
             Tab(value: "home") {
