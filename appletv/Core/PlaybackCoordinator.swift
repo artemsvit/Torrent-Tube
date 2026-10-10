@@ -240,6 +240,7 @@ final class PlaybackCoordinator {
                             self.switchingEpisode = true
                             self.release()
                             // A new task: this one was cancelled by release().
+                            Task { await self.start(file: next, continuing: true) }
                         } else if let finished, let playing = files.first(where: { $0.index == finished })?.episodeIdentity,
                                   !self.request.seasonSources.isEmpty {
                             // The last episode of this folder: the next season may be in another.
