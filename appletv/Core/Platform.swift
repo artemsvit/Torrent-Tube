@@ -1,12 +1,12 @@
 import SwiftUI
 
 extension View {
-    /// Banner titles on two lines sit closer together (iOS, tvOS and macOS 26+;
-    /// earlier systems keep the normal spacing).
-    /// `size` is the title's font size: the room left below grows with it, so
-    /// letters like "д" never touch the facts row.
+    /// Banner titles keep the normal line height. `size` is the title's font
+    /// size (kept for the callers).
     @ViewBuilder func tightTitleLines(size: CGFloat) -> some View {
-        if #available(iOS 26.0, tvOS 26.0, macOS 26.0, *) { lineHeight(.multiple(factor: 0.9)).padding(.bottom, size * 0.2) } else { self }
+        // Normal line height: below 1 it cut the tops of the first line's
+        // letters (the banner title on iPad).
+        self
     }
 }
 #if os(macOS)
