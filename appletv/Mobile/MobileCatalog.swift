@@ -705,7 +705,7 @@ struct MobileCategory: View {
 }
 
 /// Медіатека: what is already on the server (one chip per type, newest
-/// first) and Favorites (grouped by type) - as on Apple TV.
+/// first) and Favorites (newest first) - as on Apple TV.
 struct MobileLibrary: View {
     let api: TorrentTubeAPI
     @Environment(MobileContext.self) private var context
@@ -726,13 +726,8 @@ struct MobileLibrary: View {
                             .padding(.top, 40)
                             .frame(maxWidth: .infinity)
                     }
-                    ForEach(LibrarySections.kinds, id: \.0) { kind, label in
-                        let group = all.filter { $0.kind == kind }
-                        if !group.isEmpty {
-                            Text(L(label)).font(.title3.bold()).padding(.horizontal, edge).padding(.top, 6)
-                            MobileGrid(items: group.map(\.item))
-                        }
-                    }
+                    // One grid, newest first - like the other chips and the web page.
+                    MobileGrid(items: all.map(\.item))
                 } else {
                     let items = catalog.library.filter { $0.kind == active }
                     if items.isEmpty && catalog.libraryLoading {

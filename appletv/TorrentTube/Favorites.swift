@@ -18,7 +18,7 @@ struct FavoriteButton: View {
 }
 
 /// Медіатека: what is already on the server (one chip per type, newest
-/// first) and Favorites (grouped by type, newest first). The same screen on
+/// first) and Favorites (newest first). The same screen on
 /// Apple TV, iPad and iPhone.
 struct LibraryView: View {
     let api: TorrentTubeAPI
@@ -87,13 +87,7 @@ struct LibraryView: View {
                                    description: Text(L("Press the heart on a title page, or hold Select on a poster, to keep it here.")))
                 .frame(maxWidth: .infinity, minHeight: 500)
         }
-        // Grouped by type, each group newest first.
-        ForEach(LibrarySections.kinds, id: \.0) { kind, label in
-            let group = all.filter { $0.kind == kind }
-            if !group.isEmpty {
-                Text(L(label)).font(.system(size: 32, weight: .bold)).padding(.top, 10)
-                FilmGrid(items: group.map(\.item), api: api, config: config)
-            }
-        }
+        // One grid, newest first - like the other chips and the web page.
+        FilmGrid(items: all.map(\.item), api: api, config: config)
     }
 }

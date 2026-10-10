@@ -1020,9 +1020,8 @@ final class TVFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["main-tab-movies"].hasFocus, app.debugDescription)
     }
 
-    /// Down reaches the posters from a chip far to the right, and from the
-    /// last poster of a short row to the next group (Favorites: Movies, then TV).
-    func testLibraryDownFromChipAndFromRowEnd() {
+    /// Down reaches the posters from a chip far to the right (Favorites).
+    func testLibraryDownFromFavoritesChip() {
         let app = XCUIApplication()
         app.launchArguments = ["-appLanguage", "en", "-serverAddress", "http://192.168.0.102:5058", "-autoplayHomeTrailers", "NO"]
         app.launch()
@@ -1034,26 +1033,11 @@ final class TVFlowTests: XCTestCase {
         for _ in 0..<6 where !chip.hasFocus { XCUIRemote.shared.press(.right); usleep(400_000) }
         XCTAssertTrue(chip.hasFocus, app.debugDescription)
         XCUIRemote.shared.press(.select); usleep(800_000)
+        XCUIRemote.shared.press(.down); usleep(600_000)
         let posters = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "title-"))
-        func focusedPoster() -> XCUIElement? { posters.allElementsBoundByIndex.first { $0.hasFocus } }
-        XCUIRemote.shared.press(.down); usleep(600_000)
-        let first = focusedPoster()
-        XCTAssertNotNil(first, "Down from the Favorites chip reaches no poster")
-        guard let first else { return }
-        // To the end of this row, then down.
-        var last = first
-        for _ in 0..<8 {
-            XCUIRemote.shared.press(.right); usleep(400_000)
-            guard let next = focusedPoster(), next.frame.minY == last.frame.minY, next.identifier != last.identifier else { break }
-            last = next
-        }
-        let rowEnd = focusedPoster() ?? last
-        add(keep(app, "Row end before Down"))
-        XCUIRemote.shared.press(.down); usleep(600_000)
-        let below = focusedPoster()
-        print("PROBE row end \(rowEnd.label) at \(rowEnd.frame.minY) -> \(below?.label ?? "none") at \(below?.frame.minY ?? -1)")
-        XCTAssertNotNil(below)
-        XCTAssertGreaterThan(below?.frame.minY ?? 0, rowEnd.frame.minY, "Down from the row end did not move down")
+        XCTAssertTrue(posters.allElementsBoundByIndex.contains { $0.hasFocus }, "Down from the Favorites chip reaches no poster")
+        // One flat grid: no group headings.
+        XCTAssertFalse(app.staticTexts["TV Shows"].exists)
     }
 
     /// Switching between a long and a short Library list keeps the page at
