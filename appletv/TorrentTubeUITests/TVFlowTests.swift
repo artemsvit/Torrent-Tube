@@ -1069,6 +1069,45 @@ final class TVFlowTests: XCTestCase {
         add(keep(app, "Library after chip switches"))
     }
 
+    /// Controls hide after a timeline seek too; Back hides them first and
+    /// closes the player only on the second press.
+    func testPlayerControlsHideAfterSeekAndBackHidesFirst() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-appLanguage", "en", "-serverAddress", "http://192.168.0.102:5058", "-autoplayHomeTrailers", "NO"]
+        app.launch()
+        XCTAssertTrue(app.buttons["hero-play"].waitForExistence(timeout: 30))
+        openTab(app, "Library")
+        XCUIRemote.shared.press(.down); sleep(1)
+        XCUIRemote.shared.press(.select)
+        let play = app.buttons["title-play"]
+        XCTAssertTrue(play.waitForExistence(timeout: 15))
+        for _ in 0..<4 where !play.hasFocus { XCUIRemote.shared.press(.up) }
+        XCUIRemote.shared.press(.select)
+        if app.buttons["restart-playback"].waitForExistence(timeout: 8) { XCUIRemote.shared.press(.right); XCUIRemote.shared.press(.select) }
+        let timeline = app.descendants(matching: .any)["playback-timeline"]
+        sleep(3)
+        for _ in 0..<4 where !(timeline.exists && timeline.hasFocus) { XCUIRemote.shared.press(.up); usleep(600_000) }
+        XCTAssertTrue(timeline.hasFocus, app.debugDescription)
+        XCUIRemote.shared.press(.right); XCUIRemote.shared.press(.right)
+        let hidden = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !timeline.exists }, object: app)
+        XCTAssertEqual(XCTWaiter.wait(for: [hidden], timeout: 14), .completed, "Controls stayed after a timeline seek")
+        XCUIRemote.shared.press(.up)
+        XCTAssertTrue(timeline.waitForExistence(timeout: 5))
+        XCUIRemote.shared.press(.menu)
+        let hiddenByBack = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !timeline.exists }, object: app)
+        XCTAssertEqual(XCTWaiter.wait(for: [hiddenByBack], timeout: 3), .completed, "Back did not hide the controls")
+        // Still playing: Up shows the controls again.
+        sleep(1)
+        XCUIRemote.shared.press(.up)
+        XCTAssertTrue(timeline.waitForExistence(timeout: 5), "Back closed the player instead of hiding the controls")
+        XCUIRemote.shared.press(.menu); sleep(1)
+        XCUIRemote.shared.press(.menu)
+        let closed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in play.exists && play.isHittable }, object: app)
+        XCTAssertEqual(XCTWaiter.wait(for: [closed], timeout: 8), .completed, "The second Back did not close the player")
+        XCUIRemote.shared.press(.up); sleep(1)
+        XCTAssertFalse(timeline.exists, "The player is still open")
+    }
+
     private func keep(_ app: XCUIApplication, _ name: String) -> XCTAttachment {
         let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = name; shot.lifetime = .keepAlways; return shot
     }

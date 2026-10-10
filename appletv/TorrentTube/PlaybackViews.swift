@@ -358,9 +358,10 @@ struct PlayerView: View {
         }
         .task(id: activity) {
             do { try await Task.sleep(for: .seconds(7)) } catch { return }
-            if trackMenu == nil && focusedControl != .timeline && controller.playing && controller.failure == nil {
-                showControls = false
-                focusedControl = inIntro ? .skipIntro : .surface
+            // Also from the timeline (as in the system player), but not while
+            // a swipe or a chosen place is still being applied.
+            if trackMenu == nil && panStart == nil && scrubTarget == nil && controller.playing && controller.failure == nil {
+                hideControls()
             }
         }
         .overlay {
@@ -407,8 +408,10 @@ struct PlayerView: View {
                 }
             }
         }
+        // Back: the track menu first, then the controls, then the player.
         .onExitCommand {
             if trackMenu != nil { trackMenu = nil; revealControls() }
+            else if showControls && controller.failure == nil { hideControls() }
             else { close() }
         }
 
@@ -516,6 +519,10 @@ struct PlayerView: View {
         } else {
             controller.toggle()
         }
+    }
+    private func hideControls() {
+        showControls = false
+        focusedControl = inIntro ? .skipIntro : .surface
     }
     private func revealControls(focusing target: Control? = nil) {
         let wasHidden = !showControls
