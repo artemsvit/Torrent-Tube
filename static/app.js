@@ -1074,9 +1074,11 @@ async function runSearch(query) {
 function buildResultCard(r, container, allResults, emptyMessage) {
   const div = document.createElement("div");
   div.className = "item";
-  const poster = r.poster
+  const poster = `<div class="poster-wrap">${r.poster
     ? `<img class="result-poster" src="${escapeHtml(r.poster)}" alt="" loading="lazy">`
-    : `<div class="result-poster-fallback">${ICONS.download}</div>`;
+    : `<div class="result-poster-fallback">${ICONS.download}</div>`}${FAVORITE_BADGE}</div>`;
+  div.dataset.favId = r.download_link ?? r.magnet ?? r.title;
+  if (isFavorite(div.dataset.favId)) div.classList.add("is-favorite");
   const rating = (r.rating && r.rating > 0) ? `<span class="rating-badge">${ICONS.star}${r.rating.toFixed(1)}</span>` : "";
   const preferred = (r.suggested_category && currentCategories.includes(r.suggested_category)) ? r.suggested_category : getDefaultCategory();
   const categoryOptions = currentCategories.map(c =>
@@ -2398,8 +2400,18 @@ async function loadFavorites() {
     const d = await fetch("/api/favorites").then(r => r.json());
     favorites = d.items || [];
   } catch (e) { return; }
+  refreshFavoriteBadges();
   renderLibrary();
   if (detailsState) renderDetailsBody();
+}
+
+// The heart in a poster's top right corner, shown only on favorites (as
+// in the apps). Cards carry their id, so a change only flips a class.
+const FAVORITE_BADGE = `<span class="fav-badge" aria-label="In Favorites">${ICONS.heartFilled}</span>`;
+function isFavorite(id) { return favorites.some(f => f.id === id); }
+function refreshFavoriteBadges() {
+  const ids = new Set(favorites.map(f => f.id));
+  document.querySelectorAll("[data-fav-id]").forEach(el => el.classList.toggle("is-favorite", ids.has(el.dataset.favId)));
 }
 
 async function sendFavorites(path, body) {
@@ -2409,6 +2421,7 @@ async function sendFavorites(path, body) {
     if (!res.ok) throw new Error(d.error || "Couldn't save favorites");
     favorites = d.items || [];
   } catch (e) { showToast(e.message || "Couldn't reach the server", true); }
+  refreshFavoriteBadges();
   renderLibrary();
   if (detailsState) renderDetailsBody();
 }
@@ -2499,12 +2512,14 @@ function buildLibraryCard(item) {
   const card = document.createElement("button");
   card.type = "button";
   card.className = "lib-card";
+  card.dataset.favId = item.id;
+  if (isFavorite(item.id)) card.classList.add("is-favorite");
   const versions = (item.versions || []).length;
   const badge = item.seasons > 0 ? `${item.seasons} season${item.seasons === 1 ? "" : "s"}` : versions > 1 ? `${versions} versions` : "";
   const sub = [item.year, item.rating > 0 ? `★ ${item.rating.toFixed(1)}` : ""].filter(Boolean).join(" · ");
   card.innerHTML = `<div class="lib-poster">${item.poster
       ? `<img src="${escapeHtml(item.poster.replace("/w200/", "/w342/"))}" alt="" loading="lazy">`
-      : `<div class="lib-fallback">${escapeHtml(libraryTitle(item))}</div>`}${badge ? `<span class="lib-badge">${badge}</span>` : ""}</div>
+      : `<div class="lib-fallback">${escapeHtml(libraryTitle(item))}</div>`}${badge ? `<span class="lib-badge">${badge}</span>` : ""}${FAVORITE_BADGE}</div>
     <div class="lib-title">${escapeHtml(libraryTitle(item))}</div>${sub ? `<div class="lib-sub">${escapeHtml(sub)}</div>` : ""}`;
   card.addEventListener("click", () => openLibraryTitle(item));
   return card;
@@ -2513,12 +2528,12 @@ function buildLibraryCard(item) {
 function buildFavoriteCard(f) {
   const card = document.createElement("button");
   card.type = "button";
-  card.className = "lib-card";
+  card.className = "lib-card is-favorite";
   const title = f.clean_title || f.title;
   const kind = { movie: "Movie", tv: "TV show", cartoon: "Cartoon" }[f.kind] || "";
   card.innerHTML = `<div class="lib-poster">${f.poster
       ? `<img src="${escapeHtml(f.poster.replace("/w200/", "/w342/"))}" alt="" loading="lazy">`
-      : `<div class="lib-fallback">${escapeHtml(title)}</div>`}</div>
+      : `<div class="lib-fallback">${escapeHtml(title)}</div>`}${FAVORITE_BADGE}</div>
     <div class="lib-title">${escapeHtml(title)}</div>${kind ? `<div class="lib-sub">${kind}</div>` : ""}`;
   card.addEventListener("click", () => openFavorite(f));
   return card;
