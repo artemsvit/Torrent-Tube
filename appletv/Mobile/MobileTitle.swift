@@ -189,15 +189,13 @@ struct MobileTitle: View {
                 ScrollView(.horizontal) {
                     LazyHStack(alignment: .top, spacing: 16) {
                         ForEach(episodes) { ep in
-                            VStack(alignment: .leading, spacing: 6) {
-                                episodeButton(ep) {
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        MobileArtwork(url: ep.still, ratio: 16 / 9, seed: "\(value.displayTitle) \(ep.number)").clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                        Text("\(ep.number). \(ep.name)").font(MobileStyle.itemTitle(.headline, weight: .semibold)).lineLimit(1)
-                                    }
+                            // As on Apple TV: the length on the picture, the whole name below.
+                            episodeButton(ep) {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    episodeStill(ep, cornerRadius: 12)
+                                    Text("\(ep.number). \(ep.name)").font(MobileStyle.itemTitle(.headline, weight: .semibold))
+                                        .fixedSize(horizontal: false, vertical: true)
                                 }
-                                // Outside the button: Read more must not start the episode.
-                                if let overview = ep.overview { EpisodeOverview(text: overview, font: MobileStyle.itemDetail(.subheadline)) }
                             }.frame(width: 300, alignment: .topLeading)
                         }
                     }.padding(.horizontal, edge)
@@ -206,19 +204,13 @@ struct MobileTitle: View {
                 // iPhone: compact rows - still on the left, text on the right.
                 LazyVStack(alignment: .leading, spacing: 14) {
                     ForEach(episodes) { ep in
-                        VStack(alignment: .leading, spacing: 6) {
-                            episodeButton(ep) {
-                                HStack(alignment: .top, spacing: 12) {
-                                    MobileArtwork(url: ep.still, ratio: 16 / 9, seed: "\(value.displayTitle) \(ep.number)").frame(width: 150).clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text("\(ep.number). \(ep.name)").font(MobileStyle.itemTitle(.subheadline.weight(.semibold), weight: .semibold)).lineLimit(2)
-                                        if let runtime = ep.runtime { Text(L("%ld min", runtime)).font(.caption).foregroundStyle(.secondary) }
-                                    }
-                                    Spacer(minLength: 0)
-                                }
+                        episodeButton(ep) {
+                            HStack(alignment: .top, spacing: 12) {
+                                episodeStill(ep, cornerRadius: 10).frame(width: 150)
+                                Text("\(ep.number). \(ep.name)").font(MobileStyle.itemTitle(.subheadline.weight(.semibold), weight: .semibold))
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Spacer(minLength: 0)
                             }
-                            // Outside the button: Read more must not start the episode.
-                            if let overview = ep.overview { EpisodeOverview(text: overview, font: MobileStyle.itemDetail(.caption)) }
                         }
                     }
                 }.padding(.horizontal, edge)
@@ -228,6 +220,20 @@ struct MobileTitle: View {
                     .padding(.horizontal, edge)
             }
         }
+    }
+    /// The episode's picture with its length in the corner, as on Apple TV.
+    private func episodeStill(_ ep: Episode, cornerRadius: CGFloat) -> some View {
+        MobileArtwork(url: ep.still, ratio: 16 / 9, seed: "\(value.displayTitle) \(ep.number)")
+            .overlay(alignment: .bottomTrailing) {
+                if let runtime = ep.runtime {
+                    Text(L("%ld min", runtime)).font(.caption.weight(.semibold)).monospacedDigit()
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 7).padding(.vertical, 3)
+                        .background(.black.opacity(0.6), in: Capsule())
+                        .padding(6)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }
     private func episodeButton<Label: View>(_ ep: Episode, @ViewBuilder label: () -> Label) -> some View {
         Button {
@@ -563,24 +569,3 @@ struct MobileTitle: View {
     }
 }
 
-/// An episode's description: three lines, and Read more for the rest.
-private struct EpisodeOverview: View {
-    let text: String
-    let font: Font
-    @State private var expanded = false
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(text).font(font).foregroundStyle(.secondary)
-                .lineLimit(expanded ? nil : 3)
-                .fixedSize(horizontal: false, vertical: true)
-            // Only when three lines may not hold it all.
-            if text.count > 120 {
-                Button(expanded ? L("Show less") : L("Read more")) {
-                    withAnimation(.snappy) { expanded.toggle() }
-                }
-                .font(font.weight(.semibold)).foregroundStyle(.primary)
-                .buttonStyle(.plain)
-            }
-        }
-    }
-}

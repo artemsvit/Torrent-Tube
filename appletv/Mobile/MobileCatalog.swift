@@ -9,15 +9,6 @@ enum MobileStyle {
         mobileFont
         #endif
     }
-    /// Smaller text under a title (an episode's description). The iOS
-    /// styles read too small on the Mac.
-    static func itemDetail(_ mobileFont: Font) -> Font {
-        #if os(macOS)
-        .system(size: 14)
-        #else
-        mobileFont
-        #endif
-    }
 }
 
 /// Text in the banner. iOS text styles are much smaller on the Mac, so the
