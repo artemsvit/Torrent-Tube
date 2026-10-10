@@ -192,7 +192,8 @@ struct MobileTitle: View {
                             // As on Apple TV: the length on the picture, the whole name below.
                             episodeButton(ep) {
                                 VStack(alignment: .leading, spacing: 8) {
-                                    episodeStill(ep, cornerRadius: 12)
+                                    // A fixed size: a name on two lines must not shrink the picture.
+                                    episodeStill(ep, cornerRadius: 12).frame(width: 300, height: 169)
                                     Text("\(ep.number). \(ep.name)").font(MobileStyle.itemTitle(.headline, weight: .semibold))
                                         .fixedSize(horizontal: false, vertical: true)
                                 }
@@ -206,7 +207,7 @@ struct MobileTitle: View {
                     ForEach(episodes) { ep in
                         episodeButton(ep) {
                             HStack(alignment: .top, spacing: 12) {
-                                episodeStill(ep, cornerRadius: 10).frame(width: 150)
+                                episodeStill(ep, cornerRadius: 10).frame(width: 150, height: 84)
                                 Text("\(ep.number). \(ep.name)").font(MobileStyle.itemTitle(.subheadline.weight(.semibold), weight: .semibold))
                                     .fixedSize(horizontal: false, vertical: true)
                                 Spacer(minLength: 0)
