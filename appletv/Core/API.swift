@@ -35,7 +35,12 @@ struct MediaItem: Codable, Identifiable, Hashable, Sendable {
     let seeders: Int?
     let releases: [Release]?
     var sourceOverride: PlaybackSource? = nil
-    var id: String { sourceOverride?.id ?? sourceOverride?.path ?? downloadLink ?? magnet ?? title }
+    var id: String {
+        if let sourceID = sourceOverride?.id ?? sourceOverride?.path ?? downloadLink ?? magnet { return sourceID }
+        // Different recommendations can have the same translated title.
+        if let tmdbId, tmdbId > 0, let mediaType { return "tmdb:\(mediaType):\(tmdbId)" }
+        return title
+    }
     var displayTitle: String { cleanTitle ?? title }
     var source: PlaybackSource { sourceOverride ?? PlaybackSource(magnet: magnet, downloadLink: downloadLink) }
     /// A library title's folders on the server (its versions), for playing on into the next season.

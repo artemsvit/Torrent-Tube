@@ -9,6 +9,28 @@ import SwiftUI
 
 final class APITests: XCTestCase {
     @MainActor
+    func testRecommendationsWithSameTranslatedTitleKeepDistinctCardsAndArtwork() throws {
+        var first = MediaItem(title: "Ватажок", magnet: nil, downloadLink: nil, sizeLabel: nil, seeders: nil, releases: nil)
+        first.tmdbId = 93544; first.mediaType = "tv"; first.poster = "https://example.test/first.jpg"
+        var second = first; second.tmdbId = 41889; second.poster = "https://example.test/second.jpg"
+        XCTAssertNotEqual(first.id, second.id)
+        var movie = first; movie.mediaType = "movie"
+        XCTAssertNotEqual(first.id, movie.id)
+        var playable = first; playable.sourceOverride = PlaybackSource(path: "TV/Top Boy")
+        XCTAssertEqual(playable.id, "TV/Top Boy")
+        let catalog = CatalogStore()
+        catalog.metadata[first.title] = Metadata(poster: "https://example.test/wrong.jpg", rating: nil, overview: nil,
+                                                  cleanTitle: "Other title", tmdbId: 459151, mediaType: "movie")
+        XCTAssertEqual(catalog.resolved(first).poster, first.poster)
+        XCTAssertEqual(catalog.resolved(second).poster, second.poster)
+        XCTAssertEqual(catalog.resolved(second).id, second.id)
+        let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase
+        catalog.details[first.title] = try decoder.decode(Details.self, from: Data("{\"tmdb_id\":93544,\"media_type\":\"tv\"}".utf8))
+        XCTAssertNotNil(catalog.details(for: first))
+        XCTAssertNil(catalog.details(for: second))
+    }
+
+    @MainActor
     func testFavoritesMatchTitleAcrossSourcesAndRemoveOriginalEntry() {
         let name = "favorites-identity-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: name)!

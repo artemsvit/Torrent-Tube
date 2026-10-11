@@ -30,7 +30,7 @@ struct TitleView: View {
     @State private var pendingPlayback: PlaybackRequest?
     @State private var showServerNotice = false
     private var value: MediaItem { catalog.resolved(item) }
-    private var details: Details? { catalog.details[item.title] }
+    private var details: Details? { catalog.details(for: value) }
     private func playTrailer() {
         findingTrailer = true
         Task {

@@ -37,6 +37,9 @@ final class CatalogStore {
         // A library title the server matched carries its own metadata.
         if item.sourceOverride?.path != nil && libraryMatchedByServer { return value }
         if let meta = metadata[item.title] {
+            // A title lookup must not replace a known movie/show with its namesake.
+            if let id = item.tmdbId,
+               meta.tmdbId != id || (item.mediaType != nil && meta.mediaType != item.mediaType) { return value }
             value.cleanTitle = meta.cleanTitle ?? value.cleanTitle
             value.poster = meta.poster ?? value.poster
             value.overview = meta.overview ?? value.overview
@@ -45,6 +48,14 @@ final class CatalogStore {
             value.mediaType = meta.mediaType ?? value.mediaType
         }
         return value
+    }
+    private func matches(_ details: Details, item: MediaItem) -> Bool {
+        guard let id = item.tmdbId else { return true }
+        return details.tmdbId == id && (item.mediaType == nil || details.mediaType == item.mediaType)
+    }
+    func details(for item: MediaItem) -> Details? {
+        guard let saved = details[item.title], matches(saved, item: item) else { return nil }
+        return saved
     }
     func loadFeed(_ feed: String, api: TorrentTubeAPI, config: ServerConfig, refresh: Bool = false) async {
         guard config.searchEnabled, !loading.contains(feed) else { return }
@@ -234,6 +245,8 @@ final class CatalogStore {
         guard !Task.isCancelled else { return }
         var titles: [String] = []
         for item in items where metadata[item.title] == nil && !enriching.contains(item.title) && !titles.contains(item.title) {
+            // Recommendations already carry the exact TMDB identity and artwork.
+            if item.tmdbId != nil, item.sourceOverride == nil, item.magnet == nil, item.downloadLink == nil { continue }
             if item.sourceOverride?.path != nil && (!Self.libraryMetadataEnabled || libraryMatchedByServer) { continue }
             if let saved = cache.match(for: item.title) {
                 if let found = saved.metadata { metadata[item.title] = found }
@@ -251,17 +264,17 @@ final class CatalogStore {
         }
     }
     func loadDetails(_ item: MediaItem, api: TorrentTubeAPI, config: ServerConfig, refresh: Bool = false) async {
-        guard config.tmdbEnabled, refresh || details[item.title] == nil, !fetchingDetails.contains(item.title) else { return }
+        guard config.tmdbEnabled, refresh || details(for: item) == nil, !fetchingDetails.contains(item.id) else { return }
         if item.sourceOverride?.path != nil && !Self.libraryMetadataEnabled { return }
         let cache = metadataCache(api.baseURL)
         await cache.load()
-        guard !Task.isCancelled, !fetchingDetails.contains(item.title), refresh || details[item.title] == nil else { return }
+        guard !Task.isCancelled, !fetchingDetails.contains(item.id), refresh || details(for: item) == nil else { return }
         // A copy saved before cast photos opened a person's page has no ids: fetch it again.
-        if !refresh, let saved = cache.details(for: item.title), !(saved.people ?? []).contains(where: { $0.id == nil }) {
+        if !refresh, let saved = cache.details(for: item.title), matches(saved, item: item), !(saved.people ?? []).contains(where: { $0.id == nil }) {
             details[item.title] = saved; return
         }
-        fetchingDetails.insert(item.title)
-        defer { fetchingDetails.remove(item.title) }
+        fetchingDetails.insert(item.id)
+        defer { fetchingDetails.remove(item.id) }
         let resolved = resolved(item)
         var query = [URLQueryItem(name: "title", value: item.title)]
         if let id = resolved.tmdbId, let type = resolved.mediaType {

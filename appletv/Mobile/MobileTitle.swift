@@ -51,7 +51,7 @@ struct MobileTitle: View {
     @State private var playback: PlaybackRequest?
     @State private var pending: PlaybackRequest?
     private var value: MediaItem { catalog.resolved(item) }
-    private var details: Details? { catalog.details[item.title] }
+    private var details: Details? { catalog.details(for: value) }
     private var saved: Bool { favorites.contains(value, server: api.baseURL) }
 
     @Environment(\.horizontalSizeClass) private var sizeClass
