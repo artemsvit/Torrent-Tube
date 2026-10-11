@@ -366,11 +366,16 @@
      Discover, and on narrow screens (Downloads first there). */
   .layout.has-library {
     display: grid;
-    grid-template-columns: minmax(0, 3fr) minmax(320px, 1fr);
+    grid-template-columns: minmax(0, 2fr) minmax(400px, 1fr);
     gap: 20px;
     align-items: start;
   }
   .side-column { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+  /* Beside the library: names and status wrap to two lines instead of
+     being cut off. */
+  .side-column .item-title, .side-column .item-sub {
+    white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  }
   body.discover-active .layout.has-library { display: block; }
   /* Wide screens: the library keeps its title and tabs in place and scrolls
      only its posters, the height of the window under the top bar. (Body
@@ -926,7 +931,9 @@
 
   /* Buffering block: same panel, but its rows read as temporary - an
      orange play icon and a striped bar instead of a download's blue. */
-  .streams-panel { margin-top: 16px; }
+  /* No margin of its own: the side column's gap spaces it, so a lone
+     Buffering block lines up with the library's top. */
+  .streams-panel { margin-top: 0; }
   .streams-panel[hidden] { display: none; }
   .streams-note { font-size: 12px; color: var(--text-tertiary); margin: -6px 0 12px; }
   .item.is-stream .item-icon { background: rgba(255, 143, 0, 0.14); color: #ff8f00; }
