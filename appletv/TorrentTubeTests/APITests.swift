@@ -9,6 +9,30 @@ import SwiftUI
 
 final class APITests: XCTestCase {
     @MainActor
+    func testFavoritesMatchTitleAcrossSourcesAndRemoveOriginalEntry() {
+        let name = "favorites-identity-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        let server = URL(string: "http://favorites.test/")!
+        let other = URL(string: "http://other.test/")!
+        var original = MediaItem(title: "Film", magnet: "magnet:original", downloadLink: nil, sizeLabel: nil, seeders: nil, releases: nil)
+        original.tmdbId = 123; original.mediaType = "movie"
+        var library = original; library.sourceOverride = PlaybackSource(path: "Movies/Film")
+        let store = FavoritesStore(defaults: defaults)
+        store.toggle(original, details: nil, server: server)
+        XCTAssertTrue(store.contains(library, server: server))
+        XCTAssertFalse(store.contains(library, server: other))
+        var series = library; series.mediaType = "tv"
+        XCTAssertFalse(store.contains(series, server: server))
+        var different = library; different.tmdbId = 456
+        XCTAssertFalse(store.contains(different, server: server))
+        store.toggle(library, details: nil, server: server)
+        XCTAssertTrue(store.entries(server: server).isEmpty)
+        XCTAssertTrue(defaults.stringArray(forKey: "favorites.pendingRemovals")?.contains(FavoritesStore.key(server: server, item: original)) == true)
+        XCTAssertFalse(FavoritesStore(defaults: defaults).contains(original, server: server))
+    }
+
+    @MainActor
     func testNetworkErrorsUseSelectedLanguageAndTimeoutsAreExtended() async throws {
         XCTAssertEqual(TorrentTubeAPI.requestTimeout(for: "api/playback/sessions"), 86.25, accuracy: 0.001)
         XCTAssertEqual(TorrentTubeAPI.requestTimeout(for: "api/config"), 11.5, accuracy: 0.001)

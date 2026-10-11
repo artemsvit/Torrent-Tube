@@ -1,5 +1,18 @@
 import SwiftUI
 
+struct FavoritePosterBadge: View {
+    let item: MediaItem
+    let server: URL
+    @Environment(FavoritesStore.self) private var favorites
+    var body: some View {
+        if favorites.contains(item, server: server) {
+            Image(systemName: "heart.fill").font(.system(size: 20, weight: .semibold)).foregroundStyle(.white)
+                .padding(10).background(.black.opacity(0.55), in: Circle()).padding(12)
+                .accessibilityHidden(true).allowsHitTesting(false)
+        }
+    }
+}
+
 /// The heart on a title page.
 struct FavoriteButton: View {
     let item: MediaItem

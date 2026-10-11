@@ -359,6 +359,8 @@ struct HomeView: View {
                         ScrollView(.horizontal) {
                             HStack(spacing: 36) {
                                 ForEach(recent) { entry in
+                                    let resumeItem = MediaItem(title: entry.title, magnet: entry.source.magnet, downloadLink: entry.source.downloadLink,
+                                                               sizeLabel: nil, seeders: nil, releases: nil, sourceOverride: entry.source)
                                     Button { playback = PlaybackRequest(source: entry.source, title: entry.title, artwork: entry.artwork) } label: {
                                         VStack(alignment: .leading, spacing: 14) {
                                             // Progress sits on the artwork, like the TV app's Up Next.
@@ -371,6 +373,9 @@ struct HomeView: View {
                                                         .padding(.horizontal, 18).padding(.bottom, 16)
                                                 }
                                                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                                .overlay(alignment: .topTrailing) {
+                                                    FavoritePosterBadge(item: catalog.resolved(resumeItem), server: api.baseURL)
+                                                }
                                             VStack(alignment: .leading, spacing: 4) {
                                                 Text(entry.title).font(.system(size: 24, weight: .semibold)).lineLimit(1)
                                                 Text(L("Resume at %@", entry.displayPosition)).font(.system(size: 20)).foregroundStyle(.white.opacity(0.55))
@@ -841,11 +846,7 @@ struct FilmCard: View {
                     .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.white.opacity(focused ? 0.9 : 0.08), lineWidth: focused ? 3 : 1) }
                     // A favorite, in every grid and shelf - as on iPhone and iPad.
                     .overlay(alignment: .topTrailing) {
-                        if favorites.contains(item, server: api.baseURL) {
-                            Image(systemName: "heart.fill").font(.system(size: 20, weight: .semibold)).foregroundStyle(.white)
-                                .padding(10).background(.black.opacity(0.55), in: Circle()).padding(12)
-                                .accessibilityHidden(true)
-                        }
+                        FavoritePosterBadge(item: value, server: api.baseURL)
                     }
                 Text(value.displayTitle).font(.system(size: 21, weight: .semibold)).foregroundStyle(focused ? .white : .white.opacity(0.6)).lineLimit(2)
                     .frame(maxWidth: .infinity, minHeight: 54, alignment: .topLeading).padding(.horizontal, 4)
@@ -855,7 +856,7 @@ struct FilmCard: View {
         .accessibilityLabel(value.displayTitle).accessibilityIdentifier("title-\(item.id)")
         // Hold Select on a poster: add to or remove from Favorites.
         .contextMenu {
-            let saved = favorites.contains(item, server: api.baseURL)
+            let saved = favorites.contains(value, server: api.baseURL)
             Button {
                 Task {
                     // Its details say movie, show or cartoon - the Favorites tab it goes to.

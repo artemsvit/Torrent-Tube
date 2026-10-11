@@ -82,7 +82,12 @@ final class FavoritesStore {
     static func key(server: URL, item: MediaItem) -> String { "\(server.absoluteString)|\(item.id)" }
     func contains(_ item: MediaItem, server: URL) -> Bool {
         let key = Self.key(server: server, item: item)
-        return identifiers.contains(key)
+        return identifiers.contains(key) || entries(server: server).contains { sameTitle($0, item) }
+    }
+    private func sameTitle(_ entry: FavoriteEntry, _ item: MediaItem) -> Bool {
+        guard let id = item.tmdbId, id > 0, let type = item.mediaType,
+              type == "movie" || type == "tv" else { return false }
+        return entry.tmdbId == id && entry.mediaType == type
     }
     /// Newest first.
     func entries(server: URL) -> [FavoriteEntry] {
@@ -92,9 +97,13 @@ final class FavoritesStore {
     /// what is known about it - together they decide its tab.
     func toggle(_ item: MediaItem, details: Details?, server: URL) {
         let key = Self.key(server: server, item: item)
-        if identifiers.contains(key) {
-            entries.removeAll { $0.id == key }
-            pendingAdds.remove(key); pendingRemovals.insert(key)
+        var resolved = item
+        resolved.tmdbId = details?.tmdbId ?? item.tmdbId
+        resolved.mediaType = details?.mediaType ?? item.mediaType
+        let matches = Set(entries(server: server).filter { $0.id == key || sameTitle($0, resolved) }.map(\.id))
+        if !matches.isEmpty {
+            entries.removeAll { matches.contains($0.id) }
+            pendingAdds.subtract(matches); pendingRemovals.formUnion(matches)
         } else {
             let type = details?.mediaType ?? item.mediaType
             let kind = details?.kind == "Cartoon" ? "cartoon" : (type == "tv" ? "tv" : "movie")
