@@ -66,15 +66,15 @@ struct TitleView: View {
                 CinemaHero(item: value, details: details, height: 960, overviewLines: nil) {
                     HStack(spacing: 28) {
                         Button { play() } label: { Label(L("Play"), systemImage: "play.fill") }
-                            .buttonStyle(HeroActionStyle()).accessibilityIdentifier("title-play")
+                            .buttonStyle(WatchButtonStyle()).accessibilityIdentifier("title-play")
                         Button { playTrailer() } label: { Label(findingTrailer ? L("Finding trailer…") : L("Trailer"), systemImage: "play.rectangle") }
                             .disabled(findingTrailer)
-                            .buttonStyle(HeroActionStyle()).accessibilityIdentifier("show-trailers")
+                            .buttonStyle(.bordered).tint(.white).accessibilityIdentifier("show-trailers")
                         if item.sourceOverride == nil || (item.releases?.count ?? 0) > 1 {  // a library title saved twice has versions too
                             Button { selectedEpisode = nil; showVersions = true } label: {
                                 Image(systemName: "list.bullet")
                             }
-                            .buttonStyle(HeroActionStyle())
+                            .buttonStyle(.bordered).tint(.white)
                             .accessibilityLabel(L("Choose version"))
                             .accessibilityIdentifier("choose-version")
                         }

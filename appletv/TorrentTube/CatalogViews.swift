@@ -320,7 +320,7 @@ struct HomeView: View {
                                 preview.stop()
                                 if config.supportsPlayback { playback = playRequest(active) } else { showServerNotice = true }
                             } label: { Label(L("Play"), systemImage: "play.fill") }
-                                .buttonStyle(.borderedProminent).tint(.white).foregroundStyle(.black)
+                                .buttonStyle(WatchButtonStyle())
                                 .accessibilityIdentifier("hero-play").focused($heroAction, equals: .play)
                             NavigationLink(value: active) { Label(L("Details"), systemImage: "info.circle") }
                                 .buttonStyle(.bordered).tint(.white).focused($heroAction, equals: .details)
@@ -629,8 +629,8 @@ struct CinemaHero<Actions: View>: View {
     }
 }
 
-/// Hero actions share one focus treatment, so only the focused action is blue.
-struct HeroActionStyle: ButtonStyle {
+/// Watch stays white at rest and uses the player accent when focused.
+struct WatchButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         ActionLabel(content: configuration.label, pressed: configuration.isPressed)
     }
@@ -642,9 +642,9 @@ struct HeroActionStyle: ButtonStyle {
         var body: some View {
             content
                 .font(.system(size: 29, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(focused ? Color.white : Color.black)
                 .padding(.horizontal, 30).frame(height: 68)
-                .background(focused ? Color.torrentAccent : Color.white.opacity(0.16), in: Capsule())
+                .background(focused ? Color.torrentAccent : Color.white, in: Capsule())
                 .opacity(enabled ? (pressed ? 0.8 : 1) : 0.45)
         }
     }

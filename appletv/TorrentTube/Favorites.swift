@@ -11,7 +11,7 @@ struct FavoriteButton: View {
         Button { favorites.toggle(item, details: details, server: server) } label: {
             Image(systemName: saved ? "heart.fill" : "heart")
         }
-        .buttonStyle(HeroActionStyle())
+        .buttonStyle(.bordered).tint(.white)
         .accessibilityLabel(saved ? L("Remove from Favorites") : L("Add to Favorites"))
         .accessibilityIdentifier("favorite-toggle")
     }
