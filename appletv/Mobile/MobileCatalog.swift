@@ -655,7 +655,7 @@ struct MobileHome: View {
                 .frame(minWidth: sizeClass == .regular ? 140 : nil, maxWidth: sizeClass == .regular ? nil : .infinity, minHeight: HeroFont.buttonHeight)
         }
         .hapticButtonStyle(BorderedButtonStyle()).tint(.white)
-        .layoutPriority(1)  // when room is short, Play gives up width first
+        .layoutPriority(sizeClass == .regular ? 1 : 0)  // iPad: when room is short, Play gives up width first
         .accessibilityIdentifier("featured-details")
         // iPad and Mac: the trailer, as on Apple TV.
         if sizeClass == .regular {
