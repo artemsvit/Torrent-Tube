@@ -215,6 +215,16 @@ private let ukrainian: [String: String] = [
     "Off": "Вимк.",
     "On": "Увімк.",
     "No tracks available yet.": "Доріжок поки немає.",
+    "Subtitles in films and shows": "Субтитри у фільмах і серіалах",
+    "Subtitles in trailers": "Субтитри в трейлерах",
+    "Subtitle size": "Розмір субтитрів",
+    "Show subtitles when a film or episode starts.": "Показувати субтитри, коли починається фільм або серія.",
+    "Show subtitles when a trailer starts.": "Показувати субтитри, коли починається трейлер.",
+    "Make subtitles smaller or larger.": "Зробити субтитри меншими або більшими.",
+    "Small": "Малий",
+    "Medium": "Середній",
+    "Large": "Великий",
+    "Choose whether subtitles start on, and their size. You can still pick a subtitle track while a title is playing.": "Чи вмикати субтитри одразу та якого вони розміру. Доріжку субтитрів можна вибрати й під час перегляду.",
 
     // Connecting
     "Connect to your server": "Підключіться до свого сервера",

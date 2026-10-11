@@ -34,7 +34,7 @@ struct MobileTitle: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     var body: some View {
         GeometryReader { screen in
-            let heroHeight = HeroLayout.bannerHeight(screenHeight: screen.size.height, sizeClass: sizeClass)
+            let heroHeight = HeroLayout.bannerHeight(screenHeight: screen.size.height, screenWidth: screen.size.width, sizeClass: sizeClass)
             ScrollView {
                 VStack(alignment: .leading, spacing: 26) {
                     hero(height: heroHeight).padding(.top, -refreshSpinnerRoom)

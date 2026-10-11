@@ -391,14 +391,16 @@ struct MobileRoot: View {
         case "tv": destination("tv", title: "TV Shows") { MobileCategory(options: [("tv", "TV Shows")], api: api, config: config) }
         case "cartoons": destination("cartoons", title: "Cartoons") { MobileCategory(options: [("cartoons", "Cartoons")], api: api, config: config) }
         case "library": destination("library", title: "Library") { MobileLibrary(api: api) }
-        default: destination("home", title: nil) { MobileHome(api: api, config: config) }
+        default: destination("home", title: nil) { MobileHome(api: api, config: config).sidesUnderInsets() }
         }
     }
     #else
     /// iPad: a sidebar with the current banner behind its glass, as in Apple's
     /// TV app (a tab view's sidebar cannot take a background). iPhone: tabs.
     @ViewBuilder private var root: some View {
-        if sizeClass == .regular { splitRoot } else { tabRoot }
+        // iPhone keeps its tabs in landscape too: a new root would close
+        // whatever is open, a trailer playing included.
+        if sizeClass == .regular, UIDevice.current.userInterfaceIdiom == .pad { splitRoot } else { tabRoot }
     }
     private var splitRoot: some View {
         let tabs: [(key: String, title: String, symbol: String)] = [("home", "Home", "house")]
@@ -427,14 +429,14 @@ struct MobileRoot: View {
         case "tv": destination("tv", title: "TV Shows") { MobileCategory(options: [("tv", "TV Shows")], api: api, config: config) }
         case "cartoons": destination("cartoons", title: "Cartoons") { MobileCategory(options: [("cartoons", "Cartoons")], api: api, config: config) }
         case "library": destination("library", title: "Library") { MobileLibrary(api: api) }
-        default: destination("home", title: nil) { MobileHome(api: api, config: config) }
+        default: destination("home", title: nil) { MobileHome(api: api, config: config).sidesUnderInsets() }
         }
     }
     private var tabRoot: some View {
         TabView(selection: Binding(get: { tab }, set: { select($0) })) {
             // Outlined icons, the same as the Apple TV tab bar (tab bars fill them by default).
             Tab(value: "home") {
-                destination("home", title: nil) { MobileHome(api: api, config: config) }
+                destination("home", title: nil) { MobileHome(api: api, config: config).sidesUnderInsets() }
             } label: { TabIcon(title: "Home", symbol: "house") }
             // The same tabs, in the same order, as on Apple TV.
             if config.searchEnabled {
@@ -466,7 +468,7 @@ struct MobileRoot: View {
                 .softTopEdge()
                 .navigationTitle(title.map { L($0) } ?? "")
                 .navigationBarTitleDisplayMode(title == nil ? .inline : .large)
-                .navigationDestination(for: MediaItem.self) { MobileTitle(item: $0, api: api, config: config) }
+                .navigationDestination(for: MediaItem.self) { MobileTitle(item: $0, api: api, config: config).sidesUnderInsets() }
                 .navigationDestination(for: PersonRoute.self) { MobilePerson(route: $0, api: api) }
                 #if os(macOS)
                 .navigationDestination(for: SettingsRoute.self) { _ in MobileSettings(store: store, api: api, config: config) }
@@ -504,6 +506,9 @@ struct MobileSettings: View {
     @AppStorage("previewFocusedTitle") private var previewTitle = true
     @AppStorage(Haptics.key) private var haptics = true
     @AppStorage("seekInterval") private var seekInterval = 10
+    @AppStorage(SubtitleSettings.filmsKey) private var subtitlesInFilms = true
+    @AppStorage(SubtitleSettings.trailersKey) private var subtitlesInTrailers = false
+    @AppStorage(SubtitleSettings.sizeKey) private var subtitleSize = SubtitleSize.medium.rawValue
     @AppStorage("libraryMetadata") private var libraryMetadata = true
     @State private var refreshingMetadata = false
     @State private var clearHistory = false
@@ -559,6 +564,11 @@ struct MobileSettings: View {
             Picker(L("Skip"), selection: $seekInterval) {
                 ForEach([10, 15, 30], id: \.self) { Text(L("%ld seconds", $0)).tag($0) }
             }.pickerStyle(.menu)
+            Toggle(L("Subtitles in films and shows"), isOn: $subtitlesInFilms).tint(Color.torrentAccent)
+            Toggle(L("Subtitles in trailers"), isOn: $subtitlesInTrailers).tint(Color.torrentAccent)
+            Picker(L("Subtitle size"), selection: $subtitleSize) {
+                ForEach(SubtitleSize.allCases) { Text($0.name).tag($0.rawValue) }
+            }.pickerStyle(.menu)
             NavigationLink(L("Player licenses")) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
@@ -568,7 +578,7 @@ struct MobileSettings: View {
                 }.navigationTitle(L("Player licenses"))
             }
         } header: { header("Playback", "play.circle") } footer: {
-            Text(L("Choose how far the player moves with each skip. Audio and subtitles can be changed while a title is playing."))
+            Text(L("Choose how far the player moves with each skip.") + " " + L("Choose whether subtitles start on, and their size. You can still pick a subtitle track while a title is playing."))
                 .font(settingsFooterFont).foregroundStyle(.white.opacity(0.6))
         }
         .listRowBackground(Color.white.opacity(0.06))

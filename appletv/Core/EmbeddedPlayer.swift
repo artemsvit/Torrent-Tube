@@ -29,6 +29,25 @@ struct PlaybackRequest: Identifiable {
     var seasonSources: [PlaybackSource] = []
 }
 
+/// Subtitle choices in Settings: shown in films and shows (on by default),
+/// shown in trailers (off by default), and how large they are.
+enum SubtitleSettings {
+    static let filmsKey = "subtitlesInFilms"
+    static let trailersKey = "subtitlesInTrailers"
+    static let sizeKey = "subtitleSize"
+    static var films: Bool { UserDefaults.standard.object(forKey: filmsKey) as? Bool ?? true }
+    static var trailers: Bool { UserDefaults.standard.bool(forKey: trailersKey) }
+    static var size: SubtitleSize { SubtitleSize(rawValue: UserDefaults.standard.string(forKey: sizeKey) ?? "") ?? .medium }
+}
+
+enum SubtitleSize: String, CaseIterable, Identifiable {
+    case small, medium, large
+    var id: String { rawValue }
+    var name: String { L(rawValue.capitalized) }
+    /// VLC's relative font size: the video's height divided by this. 16 is VLC's own size.
+    var relativeSize: Int { switch self { case .small: 22; case .medium: 16; case .large: 12 } }
+}
+
 @MainActor @Observable
 final class EmbeddedPlayer {
     @ObservationIgnored let player = VLCMediaPlayer()
@@ -54,11 +73,19 @@ final class EmbeddedPlayer {
     @ObservationIgnored private var externalSubtitleID: Int32?
 
     @ObservationIgnored private let subtitleName: String
+    /// Off: the player starts with no subtitles; the viewer can still pick a track.
+    @ObservationIgnored private let subtitlesOn: Bool
+    @ObservationIgnored private var subtitlesTurnedOff = false
 
-    init(url: URL, resumePosition: Double, audioURL: URL? = nil, subtitleURL: URL? = nil, subtitleName: String? = nil) {
+    init(url: URL, resumePosition: Double, audioURL: URL? = nil, subtitleURL: URL? = nil, subtitleName: String? = nil,
+         subtitlesOn: Bool = SubtitleSettings.films) {
         self.resumePosition = resumePosition
         self.subtitleURL = subtitleURL
         self.subtitleName = subtitleName ?? "Subtitles"
+        self.subtitlesOn = subtitlesOn
+        // Not in VLCKit's headers; the VLC app sets the size the same way.
+        let fontSize = NSSelectorFromString("setTextRendererFontSize:")
+        if player.responds(to: fontSize) { player.perform(fontSize, with: NSNumber(value: SubtitleSettings.size.relativeSize)) }
         let media = VLCMedia(url: url)
         media.addOption(":network-caching=2500")
         if let audioURL { media.addOption(":input-slave=\(audioURL.absoluteString)") }
@@ -97,7 +124,12 @@ final class EmbeddedPlayer {
         if subtitleAttached && !subtitleSelected, let track = subtitleTracks.last(where: { $0.id >= 0 }) {
             subtitleSelected = true
             externalSubtitleID = track.id
-            player.currentVideoSubTitleIndex = track.id
+            player.currentVideoSubTitleIndex = subtitlesOn ? track.id : -1
+        }
+        // The file's own default track, once VLC lists it.
+        if !subtitlesOn && !subtitlesTurnedOff && player.isPlaying && subtitleTracks.contains(where: { $0.id >= 0 }) {
+            subtitlesTurnedOff = true
+            player.currentVideoSubTitleIndex = -1
         }
         seconds = max(0, Double(player.time.intValue) / 1000)
         duration = max(0, Double(player.media?.length.intValue ?? 0) / 1000)

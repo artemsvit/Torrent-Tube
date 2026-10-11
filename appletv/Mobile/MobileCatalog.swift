@@ -148,6 +148,30 @@ extension EnvironmentValues {
     }
 }
 
+extension View {
+    /// iPhone in landscape: the page - its banner most of all - runs under the
+    /// side insets, edge to edge; text and rows keep the insets as margin.
+    func sidesUnderInsets() -> some View { modifier(SidesUnderInsets()) }
+}
+
+private struct SidesUnderInsets: ViewModifier {
+    @Environment(\.mobileEdge) private var edge
+    func body(content: Content) -> some View {
+        #if os(iOS)
+        // iPhone only: on iPad the side inset is the sidebar's room.
+        if UIDevice.current.userInterfaceIdiom == .phone {
+            GeometryReader { proxy in
+                content
+                    .environment(\.mobileEdge, edge + max(proxy.safeAreaInsets.leading, proxy.safeAreaInsets.trailing))
+                    .ignoresSafeArea(edges: .horizontal)
+            }
+        } else { content }
+        #else
+        content
+        #endif
+    }
+}
+
 /// "Movie", "TV Show", "Cartoon" or "Animated Series" - the eyebrow over a title.
 func mobileKind(_ item: MediaItem, _ details: Details?) -> String? {
     let type = details?.mediaType ?? item.mediaType
@@ -463,6 +487,8 @@ struct MobileHome: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var featuredIndex = 0
     @State private var heroVisible = true
+    /// iPad: the buttons left no room for the page dots, so they sit in the top bar.
+    @State private var dotsOnTop = false
     @GestureState private var draggingHero = false
     private let feeds = [("new", "New to Explore"), ("popular", "Popular Now"), ("movies", "Movies"), ("tv", "TV Shows"), ("cartoons", "Cartoons"), ("ukrainian", "Ukrainian")]
     private var featuredItems: [MediaItem] {
@@ -478,7 +504,7 @@ struct MobileHome: View {
     }
     var body: some View {
         GeometryReader { screen in
-            let heroHeight = HeroLayout.bannerHeight(screenHeight: screen.size.height, sizeClass: sizeClass)
+            let heroHeight = HeroLayout.bannerHeight(screenHeight: screen.size.height, screenWidth: screen.size.width, sizeClass: sizeClass)
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 28) {
                     if let featured { hero(featured, height: heroHeight).padding(.top, -refreshSpinnerRoom) }
@@ -510,7 +536,7 @@ struct MobileHome: View {
         // The hero runs under the status bar, like the Apple TV app.
         .ignoresSafeArea(edges: .top)
         .toolbar {
-            if sizeClass == .compact, featuredItems.count > 1 {
+            if sizeClass == .compact || dotsOnTop, featuredItems.count > 1 {
                 ToolbarItem(placement: .principal) { carouselDots }
             }
         }
@@ -574,46 +600,23 @@ struct MobileHome: View {
             .frame(maxHeight: .infinity, alignment: .top)
             HeroInfo(kind: mobileKind(item, details), title: details?.title ?? item.displayTitle, item: item, details: details,
                      overview: details?.overview ?? item.overview, tagline: details?.tagline) {
-                Button {
-                    if config.supportsPlayback {
-                        playback = PlaybackRequest(source: item.source, title: item.displayTitle,
-                                                   artwork: details?.backdrop ?? item.poster, tmdbID: details?.tmdbId ?? item.tmdbId,
-                                                   seasonSources: item.librarySources)
-                    } else { serverNotice = true }
-                } label: {
-                    Label(L("Play"), systemImage: "play.fill").font(HeroFont.button)
-                        .frame(maxWidth: sizeClass == .regular ? 220 : .infinity, minHeight: HeroFont.buttonHeight)
-                }
-                .primaryHeroButton()
-                .accessibilityIdentifier("hero-play")
-                NavigationLink(value: item) {
-                    Label(L("Details"), systemImage: "info.circle").font(HeroFont.button)
-                        .padding(.horizontal, sizeClass == .regular ? 16 : 0)
-                        .frame(minWidth: sizeClass == .regular ? 140 : nil, maxWidth: sizeClass == .regular ? nil : .infinity, minHeight: HeroFont.buttonHeight)
-                }
-                .hapticButtonStyle(BorderedButtonStyle()).tint(.white)
-                .accessibilityIdentifier("featured-details")
-                // iPad and Mac: the trailer, as on Apple TV.
-                if sizeClass == .regular {
-                    Button {
-                        findingTrailer = true
-                        Task {
-                            defer { findingTrailer = false }
-                            trailer = try? await TrailerChoice.find(title: item.title, year: details?.year, known: details?.trailers ?? [], api: api)
-                        }
-                    } label: {
-                        HStack(spacing: 8) {
-                            Group { if findingTrailer { ProgressView() } else { Image(systemName: "play.rectangle") } }
-                            Text(L("Trailer"))
-                        }
-                        .font(HeroFont.button).padding(.horizontal, 16).frame(minHeight: HeroFont.buttonHeight)
-                    }
-                    .hapticButtonStyle(BorderedButtonStyle()).tint(.white).disabled(findingTrailer)
-                    .accessibilityIdentifier("featured-trailer")
-                }
                 if sizeClass == .regular, featuredItems.count > 1 {
-                    Spacer(minLength: 16)
-                    carouselDots
+                    // The dots after the buttons while they fit; else in the top bar,
+                    // as on iPhone - the Trailer button never wraps under them.
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 10) {
+                            heroButtons(item, details: details)
+                            Spacer(minLength: 16)
+                            carouselDots
+                        }.onAppear { dotsOnTop = false }
+                        HStack(spacing: 10) { heroButtons(item, details: details) }
+                            .onAppear { dotsOnTop = true }
+                        // Still short of room: Trailer as an icon, as on iPhone.
+                        HStack(spacing: 10) { heroButtons(item, details: details, iconTrailer: true) }
+                            .onAppear { dotsOnTop = true }
+                    }
+                } else {
+                    heroButtons(item, details: details)
                 }
             }
             .padding(.horizontal, edge).padding(.bottom, 12)
@@ -632,6 +635,47 @@ struct MobileHome: View {
                     changeFeatured(x < 0 ? 1 : -1)
                 }
         )
+    }
+    @ViewBuilder private func heroButtons(_ item: MediaItem, details: Details?, iconTrailer: Bool = false) -> some View {
+        Button {
+            if config.supportsPlayback {
+                playback = PlaybackRequest(source: item.source, title: item.displayTitle,
+                                           artwork: details?.backdrop ?? item.poster, tmdbID: details?.tmdbId ?? item.tmdbId,
+                                           seasonSources: item.librarySources)
+            } else { serverNotice = true }
+        } label: {
+            Label(L("Play"), systemImage: "play.fill").font(HeroFont.button)
+                .frame(maxWidth: sizeClass == .regular ? 220 : .infinity, minHeight: HeroFont.buttonHeight)
+        }
+        .primaryHeroButton()
+        .accessibilityIdentifier("hero-play")
+        NavigationLink(value: item) {
+            Label(L("Details"), systemImage: "info.circle").font(HeroFont.button)
+                .padding(.horizontal, sizeClass == .regular ? 16 : 0)
+                .frame(minWidth: sizeClass == .regular ? 140 : nil, maxWidth: sizeClass == .regular ? nil : .infinity, minHeight: HeroFont.buttonHeight)
+        }
+        .hapticButtonStyle(BorderedButtonStyle()).tint(.white)
+        .layoutPriority(1)  // when room is short, Play gives up width first
+        .accessibilityIdentifier("featured-details")
+        // iPad and Mac: the trailer, as on Apple TV.
+        if sizeClass == .regular {
+            Button {
+                findingTrailer = true
+                Task {
+                    defer { findingTrailer = false }
+                    trailer = try? await TrailerChoice.find(title: item.title, year: details?.year, known: details?.trailers ?? [], api: api)
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Group { if findingTrailer { ProgressView() } else { Image(systemName: "play.rectangle") } }
+                    if !iconTrailer { Text(L("Trailer")).lineLimit(1) }
+                }
+                .font(HeroFont.button).padding(.horizontal, 16).frame(minHeight: HeroFont.buttonHeight)
+            }
+            .hapticButtonStyle(BorderedButtonStyle()).tint(.white).disabled(findingTrailer)
+            .layoutPriority(1).accessibilityLabel(L("Trailer"))
+            .accessibilityIdentifier("featured-trailer")
+        }
     }
     private var carouselDots: some View {
         MobileHeroPageDots(count: featuredItems.count, current: featuredIndex, next: nextFeatured)
@@ -942,7 +986,7 @@ struct MobileSearch: View {
         .background(AppBackground())
         .hidesNavigationBar()
         .navigationDestination(for: MediaItem.self) { item in
-            MobileTitle(item: item, api: api, config: config)
+            MobileTitle(item: item, api: api, config: config).sidesUnderInsets()
         }
         .navigationDestination(for: PersonRoute.self) { MobilePerson(route: $0, api: api) }
     }

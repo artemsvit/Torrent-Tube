@@ -138,6 +138,31 @@ final class MobileFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["featured-details"].isHittable)
         capture("Mobile Home Automatic Rotation")
     }
+    /// iPhone: turning the phone keeps the trailer playing, and the title
+    /// page's banner runs edge to edge in landscape.
+    func testIPhoneTrailerSurvivesRotation() throws {
+        guard UIDevice.current.userInterfaceIdiom == .phone else { throw XCTSkip("iPhone rotation") }
+        guard let server = ProcessInfo.processInfo.environment["TORRENTTUBE_REFERENCE_SERVER"], !server.isEmpty else { throw XCTSkip("Set reference server") }
+        defer { XCUIDevice.shared.orientation = .portrait }
+        let app = launch(server: server, language: "uk")
+        let details = app.buttons["featured-details"]
+        XCTAssertTrue(details.waitForExistence(timeout: 60))
+        details.tap()
+        let trailers = app.buttons["show-trailers"]
+        XCTAssertTrue(trailers.waitForExistence(timeout: 30))
+        trailers.tap()
+        XCTAssertTrue(app.buttons["close-player"].waitForExistence(timeout: 30))
+        Thread.sleep(forTimeInterval: 4)
+        XCUIDevice.shared.orientation = .landscapeLeft
+        Thread.sleep(forTimeInterval: 3)
+        capture("Trailer after rotation")
+        // The controls hide while it plays: a tap shows them again.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(app.buttons["close-player"].waitForExistence(timeout: 5), "the trailer closed when the phone turned")
+        app.buttons["close-player"].tap()
+        Thread.sleep(forTimeInterval: 2)
+        capture("Title page in landscape")
+    }
     private func launch(server: String? = nil, language: String = "en") -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-serverAddress", server ?? ProcessInfo.processInfo.environment["TORRENTTUBE_TEST_SERVER"] ?? "http://127.0.0.1:5069", "-appLanguage", language]

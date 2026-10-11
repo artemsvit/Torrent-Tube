@@ -459,7 +459,11 @@ struct BrandMark: View {
 enum HeroLayout {
     /// The banner on Home and on a title page - the same height on both, so
     /// opening a title never makes it jump.
-    static func bannerHeight(screenHeight: CGFloat, sizeClass: UserInterfaceSizeClass?) -> CGFloat {
+    static func bannerHeight(screenHeight: CGFloat, screenWidth: CGFloat = 0, sizeClass: UserInterfaceSizeClass?) -> CGFloat {
+        #if os(iOS)
+        // iPad in portrait: a tall, narrow page - a lower banner shows the rows sooner.
+        if sizeClass == .regular, screenWidth > 0, screenWidth < screenHeight { return max(560, screenHeight * 0.62) }
+        #endif
         let base = mobileHeight(screenHeight: screenHeight, sizeClass: sizeClass)
         #if os(macOS)
         let share = 0.82
@@ -470,11 +474,12 @@ enum HeroLayout {
     }
     /// Adaptive height for the hero banner on mobile (iPhone / iPad).
     static func mobileHeight(screenHeight: CGFloat, sizeClass: UserInterfaceSizeClass?) -> CGFloat {
-        if sizeClass == .regular {
-            return min(max(screenHeight * 0.88, 640), 1040)
-        }
+        // A phone in landscape first: a large iPhone is "regular" there too.
         if screenHeight < 500 {
             return max(screenHeight * 0.88, 340)
+        }
+        if sizeClass == .regular {
+            return min(max(screenHeight * 0.88, 640), 1040)
         }
         return min(max(screenHeight * 0.70, 500), 650)
     }

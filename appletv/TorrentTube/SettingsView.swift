@@ -11,6 +11,9 @@ struct SettingsView: View {
     @AppStorage("showContinueWatching") private var showContinue = true
     @AppStorage("previewFocusedTitle") private var previewTitle = true
     @AppStorage("seekInterval") private var seekInterval = 10
+    @AppStorage(SubtitleSettings.filmsKey) private var subtitlesInFilms = true
+    @AppStorage(SubtitleSettings.trailersKey) private var subtitlesInTrailers = false
+    @AppStorage(SubtitleSettings.sizeKey) private var subtitleSize = SubtitleSize.medium.rawValue
     @AppStorage("libraryMetadata") private var libraryMetadata = true
     @State private var refreshingMetadata = false
     @State private var section: Section = .home
@@ -81,6 +84,13 @@ struct SettingsView: View {
                         setting("Skip", value: L("%ld seconds", seekInterval), subtitle: "Choose how far the player moves with each skip.") {
                             let intervals = [10, 15, 30]
                             seekInterval = intervals[((intervals.firstIndex(of: seekInterval) ?? 0) + 1) % intervals.count]
+                        }
+                        setting("Subtitles in films and shows", value: subtitlesInFilms ? L("On") : L("Off"), subtitle: "Show subtitles when a film or episode starts.") { subtitlesInFilms.toggle() }
+                        setting("Subtitles in trailers", value: subtitlesInTrailers ? L("On") : L("Off"), subtitle: "Show subtitles when a trailer starts.") { subtitlesInTrailers.toggle() }
+                        setting("Subtitle size", value: (SubtitleSize(rawValue: subtitleSize) ?? .medium).name, subtitle: "Make subtitles smaller or larger.") {
+                            let sizes = SubtitleSize.allCases
+                            let current = sizes.firstIndex { $0.rawValue == subtitleSize } ?? 1
+                            subtitleSize = sizes[(current + 1) % sizes.count].rawValue
                         }
                         Text(L("Audio and subtitles can be changed while a title is playing. Available tracks depend on the video file."))
                             .font(.system(size: 25)).foregroundStyle(.white.opacity(0.7)).lineSpacing(4).padding(.horizontal, 34).padding(.top, 8)
