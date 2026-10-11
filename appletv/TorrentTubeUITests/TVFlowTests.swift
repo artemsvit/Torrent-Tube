@@ -1,6 +1,27 @@
 import XCTest
 
 final class TVFlowTests: XCTestCase {
+    func testHomeDownFocusesPlayBeforeDetails() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-appLanguage", "uk", "-serverAddress", "http://192.168.0.102:5058", "-autoplayHomeTrailers", "NO"]
+        app.launch()
+        let play = app.buttons["hero-play"]
+        XCTAssertTrue(play.waitForExistence(timeout: 30))
+        let tabs = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "main-tab-"))
+        for _ in 0..<3 {
+            if tabs.allElementsBoundByIndex.contains(where: { $0.hasFocus }) { break }
+            XCUIRemote.shared.press(.up)
+        }
+        XCTAssertTrue(tabs.allElementsBoundByIndex.contains { $0.hasFocus })
+        XCUIRemote.shared.press(.down)
+        let focusedPlay = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in play.hasFocus }, object: play)
+        XCTAssertEqual(XCTWaiter.wait(for: [focusedPlay], timeout: 3), .completed)
+        XCUIRemote.shared.press(.right)
+        let details = app.buttons["Деталі"]
+        let focusedDetails = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in details.hasFocus }, object: details)
+        XCTAssertEqual(XCTWaiter.wait(for: [focusedDetails], timeout: 3), .completed)
+    }
+
     func testLibraryBackKeepsCategoryBeforeReturningHome() {
         checkLibraryBack(sections: ["movie", "tv", "cartoon", "favorites"])
     }

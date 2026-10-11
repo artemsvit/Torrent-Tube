@@ -52,6 +52,7 @@ struct MainView: View {
     @State private var libraryReturnID = UUID()
     @FocusState private var libraryChip: String?
     @FocusState private var navigationFocus: MainTab?
+    @State private var homePlayFocusRequest = UUID()
     @Environment(\.scenePhase) private var scenePhase
     private func path(_ tab: MainTab) -> Binding<NavigationPath> {
         Binding(get: { paths[tab] ?? NavigationPath() }, set: { setPath($0, for: tab) })
@@ -75,7 +76,7 @@ struct MainView: View {
     var body: some View {
         Group {
             switch tab {
-            case .home: stack(.home) { HomeView(api: api, config: config) }
+            case .home: stack(.home) { HomeView(api: api, config: config, playFocusRequest: homePlayFocusRequest) }
             case .movies: stack(.movies) { CategoryView(feed: "movies", title: "Movies", api: api, config: config) }
             case .tv: stack(.tv) { CategoryView(feed: "tv", title: "TV Shows", api: api, config: config) }
             case .cartoons: stack(.cartoons) { CategoryView(feed: "cartoons", title: "Cartoons", api: api, config: config) }
@@ -149,6 +150,9 @@ struct MainView: View {
         .frame(maxWidth: .infinity)
         .focusSection()
         .defaultFocus($navigationFocus, tab)
+        .onMoveCommand { direction in
+            if direction == .down, tab == .home { homePlayFocusRequest = UUID() }
+        }
         // Up from the page lands on the nearest item (often Home); coming
         // into the bar should land on the open tab instead.
         .onChange(of: navigationFocus) { old, new in
@@ -262,6 +266,7 @@ struct HomeView: View {
     @AppStorage("previewFocusedTitle") private var previewFocusedTitle = true
     let api: TorrentTubeAPI
     let config: ServerConfig
+    let playFocusRequest: UUID
     @Environment(CatalogStore.self) private var catalog
     @Environment(ResumeHistory.self) private var history
     @Environment(\.scenePhase) private var scenePhase
@@ -418,6 +423,7 @@ struct HomeView: View {
         .ignoresSafeArea(edges: [.top, .horizontal])
         .background(AppBackground())
         .defaultFocus($heroAction, .play, priority: .userInitiated)
+        .onChange(of: playFocusRequest) { _, _ in heroAction = .play }
         .onScrollGeometryChange(for: Bool.self) { geometry in
             geometry.contentOffset.y + geometry.contentInsets.top < 260
         } action: { _, visible in heroVisible = visible }
