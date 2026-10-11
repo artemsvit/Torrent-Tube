@@ -313,7 +313,7 @@ struct HomeView: View {
             // Each horizontal shelf still creates its posters lazily.
             VStack(alignment: .leading, spacing: 54) {
                 if let active {
-                    CinemaHero(item: catalog.resolved(active), details: catalog.details[active.title], height: 1080, bottomInset: 245, preview: preview.controller, nextArtwork: nextHeroArtwork) {
+                    CinemaHero(item: catalog.resolved(active), details: catalog.details[active.title], height: 1080, bottomInset: 245, overviewLines: nil, preview: preview.controller, nextArtwork: nextHeroArtwork) {
                         // Actions stay on the left; page indicators align with the right screen margin.
                         HStack(spacing: 28) {
                             Button {
@@ -511,7 +511,7 @@ struct CinemaHero<Actions: View>: View {
     var bottomInset: CGFloat = 70
     /// Description visibility in the hero.
     var showsOverview = true
-    /// Home keeps a short preview; title pages use nil to show the full text.
+    /// Use nil to show the full description and let the hero grow to fit it.
     var overviewLines: Int? = 3
     /// Title pages show the credits at the right.
     var showsCredits = false
