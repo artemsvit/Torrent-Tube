@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Menu on a title page: back to the top level of the tab it's in (or out of
 /// a Top Shelf title) - not one step, so a chain of "More Like This" titles
@@ -12,6 +13,11 @@ extension EnvironmentValues {
 }
 
 enum MainTab: Hashable { case home, movies, tv, cartoons, library, search, settings }
+
+private struct HomePlayAvailablePreference: PreferenceKey {
+    static let defaultValue = false
+    static func reduce(value: inout Bool, nextValue: () -> Bool) { value = value || nextValue() }
+}
 
 private struct BackScrollAction: Equatable {
     let id: UUID
@@ -53,6 +59,7 @@ struct MainView: View {
     @FocusState private var libraryChip: String?
     @FocusState private var navigationFocus: MainTab?
     @State private var homePlayFocusRequest = UUID()
+    @State private var homePlayAvailable = false
     @Environment(\.scenePhase) private var scenePhase
     private func path(_ tab: MainTab) -> Binding<NavigationPath> {
         Binding(get: { paths[tab] ?? NavigationPath() }, set: { setPath($0, for: tab) })
@@ -90,6 +97,7 @@ struct MainView: View {
         .overlay(alignment: .top) { navigationBar }
         .onPreferenceChange(BackScrollPreference.self) { backScrollActions = $0 }
         .onPreferenceChange(BackDismissPreference.self) { backDismissActions = $0 }
+        .onPreferenceChange(HomePlayAvailablePreference.self) { homePlayAvailable = $0 }
         .onExitCommand(perform: backCommand)
         .onChange(of: tab) { old, _ in
             if old == .settings { settingsReset += 1 } else { paths[old] = NavigationPath() }
@@ -150,8 +158,13 @@ struct MainView: View {
         .frame(maxWidth: .infinity)
         .focusSection()
         .defaultFocus($navigationFocus, tab)
+        .background(HomeBannerSwipe(enabled: tab == .home && (paths[.home]?.isEmpty ?? true) && navigationFocus != nil && homePlayAvailable) {
+            homePlayFocusRequest = UUID()
+        })
         .onMoveCommand { direction in
-            if direction == .down, tab == .home { homePlayFocusRequest = UUID() }
+            if direction == .down, tab == .home, paths[.home]?.isEmpty ?? true, homePlayAvailable {
+                homePlayFocusRequest = UUID()
+            }
         }
         // Up from the page lands on the nearest item (often Home); coming
         // into the bar should land on the open tab instead.
@@ -212,6 +225,56 @@ struct MainView: View {
             tab = .home
             navigationFocus = .home
         }
+    }
+}
+
+/// Consume the whole downward touchpad gesture when leaving Home's bar.
+/// Otherwise the focus engine can carry the same swipe past Watch into a shelf.
+private struct HomeBannerSwipe: UIViewRepresentable {
+    let enabled: Bool
+    let moveToPlay: () -> Void
+    func makeUIView(context: Context) -> Host { Host() }
+    func updateUIView(_ view: Host, context: Context) {
+        view.enabled = enabled
+        view.moveToPlay = moveToPlay
+        // Do not cancel an active gesture when Watch receives focus.
+        // Keep owning it until the user lifts their finger.
+    }
+    static func dismantleUIView(_ view: Host, coordinator: ()) { view.detach() }
+
+    final class Host: UIView, UIGestureRecognizerDelegate {
+        let pan = UIPanGestureRecognizer()
+        var enabled = false
+        var moveToPlay: () -> Void = {}
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            isUserInteractionEnabled = false
+            pan.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.indirect.rawValue)]
+            pan.cancelsTouchesInView = true
+            pan.delegate = self
+            pan.addTarget(self, action: #selector(handle))
+        }
+        required init?(coder: NSCoder) { fatalError() }
+        override func willMove(toWindow newWindow: UIWindow?) {
+            super.willMove(toWindow: newWindow)
+            detach()
+            newWindow?.addGestureRecognizer(pan)
+        }
+        func detach() { pan.view?.removeGestureRecognizer(pan) }
+        @objc private func handle(_ recognizer: UIPanGestureRecognizer) {
+            if recognizer.state == .began { moveToPlay() }
+        }
+        override func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
+            guard enabled else { return false }
+            let velocity = pan.velocity(in: pan.view)
+            return velocity.y > 0 && abs(velocity.y) > abs(velocity.x)
+        }
+        func gestureRecognizer(_ recognizer: UIGestureRecognizer,
+                               shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
+            enabled && (other is UIPanGestureRecognizer || other is UISwipeGestureRecognizer)
+        }
+        func gestureRecognizer(_ recognizer: UIGestureRecognizer,
+                               shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { false }
     }
 }
 
@@ -424,6 +487,7 @@ struct HomeView: View {
         .background(AppBackground())
         .defaultFocus($heroAction, .play, priority: .userInitiated)
         .onChange(of: playFocusRequest) { _, _ in heroAction = .play }
+        .preference(key: HomePlayAvailablePreference.self, value: active != nil)
         .onScrollGeometryChange(for: Bool.self) { geometry in
             geometry.contentOffset.y + geometry.contentInsets.top < 260
         } action: { _, visible in heroVisible = visible }
