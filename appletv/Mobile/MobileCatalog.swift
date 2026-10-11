@@ -412,12 +412,13 @@ struct MobileShelf: View {
     @Environment(\.mobileEdge) private var edge
     let title: String
     let items: [MediaItem]
+    var titleFont: Font? = nil
     var onFocus: (MediaItem) -> Void = { _ in }
     @Environment(\.horizontalSizeClass) private var sizeClass
     @ScaledMetric(relativeTo: .body) private var cardWidth: CGFloat = 128
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title).font(sizeClass == .regular ? .title2.bold() : .title3.bold()).padding(.horizontal, edge)
+            Text(title).font(titleFont ?? (sizeClass == .regular ? .title2.bold() : .title3.bold())).padding(.horizontal, edge)
             ScrollView(.horizontal) {
                 LazyHStack(alignment: .top, spacing: 14) {
                     ForEach(items) { MobileCard(item: $0, onFocus: onFocus).frame(width: min(cardWidth * (sizeClass == .regular ? 1.3 : 1), 240)) }

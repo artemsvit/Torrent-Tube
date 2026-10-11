@@ -1,5 +1,29 @@
 import SwiftUI
 
+private enum DetailTypography {
+    #if os(macOS)
+    static let heading = Font.system(size: 22, weight: .bold)
+    static let castName = Font.system(size: 16, weight: .semibold)
+    static let castRole = Font.system(size: 14)
+    static let infoLabel = Font.system(size: 12, weight: .semibold)
+    static let infoValue = Font.system(size: 16)
+    static let castWidth: CGFloat = 120
+    static let nameHeight: CGFloat? = 38
+    static let roleHeight: CGFloat? = 34
+    static let shelfHeading: Font? = heading
+    #else
+    static let heading = Font.title3.bold()
+    static let castName = Font.caption.weight(.semibold)
+    static let castRole = Font.caption2
+    static let infoLabel = Font.caption.weight(.semibold)
+    static let infoValue = Font.body
+    static let castWidth: CGFloat = 96
+    static let nameHeight: CGFloat? = nil
+    static let roleHeight: CGFloat? = nil
+    static let shelfHeading: Font? = nil
+    #endif
+}
+
 struct MobileTitle: View {
     @Environment(\.mobileEdge) private var edge
     let item: MediaItem
@@ -46,7 +70,7 @@ struct MobileTitle: View {
                             var media = MediaItem(title: rec.title, magnet: nil, downloadLink: nil, sizeLabel: nil, seeders: nil, releases: nil)
                             media.cleanTitle = rec.title; media.poster = rec.poster; media.tmdbId = rec.tmdbId; media.mediaType = rec.mediaType
                             return media
-                        })
+                        }, titleFont: DetailTypography.shelfHeading)
                     }
                 }.padding(.bottom, 32)
             }
@@ -181,7 +205,7 @@ struct MobileTitle: View {
                     }.padding(.horizontal, edge)
                 }.scrollIndicators(.hidden)
             }
-            Text(L("Episodes")).font(.title3.bold()).padding(.horizontal, edge)
+            Text(L("Episodes")).font(DetailTypography.heading).padding(.horizontal, edge)
             if loadingEpisodes { MobileLoading(text: L("Loading episodes…")).frame(minHeight: 160) }
             if let episodeError { MobileError(message: episodeError) { Task { await loadEpisodes() } } }
             if sizeClass == .regular {
@@ -257,7 +281,7 @@ struct MobileTitle: View {
 
     private func castSection(_ people: [Details.Person]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(L("Cast & Crew")).font(.title3.bold()).padding(.horizontal, edge)
+            Text(L("Cast & Crew")).font(DetailTypography.heading).padding(.horizontal, edge)
             ScrollView(.horizontal) {
                 LazyHStack(alignment: .top, spacing: 14) {
                     ForEach(Array(people.prefix(24).enumerated()), id: \.offset) { _, person in
@@ -271,9 +295,13 @@ struct MobileTitle: View {
                                     Text(String(person.name.prefix(1))).font(.title.weight(.semibold)).foregroundStyle(.white.opacity(0.5))
                                 }
                             }.frame(width: 84, height: 84).clipShape(Circle())
-                            Text(person.name).font(.caption.weight(.semibold)).lineLimit(2)
-                            if let role = person.role, !role.isEmpty { Text(L(role)).font(.caption2).foregroundStyle(.secondary).lineLimit(2) }
-                        }.multilineTextAlignment(.center).frame(width: 96)
+                            Text(person.name).font(DetailTypography.castName).lineLimit(2)
+                                .frame(maxWidth: .infinity, minHeight: DetailTypography.nameHeight, alignment: .top)
+                            if let role = person.role, !role.isEmpty {
+                                Text(L(role)).font(DetailTypography.castRole).foregroundStyle(.secondary).lineLimit(2)
+                                    .frame(maxWidth: .infinity, minHeight: DetailTypography.roleHeight, alignment: .top)
+                            }
+                        }.multilineTextAlignment(.center).frame(width: DetailTypography.castWidth)
                         }
                     }
                 }.padding(.horizontal, edge)
@@ -332,13 +360,13 @@ struct MobileTitle: View {
                 let count = typeSize.isAccessibilitySize ? 1 : (sizeClass == .regular
                     ? min(rows.count, max(2, Int((width - edge * 2 - 40) / 190))) : 2)
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(L("Information")).font(.title3.bold())
+                    Text(L("Information")).font(DetailTypography.heading)
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 24, alignment: .topLeading), count: count), alignment: .leading, spacing: 24) {
                         ForEach(rows, id: \.0) { label, text in
                             VStack(alignment: .leading, spacing: 8) {
-                                Text(label.uppercased()).font(.caption.weight(.semibold)).tracking(0.8)
+                                Text(label.uppercased()).font(DetailTypography.infoLabel).tracking(0.8)
                                     .foregroundStyle(.white.opacity(0.6)).fixedSize(horizontal: false, vertical: true)
-                                Text(text).font(.body).foregroundStyle(.white.opacity(0.95))
+                                Text(text).font(DetailTypography.infoValue).foregroundStyle(.white.opacity(0.95))
                                     .fixedSize(horizontal: false, vertical: true)
                             }.frame(maxWidth: .infinity, alignment: .topLeading)
                         }
