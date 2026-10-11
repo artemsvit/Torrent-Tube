@@ -487,6 +487,8 @@ struct MobileHome: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var featuredIndex = 0
     @State private var heroVisible = true
+    @State private var overviewExpanded = false
+    @State private var heroGrowth: CGFloat = 0
     /// iPad: the buttons left no room for the page dots, so they sit in the top bar.
     @State private var dotsOnTop = false
     @GestureState private var draggingHero = false
@@ -506,7 +508,7 @@ struct MobileHome: View {
     }
     private var rotationCycle: String? {
         guard featuredItems.count > 1, heroVisible, scenePhase == .active, playback == nil,
-              !serverNotice, !draggingHero, !trackpadScrolling, !previewTitle || previewed == nil else { return nil }
+              !serverNotice, !draggingHero, !trackpadScrolling, !overviewExpanded, !previewTitle || previewed == nil else { return nil }
         return "\(featuredIndex):" + featuredItems.map(\.id).joined(separator: "|")
     }
     var body: some View {
@@ -554,6 +556,10 @@ struct MobileHome: View {
         .refreshable { await load(refresh: true) }
         .task { await load(refresh: false) }
         .task(id: featured?.id) { if let featured { await catalog.loadDetails(featured, api: api, config: config) } }
+        .onChange(of: featured?.id) { _, _ in
+            overviewExpanded = false
+            heroGrowth = 0
+        }
         .task(id: rotationCycle) {
             guard rotationCycle != nil else { return }
             do { try await Task.sleep(for: .seconds(5)) } catch { return }
@@ -610,7 +616,9 @@ struct MobileHome: View {
             HeroArtFrame(height: height) { homeHeroArt(item, details: details) }
             .frame(maxHeight: .infinity, alignment: .top)
             HeroInfo(kind: mobileKind(item, details), title: details?.title ?? item.displayTitle, item: item, details: details,
-                     overview: details?.overview ?? item.overview, tagline: details?.tagline) {
+                     overview: details?.overview ?? item.overview, tagline: details?.tagline, expanded: overviewExpanded,
+                     toggleMore: (details?.overview ?? item.overview ?? "").count > 160 ? { overviewExpanded.toggle() } : nil,
+                     growth: $heroGrowth) {
                 if sizeClass == .regular, featuredItems.count > 1 {
                     // The dots after the buttons while they fit; else in the top bar,
                     // as on iPhone - the Trailer button never wraps under them.
@@ -632,7 +640,7 @@ struct MobileHome: View {
             }
             .padding(.horizontal, edge).padding(.bottom, 12)
         }
-        .frame(height: height)
+        .frame(height: height + heroGrowth)
         .mask(Rectangle().padding(.top, -1500))  // sides and bottom only: the fill above the top edge shows when pulled down
         #if os(macOS)
         .background(MacCarouselTrackpad(enabled: featuredItems.count > 1 && heroVisible && scenePhase == .active,
