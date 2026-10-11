@@ -49,11 +49,20 @@ struct MainView: View {
     @State private var backDismissActions: [BackScrollAction] = []
     @State private var librarySection = ""
     @State private var libraryScrollRequest = UUID()
+    @State private var libraryReturnID = UUID()
     @FocusState private var libraryChip: String?
     @FocusState private var navigationFocus: MainTab?
     @Environment(\.scenePhase) private var scenePhase
     private func path(_ tab: MainTab) -> Binding<NavigationPath> {
-        Binding(get: { paths[tab] ?? NavigationPath() }, set: { paths[tab] = $0 })
+        Binding(get: { paths[tab] ?? NavigationPath() }, set: { setPath($0, for: tab) })
+    }
+    private func setPath(_ path: NavigationPath, for tab: MainTab) {
+        if tab == .library, !(paths[tab]?.isEmpty ?? true), path.isEmpty {
+            // A fresh root prevents tvOS from restoring its cached poster focus.
+            // The selected category stays in MainView.
+            libraryReturnID = UUID()
+        }
+        paths[tab] = path
     }
     /// A tab's stack, with title pages pushed as values so it can be reset.
     private func stack<Root: View>(_ tab: MainTab, @ViewBuilder root: () -> Root) -> some View {
@@ -61,7 +70,7 @@ struct MainView: View {
             root().navigationDestination(for: MediaItem.self) { item in TitleView(item: item, api: api, config: config) }
                 .navigationDestination(for: PersonRoute.self) { PersonView(route: $0, api: api, config: config) }
         }
-        .environment(\.backToTop) { paths[tab] = NavigationPath() }
+        .environment(\.backToTop) { setPath(NavigationPath(), for: tab) }
     }
     var body: some View {
         Group {
@@ -70,7 +79,7 @@ struct MainView: View {
             case .movies: stack(.movies) { CategoryView(feed: "movies", title: "Movies", api: api, config: config) }
             case .tv: stack(.tv) { CategoryView(feed: "tv", title: "TV Shows", api: api, config: config) }
             case .cartoons: stack(.cartoons) { CategoryView(feed: "cartoons", title: "Cartoons", api: api, config: config) }
-            case .library: stack(.library) { LibraryView(api: api, config: config, section: $librarySection, chipFocus: $libraryChip, scrollRequest: libraryScrollRequest) }
+            case .library: stack(.library) { LibraryView(api: api, config: config, section: $librarySection, chipFocus: $libraryChip, scrollRequest: libraryScrollRequest).id(libraryReturnID) }
             case .search: stack(.search) { SearchView(api: api, config: config) }
             case .settings: NavigationStack { SettingsView(store: store, api: api, config: config).padding(.top, 118) }.id(settingsReset)
             }
@@ -168,12 +177,8 @@ struct MainView: View {
             if libraryChip == nil {
                 return {
                     let selected = librarySection.isEmpty ? LibrarySections.defaultSection(catalog.library) : librarySection
+                    libraryChip = selected
                     libraryScrollRequest = UUID()
-                    // NavigationStack can still be animating the return from a title.
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                        guard tab == .library, paths[tab]?.isEmpty ?? true else { return }
-                        libraryChip = selected
-                    }
                 }
             }
             return { needsHomeReturn = false; tab = .home; navigationFocus = .home }
@@ -190,7 +195,9 @@ struct MainView: View {
         if !(paths[tab]?.isEmpty ?? true) {
             return {
                 needsHomeReturn = false
-                paths[tab]?.removeLast()
+                var path = paths[tab] ?? NavigationPath()
+                path.removeLast()
+                setPath(path, for: tab)
             }
         }
         guard needsHomeReturn || tab != .home else { return nil }
@@ -894,7 +901,6 @@ struct ChipRow: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)  // Up from any poster reaches the chips
         .focusSection()
-
     }
 }
 

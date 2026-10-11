@@ -71,8 +71,21 @@ struct LibraryView: View {
         }
         .onChange(of: scrollRequest) { _, _ in
             var transaction = Transaction(); transaction.disablesAnimations = true
-            withTransaction(transaction) { proxy.scrollTo(Self.top, anchor: .top) }
+            withTransaction(transaction) {
+                proxy.scrollTo(Self.top, anchor: .top)
+                chipFocus.wrappedValue = active
+            }
         }
+        .onAppear {
+            // Returning from a title goes directly to its Library category.
+            // Do not restore the poster and then move focus again on Back.
+            var transaction = Transaction(); transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                proxy.scrollTo(Self.top, anchor: .top)
+                chipFocus.wrappedValue = active
+            }
+        }
+        .defaultFocus(chipFocus, active, priority: .userInitiated)
         }
         .ignoresSafeArea(edges: .horizontal)
         .task {

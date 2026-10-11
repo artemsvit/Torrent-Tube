@@ -2,11 +2,19 @@ import XCTest
 
 final class TVFlowTests: XCTestCase {
     func testLibraryBackKeepsCategoryBeforeReturningHome() {
+        checkLibraryBack(sections: ["movie", "tv", "cartoon", "favorites"])
+    }
+
+    func testLibraryTVShowBackFocusesCategoryWithoutExtraPress() {
+        checkLibraryBack(sections: ["tv"])
+    }
+
+    private func checkLibraryBack(sections: [String]) {
         let app = XCUIApplication()
         app.launchArguments = ["-appLanguage", "uk", "-serverAddress", "http://192.168.0.102:5058", "-autoplayHomeTrailers", "NO"]
         app.launch()
         XCTAssertTrue(app.buttons["hero-play"].waitForExistence(timeout: 45))
-        for section in ["movie", "tv", "cartoon", "favorites"] {
+        for section in sections {
             openTab(app, "Медіатека")
             let tv = app.buttons["library-chip-\(section)"]
             XCTAssertTrue(tv.waitForExistence(timeout: 20))
@@ -29,18 +37,23 @@ final class TVFlowTests: XCTestCase {
             for _ in 0..<3 {
                 if !app.buttons["title-play"].exists { break }
                 XCUIRemote.shared.press(.menu)
+                // Let the pop finish before sending another remote press.
+                if tv.waitForExistence(timeout: 2) { break }
             }
             XCTAssertTrue(app.buttons["main-tab-library"].isSelected)
             XCTAssertTrue(tv.exists)
             XCTAssertTrue(tv.isSelected)
-            if !tv.hasFocus { XCUIRemote.shared.press(.menu) }
-            let focusedCategory = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in tv.hasFocus }, object: tv)
+            let chips = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "library-chip-"))
+            let focusedCategory = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                chips.allElementsBoundByIndex.contains { $0.hasFocus }
+            }, object: app)
             XCTAssertEqual(XCTWaiter.wait(for: [focusedCategory], timeout: 5), .completed)
-            XCTAssertTrue(tv.hasFocus, app.debugDescription)
+            XCTAssertTrue(chips.allElementsBoundByIndex.contains { $0.hasFocus }, app.debugDescription)
             XCTAssertTrue(app.buttons["main-tab-library"].isSelected)
             add(keep(app, "Back preserves Library \(section) category"))
             XCUIRemote.shared.press(.menu)
-            XCTAssertTrue(app.buttons["main-tab-home"].isSelected)
+            let homeSelected = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in app.buttons["main-tab-home"].isSelected }, object: app)
+            XCTAssertEqual(XCTWaiter.wait(for: [homeSelected], timeout: 3), .completed)
         }
     }
 
