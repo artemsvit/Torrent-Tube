@@ -509,10 +509,10 @@ struct CinemaHero<Actions: View>: View {
     /// Space under the buttons - Home leaves room for its first shelf, which
     /// rises into the fade.
     var bottomInset: CGFloat = 70
-    /// The Title page shows the full description under the hero instead.
+    /// Description visibility in the hero.
     var showsOverview = true
-    /// Home shows three lines of the description; a title page more.
-    var overviewLines = 3
+    /// Home keeps a short preview; title pages use nil to show the full text.
+    var overviewLines: Int? = 3
     /// Title pages show the credits at the right.
     var showsCredits = false
     var preview: EmbeddedPlayer? = nil
@@ -581,11 +581,12 @@ struct CinemaHero<Actions: View>: View {
                         VStack(alignment: .leading, spacing: 6) {
                             // The tagline heads the description.
                             if let tagline = details?.tagline, !tagline.isEmpty {
-                                Text(tagline).font(.system(size: 24, weight: .semibold)).foregroundStyle(.white.opacity(0.9)).lineLimit(2)
+                                Text(tagline).font(.system(size: 24, weight: .semibold)).foregroundStyle(.white.opacity(0.9)).lineLimit(overviewLines == nil ? nil : 2)
                             }
                             if let overview = details?.overview ?? item.overview, !overview.isEmpty {
                                 Text(overview).font(.system(size: 24)).foregroundStyle(.white.opacity(0.78)).lineSpacing(3)
                                     .lineLimit(overviewLines)
+                                    .fixedSize(horizontal: false, vertical: overviewLines == nil)
                             }
                         }
                         .frame(maxWidth: 820, alignment: .leading).padding(.top, 16)
@@ -618,9 +619,34 @@ struct CinemaHero<Actions: View>: View {
             }
             .padding(.trailing, showsCredits ? TVLayout.edge : 0)
             .padding(.leading, TVLayout.edge).padding(.bottom, bottomInset)
+            .padding(.top, overviewLines == nil ? 180 : 0)
         }
-        .frame(maxWidth: .infinity).frame(height: height).clipped()
+        .frame(maxWidth: .infinity)
+        .frame(height: overviewLines == nil ? nil : height)
+        .frame(minHeight: overviewLines == nil ? height : nil)
+        .clipped()
         .focusSection()
+    }
+}
+
+/// Hero actions share one focus treatment, so only the focused action is blue.
+struct HeroActionStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        ActionLabel(content: configuration.label, pressed: configuration.isPressed)
+    }
+    private struct ActionLabel<Content: View>: View {
+        let content: Content
+        let pressed: Bool
+        @Environment(\.isFocused) private var focused
+        @Environment(\.isEnabled) private var enabled
+        var body: some View {
+            content
+                .font(.system(size: 29, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 30).frame(height: 68)
+                .background(focused ? Color.torrentAccent : Color.white.opacity(0.16), in: Capsule())
+                .opacity(enabled ? (pressed ? 0.8 : 1) : 0.45)
+        }
     }
 }
 
