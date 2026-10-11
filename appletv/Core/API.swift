@@ -265,6 +265,8 @@ struct StreamStatus: Decodable {
 }
 struct APIError: LocalizedError {
     let message: String
+    /// The server's HTTP status, when the server answered with an error.
+    var status: Int? = nil
     var errorDescription: String? { message }
 }
 
@@ -340,7 +342,7 @@ struct TorrentTubeAPI: Sendable {
         guard (200..<300).contains(http.statusCode) else {
             let message = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
             // Server messages are English; show the app's translation when there is one.
-            throw APIError(message: message.map { L($0) } ?? L("Server request failed (HTTP %ld).", http.statusCode))
+            throw APIError(message: message.map { L($0) } ?? L("Server request failed (HTTP %ld).", http.statusCode), status: http.statusCode)
         }
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase

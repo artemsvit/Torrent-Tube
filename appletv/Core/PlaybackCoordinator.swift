@@ -131,7 +131,8 @@ final class PlaybackCoordinator {
     /// `continuing`: the next episode after one ended - play at once (from
     /// its saved place, if any) instead of asking. Apple TV asks anyway: its
     /// prompt starts from the beginning by itself after a few seconds.
-    func start(file: Int, continuing: Bool = false) async {
+    /// `resumeAt`: a renewed session - the player opens there at once.
+    func start(file: Int, continuing: Bool = false, resumeAt: Double? = nil) async {
         guard !closed, !suspended else { return }
         let current = UUID(); operation = current
         loading = true; error = nil
@@ -148,6 +149,7 @@ final class PlaybackCoordinator {
             selectedSource = source
             beginHeartbeat(result)
             loadIntro(file: file, source: source)
+            if let resumeAt { openPlayer(at: resumeAt); return }
             if let prior = history?.entry(server: api.baseURL, torrentID: result.id, file: result.file) {
                 #if os(tvOS)
                 // Apple TV: the next episode simply plays, from its beginning.
@@ -287,6 +289,9 @@ final class PlaybackCoordinator {
                     lastSuccess = Date()
                 } catch is CancellationError { return } catch {
                     guard !Task.isCancelled else { return }
+                    // The server let the session go (the device slept, or the
+                    // server restarted): a new one, at the same place.
+                    if (error as? APIError)?.status == 410 { self?.renewSession(); return }
                     if Date().timeIntervalSince(lastSuccess) > 45 || error is APIError {
                         self?.controller?.pause()
                         self?.error = error.localizedDescription
@@ -297,6 +302,15 @@ final class PlaybackCoordinator {
                 do { try await Task.sleep(for: .seconds(20)) } catch { return }
             }
         }
+    }
+
+    private func renewSession() {
+        guard !closed, !suspended, let session else { return }
+        controller?.refresh()
+        let position = controller?.seconds ?? 0
+        savePosition()
+        release()
+        Task { await start(file: session.file, resumeAt: position) }
     }
 
     func savePosition(completed: Bool = false) {
