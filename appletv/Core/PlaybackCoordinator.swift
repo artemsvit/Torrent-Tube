@@ -5,6 +5,7 @@ import Observation
 /// resume, heartbeat and cleanup rules; the views only present these states.
 @MainActor @Observable
 final class PlaybackCoordinator {
+    static let networkFailureGrace: TimeInterval = 45 * 1.15
     let request: PlaybackRequest
     let api: TorrentTubeAPI
     var history: ResumeHistory?
@@ -150,6 +151,8 @@ final class PlaybackCoordinator {
             beginHeartbeat(result)
             loadIntro(file: file, source: source)
             if let resumeAt { openPlayer(at: resumeAt); return }
+            await history?.sync().value
+            guard !closed, !suspended, !Task.isCancelled, current == operation else { return }
             if let prior = history?.entry(server: api.baseURL, torrentID: result.id, file: result.file) {
                 #if os(tvOS)
                 // Apple TV: the next episode simply plays, from its beginning.
@@ -292,7 +295,7 @@ final class PlaybackCoordinator {
                     // The server let the session go (the device slept, or the
                     // server restarted): a new one, at the same place.
                     if (error as? APIError)?.status == 410 { self?.renewSession(); return }
-                    if Date().timeIntervalSince(lastSuccess) > 45 || error is APIError {
+                    if Date().timeIntervalSince(lastSuccess) > Self.networkFailureGrace || error is APIError {
                         self?.controller?.pause()
                         self?.error = error.localizedDescription
                         self?.controller?.failure = error.localizedDescription

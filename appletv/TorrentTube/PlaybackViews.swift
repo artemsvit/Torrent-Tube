@@ -15,7 +15,7 @@ struct PlaybackLauncher: View {
     var body: some View {
         ZStack {
             if let controller = model.controller {
-                PlayerView(controller: controller, title: request.title, streamStatus: model.streamStatus, episodeLabel: model.episodeLabel, intro: model.intro) { close() }
+                PlayerView(controller: controller, title: request.title, streamStatus: model.streamStatus, episodeLabel: model.episodeLabel, intro: model.intro, retry: { Task { await model.prepare() } }) { close() }
                     .id(ObjectIdentifier(controller))
 
             } else if model.switchingEpisode && model.error == nil {
@@ -68,43 +68,8 @@ struct PlaybackLauncher: View {
                                     .shadow(color: .black.opacity(0.6), radius: 14, y: 4)
 
                                 if let error = model.error {
-                                    VStack(alignment: .leading, spacing: 24) {
-                                        HStack(spacing: 16) {
-                                            Image(systemName: "exclamationmark.triangle.fill")
-                                                .font(.system(size: 28, weight: .bold))
-                                                .foregroundStyle(Color(red: 1.0, green: 0.6, blue: 0.2))
-                                            Text(error)
-                                                .font(.system(size: 30, weight: .medium))
-                                                .foregroundStyle(.white)
-                                        }
-                                        .padding(.horizontal, 24)
-                                        .padding(.vertical, 16)
-                                        .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 16))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 16)
-                                                .strokeBorder(.white.opacity(0.15), lineWidth: 1)
-                                        )
-
-                                        HStack(spacing: 24) {
-                                            Button {
-                                                Task { await model.prepare() }
-                                            } label: {
-                                                Label(L("Try again"), systemImage: "arrow.clockwise")
-                                            }
-                                            .buttonStyle(.borderedProminent)
-                                            .tint(.white)
-                                            .foregroundStyle(.black)
-
-                                            Button(action: close) {
-                                                Label(L("Back"), systemImage: "arrow.backward")
-                                            }
-                                            .buttonStyle(.bordered)
-                                            .tint(.white.opacity(0.25))
-                                            .foregroundStyle(.white)
-                                        }
-                                    }
-                                    .padding(.top, 8)
-                                    .focusSection()
+                                    TVPlaybackErrorPrompt(message: error, retry: { Task { await model.prepare() } },
+                                                          closeTitle: "Back", close: close)
                                 } else if let prepared = model.prepared, !model.loading {
                                     Text(request.episode.map { L("Choose a file for episode %ld", $0) } ?? L("Choose an episode"))
                                         .font(.system(size: 32, weight: .semibold))
@@ -171,6 +136,39 @@ struct PlaybackLauncher: View {
 
 
 /// The saved position is information; only the three playback choices take focus.
+struct TVPlaybackErrorPrompt: View {
+    var title = "Unable to play"
+    let message: String
+    var retry: (() -> Void)? = nil
+    var closeTitle = "Close player"
+    let close: () -> Void
+    @FocusState private var action: Action?
+    private enum Action { case retry, close }
+    var body: some View {
+        VStack(spacing: 24) {
+            Text(L(title)).font(.system(size: 32, weight: .semibold))
+            Text(L(message)).font(.system(size: 26)).foregroundStyle(.white.opacity(0.75))
+                .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("playback-error-message")
+            HStack(spacing: 24) {
+                if let retry {
+                    Button(action: retry) { Label(L("Try again"), systemImage: "arrow.clockwise") }
+                        .buttonStyle(.borderedProminent).tint(.white).foregroundStyle(.black)
+                        .focused($action, equals: .retry).accessibilityIdentifier("playback-error-retry")
+                }
+                Button(L(closeTitle), action: close)
+                    .buttonStyle(.bordered).tint(.white.opacity(0.2))
+                    .focused($action, equals: .close).accessibilityIdentifier("playback-error-close")
+            }.padding(.top, 8)
+        }
+        .foregroundStyle(.white)
+        .padding(40).frame(width: 760)
+        .background(Color(white: 0.07).opacity(0.96), in: RoundedRectangle(cornerRadius: 28))
+        .overlay(RoundedRectangle(cornerRadius: 28).strokeBorder(.white.opacity(0.12), lineWidth: 1))
+        .focusSection().defaultFocus($action, retry == nil ? .close : .retry)
+    }
+}
+
 struct TVResumePrompt: View {
     let title: String
     let position: String
@@ -275,6 +273,7 @@ struct PlayerView: View {
     let streamStatus: StreamStatus?
     var episodeLabel: String? = nil
     var intro: ClosedRange<Double>? = nil
+    var retry: (() -> Void)? = nil
     let close: () -> Void
     @State private var showControls = true
     @State private var activity = Date()
@@ -311,10 +310,7 @@ struct PlayerView: View {
                 PlaybackBufferingIndicator()
             }
             if let failure = controller.failure {
-                VStack(spacing: 25) {
-                    Text(failure).multilineTextAlignment(.center)
-                    Button(L("Close player"), action: close)
-                }.padding(50).frame(maxWidth: 800).background(.black.opacity(0.9), in: RoundedRectangle(cornerRadius: 24))
+                TVPlaybackErrorPrompt(title: "Playback interrupted", message: failure, retry: retry, close: close)
             } else if showControls {
                 VStack {
                     HStack {

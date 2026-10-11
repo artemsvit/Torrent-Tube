@@ -332,6 +332,15 @@ into the next episode and season. The updated server
 adds episode selection, native trailer streaming, and heartbeat-based playback sessions while keeping
 the web app’s external-player flow.
 
+Continue Watching is enabled by default and shares playback positions across
+Apple TV, iPhone, iPad, and Mac apps connected to the same updated server.
+Existing device history is uploaded once. New positions, completed titles,
+and cleared history sync through `/api/continue-watching`; offline changes
+are retried when the server is available. The server stores these records in
+`continue-watching.json` in its persistent state folder. Foreground apps refresh
+every 30 seconds and before offering a saved playback position. Update both
+the server image and the Apple apps to use this feature.
+
 To open the Xcode project, first run `python3 appletv/scripts/bootstrap.py`.
 See the Apple TV README for builds, server update requirements, and verification.
 

@@ -13,6 +13,7 @@ struct ServerConfig: Decodable {
         var topShelfPreviews: Bool? = nil
         /// The server keeps one favorites list for every app (/api/favorites).
         var favorites: Bool? = nil
+        var continueWatching: Bool? = nil
     }
     var supportsPlayback: Bool { capabilities?.playbackSessions == true && capabilities?.fileSelection == true }
 }
@@ -263,6 +264,11 @@ struct StreamStatus: Decodable {
     let gone: Bool?
     var done: Bool? = nil
 }
+struct NetworkRequestError: LocalizedError {
+    let message: String
+    var errorDescription: String? { message }
+}
+
 struct APIError: LocalizedError {
     let message: String
     /// The server's HTTP status, when the server answered with an error.
@@ -317,7 +323,7 @@ struct TorrentTubeAPI: Sendable {
         request.httpMethod = method
         request.httpBody = body
         // The connection check gives up quickly, so a missing server is reported in seconds.
-        request.timeoutInterval = (path.hasPrefix("api/playback") || path == "api/trailer/stream") ? 75 : path == "api/config" ? 10 : 40
+        request.timeoutInterval = Self.requestTimeout(for: path)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         #if os(tvOS)
@@ -332,6 +338,7 @@ struct TorrentTubeAPI: Sendable {
         do { (data, response) = try await session.data(for: request) }
         // A stopped request (season switched, page closed) is not an error to show.
         catch let error as URLError where error.code == .cancelled { throw CancellationError() }
+        catch let error as URLError { throw NetworkRequestError(message: Self.networkErrorMessage(error.code)) }
         guard let http = response as? HTTPURLResponse else { throw APIError(message: L("No response from the server.")) }
         if http.statusCode == 401 || http.statusCode == 403 {
             throw APIError(message: L("This server requires authentication. This version supports direct LAN connections."))
@@ -348,6 +355,24 @@ struct TorrentTubeAPI: Sendable {
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         do { return try decoder.decode(T.self, from: data) }
         catch { throw APIError(message: L("The server returned an unexpected response. Check the address and server version.")) }
+    }
+
+    static func requestTimeout(for path: String) -> TimeInterval {
+        if path == "api/continue-watching" { return 5 }
+        return ((path.hasPrefix("api/playback") || path == "api/trailer/stream") ? 75.0 : path == "api/config" ? 10.0 : 40.0) * 1.15
+    }
+
+    static func networkErrorMessage(_ code: URLError.Code) -> String {
+        switch code {
+        case .timedOut: return L("The server took too long to respond. Try again.")
+        case .networkConnectionLost, .notConnectedToInternet:
+            return L("The connection to the server was lost. Check your network and try again.")
+        case .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed:
+            return L("Could not connect to the server. Check its address and your network.")
+        case .secureConnectionFailed, .serverCertificateUntrusted, .serverCertificateHasBadDate, .serverCertificateHasUnknownRoot, .serverCertificateNotYetValid:
+            return L("Could not establish a secure connection to the server.")
+        default: return L("The request could not be completed. Try again.")
+        }
     }
 
     func post<T: Decodable, B: Encodable>(_ path: String, body: B) async throws -> T {

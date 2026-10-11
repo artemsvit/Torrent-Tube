@@ -140,7 +140,7 @@ struct SettingsView: View {
                             Text(refreshMessage).font(.system(size: 25, weight: .medium)).foregroundStyle(.white.opacity(0.85))
                                 .padding(.horizontal, 34).padding(.top, 8)
                         }
-                        setting("Clear viewing history", value: nil, subtitle: "Remove saved positions for this server on this Apple TV.") { clearingHistory = true }
+                        setting("Clear viewing history", value: nil, subtitle: "Remove saved positions on all devices using this server.") { clearingHistory = true }
                     }
                 }.padding(12)
             }.tvBackScroll().frame(maxWidth: .infinity).focusSection()
@@ -151,7 +151,7 @@ struct SettingsView: View {
         .alert(L("Clear viewing history?"), isPresented: $clearingHistory) {
             Button(L("Cancel"), role: .cancel) {}
             Button(L("Clear history"), role: .destructive) { history.clear(server: api.baseURL) }
-        } message: { Text(L("Saved playback positions for this server will be removed from this Apple TV. Your server files stay untouched.")) }
+        } message: { Text(L("Saved playback positions will be removed from all devices using this server. Your server files stay untouched.")) }
     }
     private func setting(_ title: String, value: String?, subtitle: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {

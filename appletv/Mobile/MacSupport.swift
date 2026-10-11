@@ -2,6 +2,114 @@ import SwiftUI
 #if os(macOS)
 import AppKit
 
+/// One page per physical scroll gesture; its inertial tail never advances again.
+struct MacCarouselScrollState {
+    private enum Axis { case undecided, horizontal, vertical }
+    private var axis = Axis.undecided
+    private var x: CGFloat = 0
+    private var y: CGFloat = 0
+    private var advanced = false
+    private var lastEvent: TimeInterval = 0
+
+    mutating func consume(x deltaX: CGFloat, y deltaY: CGFloat, phase: NSEvent.Phase,
+                          momentum: NSEvent.Phase, timestamp: TimeInterval) -> (handled: Bool, step: Int?) {
+        if !momentum.isEmpty { return (axis == .horizontal, nil) }
+        if phase.contains(.began) || phase.contains(.mayBegin) || (phase.isEmpty && timestamp - lastEvent > 0.3) {
+            axis = .undecided; x = 0; y = 0; advanced = false
+        }
+        lastEvent = timestamp
+        if phase.contains(.cancelled) { return (axis == .horizontal, nil) }
+        x += deltaX; y += deltaY
+        if axis == .undecided {
+            if abs(x) > 6, abs(x) > abs(y) * 1.5 { axis = .horizontal }
+            else if abs(y) > 6, abs(y) > abs(x) * 1.5 { axis = .vertical }
+        }
+        guard axis == .horizontal else { return (false, nil) }
+        guard !advanced, abs(x) >= 48 else { return (true, nil) }
+        advanced = true
+        return (true, x < 0 ? 1 : -1)
+    }
+}
+
+/// SwiftUI DragGesture handles a pressed mouse, but trackpad swipes arrive as
+/// scroll-wheel events. Observe only the visible hero without covering its buttons.
+struct MacCarouselTrackpad: NSViewRepresentable {
+    let enabled: Bool
+    let changePage: (Int) -> Void
+    let trackingChanged: (Bool) -> Void
+    @Environment(MacCovers.self) private var covers
+    func makeNSView(context: Context) -> TrackpadView { TrackpadView() }
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: TrackpadView, context: Context) -> CGSize? {
+        CGSize(width: proposal.width ?? 0, height: proposal.height ?? 0)
+    }
+    func updateNSView(_ view: TrackpadView, context: Context) {
+        view.enabled = enabled && covers.current == nil
+        view.changePage = changePage
+        view.trackingChanged = trackingChanged
+        if !view.enabled { view.resetTracking() }
+    }
+    static func dismantleNSView(_ view: TrackpadView, coordinator: ()) { view.stopMonitoring() }
+
+    final class TrackpadView: NSView {
+        var enabled = false
+        var changePage: ((Int) -> Void)?
+        var trackingChanged: ((Bool) -> Void)?
+        private var tracking = false
+        private var gestureAccepted = false
+        private var lastEvent: TimeInterval = 0
+        private var monitor: Any?
+        private var scroll = MacCarouselScrollState()
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            stopMonitoring()
+            guard window != nil else { return }
+            monitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+                guard let self else { return event }
+                if event.phase.contains(.ended) || event.phase.contains(.cancelled) { self.setTracking(false) }
+                guard self.enabled, let window = self.window, window.isKeyWindow,
+                      !self.isHiddenOrHasHiddenAncestor else { return event }
+                if let eventWindow = event.window, eventWindow !== window { return event }
+                let location = event.window == nil ? window.convertPoint(fromScreen: NSEvent.mouseLocation) : event.locationInWindow
+                let insideBanner = self.bounds.intersection(self.visibleRect).contains(self.convert(location, from: nil))
+                let startsGesture = event.phase.contains(.began) || event.phase.contains(.mayBegin)
+                    || (event.phase.isEmpty && event.momentumPhase.isEmpty && event.timestamp - self.lastEvent > 0.3)
+                self.lastEvent = event.timestamp
+                if startsGesture {
+                    self.scroll = MacCarouselScrollState()
+                    self.gestureAccepted = insideBanner
+                    self.setTracking(insideBanner)
+                }
+                guard insideBanner, self.gestureAccepted else { return event }
+                let scale: CGFloat = event.hasPreciseScrollingDeltas ? 1 : 16
+                let result = self.scroll.consume(x: event.scrollingDeltaX * scale, y: event.scrollingDeltaY * scale,
+                                                 phase: event.phase, momentum: event.momentumPhase, timestamp: event.timestamp)
+                if let step = result.step { self.changePage?(step) }
+                return result.handled ? nil : event
+            }
+        }
+        func stopMonitoring() {
+            if let monitor { NSEvent.removeMonitor(monitor); self.monitor = nil }
+            scroll = MacCarouselScrollState()
+            resetTracking()
+        }
+        private func setTracking(_ value: Bool) {
+            guard tracking != value else { return }
+            tracking = value
+            trackingChanged?(value)
+        }
+        func resetTracking() {
+            gestureAccepted = false
+            scroll = MacCarouselScrollState()
+            guard tracking else { return }
+            tracking = false
+            let publish = trackingChanged
+            // A representable may be updating or disappearing; publish afterward.
+            DispatchQueue.main.async { publish?(false) }
+        }
+    }
+}
+
 /// The window is all content: no title, no close/minimise/zoom buttons
 /// (⌘W closes it, ⌃⌘F fills the screen). The top row drags it.
 struct BarelessWindow: NSViewRepresentable {

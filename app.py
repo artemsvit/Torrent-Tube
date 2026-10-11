@@ -23,6 +23,7 @@ from release_titles import SERIES_NAME_RE, extract_title_and_year
 from intro_detection import IntroDetector
 from playback_sessions import PlaybackSessions
 from favorites import Favorites
+from continue_watching import ContinueWatching
 from trailer_streams import TrailerError, TrailerStreams
 from flask import Flask, Response, jsonify, redirect, render_template, request, send_file, url_for
 
@@ -429,7 +430,7 @@ def config():
         "server": "torrenttube",
         "api_version": 1,
         "capabilities": {"file_selection": True, "playback_sessions": True, "library": True, "top_shelf_previews": True,
-                         "favorites": True},
+                         "favorites": True, "continue_watching": True},
         "download_dir": str(DOWNLOAD_DIR),
         # The same folder as the server's own path (None when it isn't
         # known) - what Settings shows, as /downloads means little.
@@ -2465,6 +2466,22 @@ def remove_favorites():
         return jsonify({"error": "Send a list of ids"}), 400
     FAVORITES.remove(ids)
     return jsonify({"items": FAVORITES.items()})
+
+
+# Continue Watching uses server-independent torrent/file identities.
+CONTINUE_WATCHING = ContinueWatching(STATE_DIR / "continue-watching.json")
+
+
+@app.route("/api/continue-watching", methods=["GET", "POST"])
+def continue_watching():
+    if request.method == "POST":
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict) or not isinstance(body.get("items"), list) or len(body["items"]) > 5000:
+            return jsonify({"error": "Send a list of viewing positions"}), 400
+        CONTINUE_WATCHING.update(body["items"], body.get("clear_before"))
+    response = jsonify({"items": CONTINUE_WATCHING.items()})
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.route("/api/intro")

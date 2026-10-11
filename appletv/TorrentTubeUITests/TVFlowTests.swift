@@ -1,6 +1,49 @@
 import XCTest
 
 final class TVFlowTests: XCTestCase {
+    func testLibraryBackKeepsCategoryBeforeReturningHome() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-appLanguage", "uk", "-serverAddress", "http://192.168.0.102:5058", "-autoplayHomeTrailers", "NO"]
+        app.launch()
+        XCTAssertTrue(app.buttons["hero-play"].waitForExistence(timeout: 45))
+        for section in ["movie", "tv", "cartoon", "favorites"] {
+            openTab(app, "Медіатека")
+            let tv = app.buttons["library-chip-\(section)"]
+            XCTAssertTrue(tv.waitForExistence(timeout: 20))
+            for _ in 0..<10 {
+                if tv.hasFocus { break }
+                let focused = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "library-chip-")).allElementsBoundByIndex.first { $0.hasFocus }
+                if let focused { XCUIRemote.shared.press(focused.frame.midX < tv.frame.midX ? .right : .left) }
+                else if app.buttons["main-tab-library"].hasFocus { XCUIRemote.shared.press(.down) }
+                else { XCUIRemote.shared.press(.up) }
+            }
+            XCTAssertTrue(tv.hasFocus, app.debugDescription)
+            XCUIRemote.shared.press(.select)
+            XCUIRemote.shared.press(.down)
+            let cards = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "title-"))
+            XCTAssertTrue(cards.firstMatch.waitForExistence(timeout: 15))
+            XCTAssertTrue(cards.allElementsBoundByIndex.contains { $0.hasFocus }, app.debugDescription)
+            XCUIRemote.shared.press(.select)
+            XCTAssertTrue(app.buttons["title-play"].waitForExistence(timeout: 30))
+            // Back may first scroll the title to its top, then must pop to its Library category.
+            for _ in 0..<3 {
+                if !app.buttons["title-play"].exists { break }
+                XCUIRemote.shared.press(.menu)
+            }
+            XCTAssertTrue(app.buttons["main-tab-library"].isSelected)
+            XCTAssertTrue(tv.exists)
+            XCTAssertTrue(tv.isSelected)
+            if !tv.hasFocus { XCUIRemote.shared.press(.menu) }
+            let focusedCategory = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in tv.hasFocus }, object: tv)
+            XCTAssertEqual(XCTWaiter.wait(for: [focusedCategory], timeout: 5), .completed)
+            XCTAssertTrue(tv.hasFocus, app.debugDescription)
+            XCTAssertTrue(app.buttons["main-tab-library"].isSelected)
+            add(keep(app, "Back preserves Library \(section) category"))
+            XCUIRemote.shared.press(.menu)
+            XCTAssertTrue(app.buttons["main-tab-home"].isSelected)
+        }
+    }
+
     func testFinalEpisodeClosesPlayerAndKeepsTitleScreen() throws {
         guard let address = ProcessInfo.processInfo.environment["TORRENTTUBE_COMPLETION_SERVER"] else {
             throw XCTSkip("Set TORRENTTUBE_COMPLETION_SERVER to smoke_server.py with an eight-second sample.")
@@ -239,7 +282,9 @@ final class TVFlowTests: XCTestCase {
         XCUIRemote.shared.press(.menu)
         XCTAssertEqual(app.state, .runningForeground)
         XCTAssertTrue(app.buttons["main-tab-library"].isSelected)
-        XCTAssertTrue(app.buttons["main-tab-library"].hasFocus)
+        let chips = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "library-chip-"))
+        let categoryFocused = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in chips.allElementsBoundByIndex.contains { $0.hasFocus } }, object: app)
+        XCTAssertEqual(XCTWaiter.wait(for: [categoryFocused], timeout: 5), .completed)
         let heading = app.staticTexts["library-heading"]
         expectation(for: NSPredicate { _, _ in heading.frame.minY > 100 && heading.frame.minY < 300 }, evaluatedWith: app)
         waitForExpectations(timeout: 5)

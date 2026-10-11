@@ -39,40 +39,8 @@ struct TrailerPlayer: View {
                             .lineLimit(2)
                             .shadow(color: .black.opacity(0.6), radius: 12, y: 4)
                         if let error {
-                            VStack(spacing: 24) {
-                                HStack(spacing: 14) {
-                                    Image(systemName: "exclamationmark.triangle.fill")
-                                        .font(.system(size: 26, weight: .bold))
-                                        .foregroundStyle(.orange)
-                                    Text(error)
-                                        .font(.system(size: 26, weight: .medium))
-                                        .foregroundStyle(.white)
-                                }
-                                .padding(.horizontal, 24)
-                                .padding(.vertical, 14)
-                                .background(.black.opacity(0.5), in: RoundedRectangle(cornerRadius: 16))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 16)
-                                        .strokeBorder(.white.opacity(0.15), lineWidth: 1)
-                                )
-                                HStack(spacing: 24) {
-                                    Button {
-                                        Task { await prepare() }
-                                    } label: {
-                                        Label(L("Try again"), systemImage: "arrow.clockwise")
-                                    }
-                                    .buttonStyle(.borderedProminent)
-                                    .tint(.white)
-                                    .foregroundStyle(.black)
-
-                                    Button(action: close) {
-                                        Label(L("Back"), systemImage: "arrow.backward")
-                                    }
-                                    .buttonStyle(.bordered)
-                                    .tint(.white.opacity(0.25))
-                                    .foregroundStyle(.white)
-                                }
-                            }
+                            TVPlaybackErrorPrompt(message: error, retry: { Task { await prepare() } },
+                                                  closeTitle: "Back", close: close)
                         } else {
                             ProgressView()
                                 .progressViewStyle(.circular)

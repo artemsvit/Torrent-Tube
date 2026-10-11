@@ -25,7 +25,9 @@ struct LibraryView: View {
     let config: ServerConfig
     @Environment(CatalogStore.self) private var catalog
     @Environment(FavoritesStore.self) private var favorites
-    @State private var section = ""
+    @Binding var section: String
+    let chipFocus: FocusState<String?>.Binding
+    let scrollRequest: UUID
     private static let top = "library-top"
     var body: some View {
         let active = section.isEmpty ? LibrarySections.defaultSection(catalog.library) : section
@@ -39,7 +41,7 @@ struct LibraryView: View {
                 Text(L("Library")).font(.system(size: 50, weight: .bold)).accessibilityIdentifier("library-heading")
                 // The Library syncs itself (new titles only); Settings has "Sync now".
                 ChipRow(options: LibrarySections.chips(catalog.library, favorites: favorites.entries(server: api.baseURL).count),
-                        selected: active) { section = $0 }
+                        selected: active, select: { section = $0 }, externalFocus: chipFocus)
                 if active == "favorites" {
                     favoritesSection
                 } else {
@@ -61,13 +63,17 @@ struct LibraryView: View {
         // A shorter list (Movies, then Favorites) kept the old offset and the
         // focused chip's place on screen, so each switch pushed the page
         // further down, past its top. Keep the top fixed and go back to it.
+        .tvScrollEdge()
         .defaultScrollAnchor(.top, for: .sizeChanges)
         .onChange(of: section) { _, _ in
             var transaction = Transaction(); transaction.disablesAnimations = true
             withTransaction(transaction) { proxy.scrollTo(Self.top, anchor: .top) }
         }
+        .onChange(of: scrollRequest) { _, _ in
+            var transaction = Transaction(); transaction.disablesAnimations = true
+            withTransaction(transaction) { proxy.scrollTo(Self.top, anchor: .top) }
         }
-        .tvScrollEdge()
+        }
         .ignoresSafeArea(edges: .horizontal)
         .task {
             favorites.sync()

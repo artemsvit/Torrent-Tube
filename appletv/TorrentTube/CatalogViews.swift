@@ -37,6 +37,7 @@ struct MainView: View {
     let config: ServerConfig
     @State private var catalog = CatalogStore()
     @Environment(FavoritesStore.self) private var favorites
+    @Environment(ResumeHistory.self) private var history
     @State private var shelfTitle: MediaItem?
     @State private var tab: MainTab = .home
     // Each tab's own stack of title pages. Leaving a tab resets it, so
@@ -46,6 +47,9 @@ struct MainView: View {
     @State private var backScrollActions: [BackScrollAction] = []
     @State private var needsHomeReturn = false
     @State private var backDismissActions: [BackScrollAction] = []
+    @State private var librarySection = ""
+    @State private var libraryScrollRequest = UUID()
+    @FocusState private var libraryChip: String?
     @FocusState private var navigationFocus: MainTab?
     @Environment(\.scenePhase) private var scenePhase
     private func path(_ tab: MainTab) -> Binding<NavigationPath> {
@@ -66,7 +70,7 @@ struct MainView: View {
             case .movies: stack(.movies) { CategoryView(feed: "movies", title: "Movies", api: api, config: config) }
             case .tv: stack(.tv) { CategoryView(feed: "tv", title: "TV Shows", api: api, config: config) }
             case .cartoons: stack(.cartoons) { CategoryView(feed: "cartoons", title: "Cartoons", api: api, config: config) }
-            case .library: stack(.library) { LibraryView(api: api, config: config) }
+            case .library: stack(.library) { LibraryView(api: api, config: config, section: $librarySection, chipFocus: $libraryChip, scrollRequest: libraryScrollRequest) }
             case .search: stack(.search) { SearchView(api: api, config: config) }
             case .settings: NavigationStack { SettingsView(store: store, api: api, config: config).padding(.top, 118) }.id(settingsReset)
             }
@@ -85,10 +89,17 @@ struct MainView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 Task { await catalog.loadFeed("new", api: api, config: config, refresh: true) }
-                favorites.sync()  // hearts added on another device
+                favorites.sync(); history.sync()  // changes on another device
             }
         }
-        .task(id: api.baseURL) { favorites.connect(api, config: config) }
+        .task(id: api.baseURL) {
+            favorites.connect(api, config: config)
+            history.connect(api, config: config)
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(30)) } catch { return }
+                if scenePhase == .active { history.sync() }
+            }
+        }
         .onChange(of: store.shelfTitleID, initial: true) { _, id in
             guard let id, let snapshot = TopShelfStore.snapshot, snapshot.server == api.baseURL.absoluteString,
                   let title = snapshot.titles.first(where: { $0.id == id }) else { return }
@@ -153,6 +164,21 @@ struct MainView: View {
 
     private var backCommand: (() -> Void)? {
         if let action = backDismissActions.last { return action.scroll }
+        if tab == .library, paths[tab]?.isEmpty ?? true {
+            if libraryChip == nil {
+                return {
+                    let selected = librarySection.isEmpty ? LibrarySections.defaultSection(catalog.library) : librarySection
+                    libraryScrollRequest = UUID()
+                    // NavigationStack can still be animating the return from a title.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        guard tab == .library, paths[tab]?.isEmpty ?? true else { return }
+                        libraryChip = selected
+                    }
+                }
+            }
+            return { needsHomeReturn = false; tab = .home; navigationFocus = .home }
+        }
+
         if let action = backScrollActions.last {
             return {
                 needsHomeReturn = true
@@ -161,7 +187,13 @@ struct MainView: View {
                 withAnimation(.easeOut(duration: 0.3)) { action.scroll() }
             }
         }
-        guard needsHomeReturn || tab != .home || !(paths[tab]?.isEmpty ?? true) else { return nil }
+        if !(paths[tab]?.isEmpty ?? true) {
+            return {
+                needsHomeReturn = false
+                paths[tab]?.removeLast()
+            }
+        }
+        guard needsHomeReturn || tab != .home else { return nil }
         return {
             needsHomeReturn = false
             paths[tab] = NavigationPath()
@@ -679,6 +711,7 @@ private struct TVBackScroll: ViewModifier {
     func body(content: Content) -> some View {
         content
             .scrollPosition($position)
+            .onAppear { id = UUID() }
             .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y + $0.contentInsets.top > 40 } action: { _, value in scrolled = value }
             .preference(key: BackScrollPreference.self,
                         value: scrolled ? [BackScrollAction(id: id, scroll: { position.scrollTo(edge: .top) })] : [])
@@ -846,6 +879,8 @@ struct ChipRow: View {
     let options: [(String, String)]
     let selected: String
     let select: (String) -> Void
+    var externalFocus: FocusState<String?>.Binding? = nil
+    @FocusState private var focusedChip: String?
     var body: some View {
         HStack(spacing: 20) {
             ForEach(options, id: \.0) { key, label in
@@ -853,10 +888,13 @@ struct ChipRow: View {
                 Button { select(key) } label: { Text(L(label)) }
                     .buttonStyle(ChipStyle(selected: current))
                     .accessibilityAddTraits(current ? .isSelected : [])
+                    .accessibilityIdentifier("library-chip-\(key)")
+                    .focused(externalFocus ?? $focusedChip, equals: key)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)  // Up from any poster reaches the chips
         .focusSection()
+
     }
 }
 

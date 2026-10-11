@@ -490,6 +490,7 @@ struct MobileHome: View {
     /// iPad: the buttons left no room for the page dots, so they sit in the top bar.
     @State private var dotsOnTop = false
     @GestureState private var draggingHero = false
+    @State private var trackpadScrolling = false
     private let feeds = [("new", "New to Explore"), ("popular", "Popular Now"), ("movies", "Movies"), ("tv", "TV Shows"), ("cartoons", "Cartoons"), ("ukrainian", "Ukrainian")]
     private var featuredItems: [MediaItem] {
         catalog.homeFeatured.isEmpty ? catalog.library.prefix(HomeFeaturedSelection.limit).map(libraryItem) : catalog.homeFeatured
@@ -497,9 +498,15 @@ struct MobileHome: View {
     private var featured: MediaItem? {
         ((previewTitle ? previewed : nil) ?? (featuredItems.isEmpty ? nil : featuredItems[min(featuredIndex, featuredItems.count - 1)])).map(catalog.resolved)
     }
+    private func previewShelfItem(_ item: MediaItem) {
+        #if os(macOS)
+        guard heroVisible else { return }
+        #endif
+        if previewTitle { previewed = item }
+    }
     private var rotationCycle: String? {
         guard featuredItems.count > 1, heroVisible, scenePhase == .active, playback == nil,
-              !serverNotice, !draggingHero, !previewTitle || previewed == nil else { return nil }
+              !serverNotice, !draggingHero, !trackpadScrolling, !previewTitle || previewed == nil else { return nil }
         return "\(featuredIndex):" + featuredItems.map(\.id).joined(separator: "|")
     }
     var body: some View {
@@ -512,13 +519,13 @@ struct MobileHome: View {
                     if showContinue { continueWatching }
                     ForEach(feeds, id: \.0) { feed, title in
                         if let items = catalog.rows[feed], !items.isEmpty {
-                            MobileShelf(title: L(title), items: Array(items.prefix(24))) { if previewTitle { previewed = $0 } }
+                            MobileShelf(title: L(title), items: Array(items.prefix(24)), onFocus: previewShelfItem)
                         } else if let error = catalog.errors[feed] {
                             MobileError(message: "\(L(title)): \(error)") { Task { await catalog.loadFeed(feed, api: api, config: config, refresh: true) } }
                         }
                     }
                     if !catalog.library.isEmpty {
-                        MobileShelf(title: L("New on your server"), items: catalog.library.prefix(24).map(libraryItem)) { if previewTitle { previewed = $0 } }
+                        MobileShelf(title: L("New on your server"), items: catalog.library.prefix(24).map(libraryItem), onFocus: previewShelfItem)
                     }
                     if let error = catalog.libraryError { MobileError(message: error) { Task { await catalog.loadLibrary(api: api) } } }
                     if !config.searchEnabled, catalog.library.isEmpty, !catalog.libraryLoading, catalog.libraryError == nil {
@@ -528,7 +535,11 @@ struct MobileHome: View {
                 }.padding(.bottom, 24)
             }
             .onScrollGeometryChange(for: Bool.self) { geometry in
+                #if os(macOS)
+                geometry.contentOffset.y + geometry.contentInsets.top <= 1
+                #else
                 geometry.contentOffset.y + geometry.contentInsets.top < heroHeight / 2
+                #endif
             } action: { _, visible in heroVisible = visible }
             .contentMargins(.top, refreshSpinnerRoom, for: .scrollContent)
             .pulledFill(height: heroHeight) { if let featured { homeHeroArt(featured, details: catalog.details[featured.title]) } }
@@ -623,6 +634,10 @@ struct MobileHome: View {
         }
         .frame(height: height)
         .mask(Rectangle().padding(.top, -1500))  // sides and bottom only: the fill above the top edge shows when pulled down
+        #if os(macOS)
+        .background(MacCarouselTrackpad(enabled: featuredItems.count > 1 && heroVisible && scenePhase == .active,
+                                       changePage: changeFeatured, trackingChanged: { trackpadScrolling = $0 }))
+        #endif
         .contentShape(Rectangle())
         .simultaneousGesture(
             DragGesture(minimumDistance: 24)

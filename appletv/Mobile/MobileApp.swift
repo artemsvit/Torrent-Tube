@@ -209,6 +209,7 @@ struct MobileRoot: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.scenePhase) private var scenePhase
     @Environment(FavoritesStore.self) private var favorites
+    @Environment(ResumeHistory.self) private var history
     init(store: AppStore, api: TorrentTubeAPI, config: ServerConfig) {
         self.store = store; self.api = api; self.config = config
         _context = State(initialValue: MobileContext(api: api, config: config))
@@ -228,9 +229,16 @@ struct MobileRoot: View {
             .environment(catalog)
             .environment(context)
             .environment(sidebarArt)
-            .task(id: api.baseURL) { favorites.connect(api, config: config) }
+            .task(id: api.baseURL) {
+                favorites.connect(api, config: config)
+                history.connect(api, config: config)
+                while !Task.isCancelled {
+                    do { try await Task.sleep(for: .seconds(30)) } catch { return }
+                    if scenePhase == .active { history.sync() }
+                }
+            }
             .onChange(of: scenePhase) { _, phase in
-                if phase == .active { favorites.sync() }  // hearts added on another device
+                if phase == .active { favorites.sync(); history.sync() }  // changes on another device
             }
             .sheet(isPresented: $settings) {
                 MobileSettings(store: store, api: api, config: config)
@@ -654,7 +662,7 @@ struct MobileSettings: View {
             .disabled(refreshing)
             Button(L("Clear viewing history"), role: .destructive) { clearHistory = true }
         } header: { header("Server & Storage", "externaldrive") } footer: {
-            Text(L("Favorites and viewing history stay on this device.")).font(settingsFooterFont).foregroundStyle(.white.opacity(0.6))
+            Text(L("Favorites and viewing history sync across devices using this server.")).font(settingsFooterFont).foregroundStyle(.white.opacity(0.6))
         }
         .listRowBackground(Color.white.opacity(0.06))
         .listRowSeparatorTint(Color.white.opacity(0.08))
@@ -733,7 +741,7 @@ struct MobileSettings: View {
                 Button(L("Clear viewing history"), role: .destructive) { history.clear(server: api.baseURL) }
                 Button(L("Cancel"), role: .cancel) {}
             } message: {
-                Text(L("Saved playback positions for this server will be removed from this device. Your server files stay untouched."))
+                Text(L("Saved playback positions will be removed from all devices using this server. Your server files stay untouched."))
             }
         }
         .presentationBackground { AppBackground() }

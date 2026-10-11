@@ -1,5 +1,6 @@
 import XCTest
 import UIKit
+import SwiftUI
 #if os(tvOS)
 @testable import TorrentTubeTV
 #else
@@ -7,6 +8,49 @@ import UIKit
 #endif
 
 final class APITests: XCTestCase {
+    @MainActor
+    func testNetworkErrorsUseSelectedLanguageAndTimeoutsAreExtended() async throws {
+        XCTAssertEqual(TorrentTubeAPI.requestTimeout(for: "api/playback/sessions"), 86.25, accuracy: 0.001)
+        XCTAssertEqual(TorrentTubeAPI.requestTimeout(for: "api/config"), 11.5, accuracy: 0.001)
+        XCTAssertEqual(TorrentTubeAPI.requestTimeout(for: "api/library"), 46, accuracy: 0.001)
+        XCTAssertEqual(PlaybackCoordinator.networkFailureGrace, 51.75, accuracy: 0.001)
+        let original = Localizer.shared.language
+        defer { Localizer.shared.language = original }
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [TimeoutResponseProtocol.self]
+        let session = URLSession(configuration: config)
+        defer { session.invalidateAndCancel() }
+        let api = TorrentTubeAPI(baseURL: URL(string: "http://timeout.test/")!, session: session)
+        for language in AppLanguage.allCases {
+            Localizer.shared.language = language
+            do {
+                let _: ServerConfig = try await api.request("api/config")
+                XCTFail("Expected timeout")
+            } catch {
+                XCTAssertTrue(error is NetworkRequestError)
+                XCTAssertEqual(error.localizedDescription, language == .uk ? "Сервер не відповів вчасно. Спробуйте ще раз." : "The server took too long to respond. Try again.")
+            }
+            for code in [URLError.networkConnectionLost, .cannotConnectToHost, .secureConnectionFailed, .unknown] {
+                XCTAssertFalse(TorrentTubeAPI.networkErrorMessage(code).isEmpty)
+                if language == .uk { XCTAssertNotEqual(TorrentTubeAPI.networkErrorMessage(code), URLError(code).localizedDescription) }
+            }
+            #if os(tvOS)
+            let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 1920, height: 1080))
+            let host = UIHostingController(rootView: ZStack {
+                Color.appBase
+                TVPlaybackErrorPrompt(title: "Playback interrupted", message: TorrentTubeAPI.networkErrorMessage(.timedOut), retry: {}, close: {})
+            }.preferredColorScheme(.dark))
+            window.rootViewController = host; window.makeKeyAndVisible()
+            host.view.frame = window.bounds; host.view.layoutIfNeeded()
+            try await Task.sleep(for: .milliseconds(300))
+            let picture = UIGraphicsImageRenderer(size: window.bounds.size).image { _ in host.view.drawHierarchy(in: window.bounds, afterScreenUpdates: true) }
+            let attachment = XCTAttachment(image: picture)
+            attachment.name = "Timeout prompt \(language.rawValue)"; attachment.lifetime = .keepAlways
+            add(attachment)
+            window.isHidden = true
+            #endif
+        }
+    }
     @MainActor
     func testOnlyRecognizedEpisodesContinueAutomatically() throws {
         let decoder = JSONDecoder()
@@ -70,6 +114,13 @@ final class APITests: XCTestCase {
         XCTAssertEqual(item.tmdbId, 12)
         XCTAssertEqual(item.displayTitle, "Example")
     }
+}
+
+private final class TimeoutResponseProtocol: URLProtocol {
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() { client?.urlProtocol(self, didFailWithError: URLError(.timedOut)) }
+    override func stopLoading() {}
 }
 
 final class EpisodeIdentityTests: XCTestCase {
