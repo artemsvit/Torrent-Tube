@@ -1,5 +1,6 @@
 """Startup permission setup must not traverse or change the media library."""
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -26,7 +27,12 @@ class DockerEntrypoint(unittest.TestCase):
                 path = tools / name
                 path.write_text(source)
                 path.chmod(0o755)
-            result = subprocess.run(['sh', str(Path(__file__).parents[1] / 'docker-entrypoint.sh'), 'echo', 'app started'], env={
+            entrypoint = Path(__file__).parents[1] / 'docker-entrypoint.sh'
+            if not entrypoint.exists():
+                installed = shutil.which('docker-entrypoint.sh')
+                self.assertIsNotNone(installed, 'The image must include its startup script')
+                entrypoint = Path(installed)
+            result = subprocess.run(['sh', str(entrypoint), 'echo', 'app started'], env={
                 **os.environ, 'PATH': f'{tools}:{os.environ["PATH"]}', 'PUID': '1026', 'PGID': '100',
                 'TORRENTTUBE_DOWNLOAD_DIR': str(media), 'OWNERSHIP_LOG': str(log),
             }, capture_output=True, text=True, timeout=5)
