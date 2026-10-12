@@ -978,6 +978,7 @@ function closeSettings() {
 }
 
 settingsBtn.addEventListener("click", openSettings);
+document.getElementById("settingsClose")?.addEventListener("click", closeSettings);
 settingsModal.addEventListener("click", e => { if (e.target === settingsModal) closeSettings(); });
 settingsTabs.addEventListener("click", e => {
   const btn = e.target.closest(".settings-tab");
