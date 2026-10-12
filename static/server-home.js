@@ -1,7 +1,7 @@
 // Shared library and history, presented like the Apple clients. Download
 // controls remain in the existing Discover, search and Downloads screens.
 let serverHistory = [], homeFeaturedIndex = 0, homeRenderKey = "", homeHeroRequest = 0;
-let serverOnline = false, homeLibraryError = '', serverOverviewKey = '';
+let homeLibraryError = '';
 const homeMetadata = new Map();
 
 function updateServerNavigation(view) {
@@ -26,19 +26,6 @@ function setServerView(view) {
   // library setting was disabled or there are no titles yet.
   if (['library', 'movie', 'tv', 'cartoon', 'favorites'].includes(view)) libraryPanel.hidden = false;
   window.scrollTo({top:0});
-}
-
-function updateServerOverview(online) {
-  if (online !== undefined) serverOnline = online;
-  const speed = currentTorrents.reduce((sum, item) => sum + (item.download_rate || 0), 0);
-  const key = JSON.stringify([serverOnline,currentTorrentCount,libraryItems.length,speed,lastConfig.download_dir_host,lastConfig.download_dir,searchEnabled]);
-  if (key === serverOverviewKey) return;
-  serverOverviewKey = key;
-  document.getElementById('serverHost').textContent = location.host;
-  document.getElementById('serverFolder').textContent = lastConfig.download_dir_host || lastConfig.download_dir || '';
-  document.getElementById('serverStatusDot').classList.toggle('is-online', serverOnline);
-  const stats = document.getElementById('serverOverviewStats');
-  stats.innerHTML = `<span>${serverOnline ? 'Connected' : 'Connecting…'}</span><span><b>${libraryItems.length}</b> titles</span><span><b>${currentTorrentCount}</b> active downloads</span>${speed ? `<span><b>${formatBytes(speed)}/s</b></span>` : ''}<span>Search ${searchEnabled ? 'enabled' : 'not configured'}</span>`;
 }
 
 function featuredLibraryItems(items) {
@@ -118,7 +105,6 @@ function buildContinueCard(entry) {
 }
 
 function renderServerHome() {
-  updateServerOverview();
   const key = JSON.stringify([libraryLoaded,homeLibraryError,libraryItems,favorites,serverHistory]);
   if (key === homeRenderKey) return;
   homeRenderKey = key;
@@ -191,9 +177,5 @@ document.getElementById('serverHome').addEventListener('click',e=>{
   if (view) setServerView(view.dataset.homeView);
   const featured = e.target.closest('[data-featured]');
   if (featured) { homeFeaturedIndex = Number(featured.dataset.featured); renderHomeHero(); }
-});
-document.getElementById('homeServerSettings').addEventListener('click',async()=>{
-  await openSettings();
-  switchSettingsTab('server');
 });
 document.addEventListener('visibilitychange',()=>{ if (!document.hidden) loadServerHistory(); });

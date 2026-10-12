@@ -562,7 +562,7 @@ async function refreshOnce() {
     if (!res.ok) throw new Error('Could not reach the server');
     const body = await res.text();
     const key = `${discoverMode}|${body}`;
-    if (key === lastRefreshKey) { updateServerOverview(true); return; }
+    if (key === lastRefreshKey) return;
     const data = JSON.parse(body);
     const torrents = data.torrents || [];
     currentStreams = data.streams || [];
@@ -575,7 +575,6 @@ async function refreshOnce() {
     currentTorrentCount = torrents.filter(t => t.state !== "finished" && t.state !== "seeding").length;
     renderViewToggleBtn();
     currentTorrents = torrents;
-    updateServerOverview(true);
     clearAllBtn.disabled = torrents.length === 0;
     layoutEl.classList.toggle("downloads-empty", torrents.length === 0 && !currentStreams.length);
     layoutEl.classList.toggle("no-downloads", torrents.length === 0);
@@ -584,7 +583,6 @@ async function refreshOnce() {
     lastRefreshKey = key;  // only once it is on the page: a failed render tries again
   } catch (e) {
     // Transient network hiccup; the next poll will retry.
-    updateServerOverview(false);
   }
 }
 
