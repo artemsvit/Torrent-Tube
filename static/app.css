@@ -555,7 +555,6 @@
      scrollable by that sliver. Hard-disable page scroll while Discover is
      open so scrolling can only ever happen inside the card list. */
   body.discover-active:not(.has-title-page) { overflow: hidden; }
-  body.has-title-page { overflow-y: auto !important; }
   .panel.discover-mode #discoverHeader { flex-shrink: 0; }
   .panel.discover-mode .search-dropdown.discover-grid.is-open {
     display: block;
