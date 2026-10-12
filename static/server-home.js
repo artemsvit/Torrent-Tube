@@ -5,9 +5,9 @@ let homeLibraryError = '';
 const homeMetadata = new Map();
 
 function updateServerNavigation(view) {
-  document.getElementById('browseDiscoverBtn').setAttribute('aria-pressed', String(view === 'discover'));
+  const navigationView = view === 'favorites' ? 'library' : view;
   document.querySelectorAll('#serverNavigation [data-view]').forEach(button => {
-    if (button.dataset.view === view) button.setAttribute('aria-current', 'page');
+    if (button.dataset.view === navigationView) button.setAttribute('aria-current', 'page');
     else button.removeAttribute('aria-current');
   });
 }
@@ -15,7 +15,7 @@ function updateServerNavigation(view) {
 function setServerView(view) {
   closeSearchDropdown();
   if (detailsState || personState) closeDetails();
-  if (view === 'discover') { enterDiscover(); return; }
+  if (view === 'discover') view = 'home';
   if (discoverMode) exitDiscover();
   document.body.dataset.serverView = view;
   updateServerNavigation(view);
@@ -54,7 +54,7 @@ function renderHomeHero() {
       if (retry) retry.onclick = () => loadLibrary(true);
       return;
     }
-    hero.innerHTML = `<div class="home-hero-copy home-empty"><span class="home-eyebrow">Your server</span><h2>Your next watch starts here</h2><p>Your library, favorites and viewing history in one place. Search for a title or add a torrent to grow your library.</p><div class="home-hero-actions"><button type="button" class="btn-primary btn-pill" data-home-view="discover">Discover</button><button type="button" class="btn-secondary" data-home-view="downloads">Downloads</button></div></div>`;
+    hero.innerHTML = `<div class="home-hero-copy home-empty"><span class="home-eyebrow">Your server</span><h2>Your next watch starts here</h2><p>Your library, favorites and viewing history in one place. Search for a title or add a torrent to grow your library.</p><div class="home-hero-actions"><button type="button" class="btn-primary btn-pill" data-home-search>Search</button><button type="button" class="btn-secondary" data-home-view="downloads">Downloads</button></div></div>`;
     return;
   }
   homeFeaturedIndex %= items.length;
@@ -167,12 +167,12 @@ document.getElementById('serverNavigation').addEventListener('click',e=>{
   const button = e.target.closest('[data-view]');
   if (button) setServerView(button.dataset.view);
 });
-document.getElementById('browseDiscoverBtn').addEventListener('click',()=>setServerView('discover'));
 const browseSearch = document.getElementById('mainInput');
 browseSearch.addEventListener('focus',()=>{ browseSearch.placeholder = 'Search torrents, library, or paste a magnet link'; });
 browseSearch.addEventListener('blur',()=>{ browseSearch.placeholder = 'Search'; });
 browseSearch.addEventListener('keydown',e=>{ if (e.key === 'Escape') browseSearch.blur(); });
 document.getElementById('serverHome').addEventListener('click',e=>{
+  if (e.target.closest('[data-home-search]')) browseSearch.focus();
   const view = e.target.closest('[data-home-view]');
   if (view) setServerView(view.dataset.homeView);
   const featured = e.target.closest('[data-featured]');

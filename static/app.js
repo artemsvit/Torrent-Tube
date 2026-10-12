@@ -3164,7 +3164,6 @@ async function init() {
   loadFavorites();
   // Hearts set on another device show when the page is looked at again.
   document.addEventListener("visibilitychange", () => { if (!document.hidden) loadFavorites(); });
-  await loadDiscoverFeeds();
   // Home uses the same server library and history as the Apple clients.
   loadServerHistory();
   handleServerResumeReturn();
