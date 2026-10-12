@@ -1,6 +1,16 @@
 /* Native-style browsing, with a separate workspace for server downloads. */
 :root { --home-edge: clamp(20px, 3.5vw, 54px); }
 body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif; }
+/* Reserve the same viewport width even when Downloads has no scrollbar. */
+html { overflow-y: scroll; scrollbar-gutter: stable; }
+/* The contextual header occupies exactly the logo header's slots. */
+.top-bar .header-back { width: 30px; height: 30px; border-radius: 9px; padding: 0; }
+.top-bar .header-back svg { width: 15px; height: 15px; }
+.top-bar .brand-text.has-page-title h1 { font-size: 14.5px; font-weight: 600; margin: 0; letter-spacing: -.01em; }
+.top-bar .brand-text.has-page-title p { font-size: 12px; margin: 1px 0 0; color: var(--text-secondary); }
+.top-bar .brand-text { height: 33px; display: flex; flex-direction: column; justify-content: center; }
+.top-bar .brand-text h1 { line-height: 18px; }
+.top-bar .brand-text p { display: block; height: 14px; min-height: 14px; line-height: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 html[data-theme="dark"] { --bg-base: #101114; --surface: rgba(26,28,33,.8); }
 body:not(.has-title-page) .bg-decor { opacity: .22; }
 .server-navigation { display: flex; gap: 4px; align-items: center; width: max-content; max-width: calc(100% - 40px); margin: 0 auto 10px; padding: 4px; border: 1px solid var(--border-strong); border-radius: 28px; background: var(--surface); overflow-x: auto; scrollbar-width: none; }
@@ -31,6 +41,18 @@ body:not([data-server-view="downloads"]) #libraryPanel .library-grid { max-heigh
 .home-hero-art { object-fit: cover; object-position: center 35%; }
 .home-hero-placeholder .brand-art { height: 100%; }
 .home-hero-shade { background: linear-gradient(90deg,rgba(8,12,18,.94),rgba(8,12,18,.48) 45%,rgba(8,12,18,.04) 78%),linear-gradient(0deg,#101114,transparent 60%); }
+.title-page .dt-hero.has-backdrop:not(.is-playing) .dt-media {
+  -webkit-mask-image: linear-gradient(180deg,#000 45%,rgba(0,0,0,.98) 55%,rgba(0,0,0,.85) 68%,rgba(0,0,0,.5) 83%,transparent 100%);
+  mask-image: linear-gradient(180deg,#000 45%,rgba(0,0,0,.98) 55%,rgba(0,0,0,.85) 68%,rgba(0,0,0,.5) 83%,transparent 100%);
+}
+.home-hero-art, .home-hero-placeholder, .home-hero-shade {
+  -webkit-mask-image: linear-gradient(180deg,#000 calc(100% - 110px),rgba(0,0,0,.85) calc(100% - 80px),rgba(0,0,0,.5) calc(100% - 45px),transparent 100%);
+  mask-image: linear-gradient(180deg,#000 calc(100% - 110px),rgba(0,0,0,.85) calc(100% - 80px),rgba(0,0,0,.5) calc(100% - 45px),transparent 100%);
+}
+.home-featured { background: transparent; }
+.title-page .dt-hero.has-backdrop:not(.is-playing) .dt-info { color: var(--text); text-shadow: none; }
+.title-page .dt-hero.has-backdrop:not(.is-playing) .dt-sub,
+.title-page .dt-hero.has-backdrop:not(.is-playing) .dt-meta { color: var(--text-secondary); }
 .home-hero-copy { position: relative; z-index: 1; width: min(660px, 65%); padding: 48px var(--home-edge) 42px; display: flex; flex-direction: column; justify-content: flex-end; min-height: inherit; height: 100%; }
 .home-eyebrow { display: block; color: rgba(255,255,255,.65); font-size: 12px; font-weight: 600; margin-bottom: 14px; }
 .home-hero-copy h2 { margin: 0 0 15px; font-size: clamp(30px,4vw,54px); line-height: 1.06; letter-spacing: -.04em; font-weight: 750; text-wrap: balance; }
