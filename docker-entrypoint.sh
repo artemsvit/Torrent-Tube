@@ -25,7 +25,26 @@ else
   USER_NAME="$EXISTING_USER"
 fi
 
-mkdir -p "${TORRENTTUBE_DOWNLOAD_DIR:-/downloads}"
-chown -R "$PUID:$PGID" "${TORRENTTUBE_DOWNLOAD_DIR:-/downloads}"
+DOWNLOAD_PATH="${TORRENTTUBE_DOWNLOAD_DIR:-/downloads}"
+STATE_PATH="${TORRENTTUBE_STATE_DIR:-$DOWNLOAD_PATH/.torrenttube}"
+
+# Never walk the media library at startup. On a NAS that can take minutes
+# or hours, and it changes ownership of unrelated files in a shared folder.
+# Only the app's directories and its own state files need ownership setup.
+for APP_PATH in "$DOWNLOAD_PATH" "$STATE_PATH"; do
+  echo "Checking app directory: $APP_PATH"
+  mkdir -p "$APP_PATH"
+  if ! gosu "$USER_NAME" test -w "$APP_PATH"; then
+    chown "$PUID:$PGID" "$APP_PATH"
+  fi
+  if ! gosu "$USER_NAME" test -w "$APP_PATH"; then
+    echo "Startup failed: $APP_PATH is not writable by UID $PUID / GID $PGID. Check NAS folder permissions." >&2
+    exit 1
+  fi
+done
+# Saved settings and SQLite files from an older root-run container belong
+# to the app. Limit repair to this directory, never downloaded media.
+find "$STATE_PATH" -maxdepth 1 -type f ! -uid "$PUID" -exec chown "$PUID:$PGID" {} +
+echo "Starting Torrent Tube as UID $PUID / GID $PGID"
 
 exec gosu "$USER_NAME" "$@"
