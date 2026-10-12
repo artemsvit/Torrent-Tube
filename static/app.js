@@ -2705,7 +2705,7 @@ function renderDetailsBody() {
   }
   const episodeSection = renderTitleEpisodes(s);
   const downloads = `<details class="dt-section title-downloads" id="titleDownloads"${s.showDownloads || !s.library ? " open" : ""}>
-    <summary><h2 class="section-label">Downloads &amp; versions${s.releaseEpisode ? ` · ${escapeHtml(s.releaseEpisode)}` : ""}</h2><span class="title-section-note">Choose quality and manage files</span></summary>
+    <summary><h2 class="section-label">Downloads &amp; versions${s.releaseEpisode ? ` · ${escapeHtml(s.releaseEpisode)}` : ""}</h2></summary>
     ${s.library ? `<div class="title-storage-info"><div class="title-storage-heading"><span class="title-storage-icon">${ICONS.check}</span><div><h3>Available on your server</h3><p>${escapeHtml(s.library.category || "Library")}${s.library.versions?.length > 1 ? ` · ${s.library.versions.length} versions` : ""} · ${libraryFileList().length} video files</p></div></div>${storedFiles ? `<details class="title-file-browser"${s.showStoredFiles || (s.libraryFiles && libraryFileList().length <= 3) ? " open" : ""}><summary><span>Browse files</span><span class="title-file-count">${libraryFileList().length}</span></summary>${storedFiles}</details>` : ""}</div>` : ""}
     ${downloadReleases ? `<div class="title-tracker-releases">${releasesHead}${downloadReleases}</div>` : searchEnabled && s.library ? `<p class="dt-status">Search torrents for a different quality or another season. <button type="button" class="dt-link-btn" data-act="find-versions">Search torrents</button></p>` : ""}
     <p class="title-storage-note">Downloaded files are added to your library.</p>
