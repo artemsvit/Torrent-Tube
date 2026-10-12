@@ -34,7 +34,8 @@ class DockerEntrypoint(unittest.TestCase):
                 entrypoint = Path(installed)
             result = subprocess.run(['sh', str(entrypoint), 'echo', 'app started'], env={
                 **os.environ, 'PATH': f'{tools}:{os.environ["PATH"]}', 'PUID': '1026', 'PGID': '100',
-                'TORRENTTUBE_DOWNLOAD_DIR': str(media), 'OWNERSHIP_LOG': str(log),
+                'TORRENTTUBE_DOWNLOAD_DIR': str(media), 'TORRENTTUBE_STATE_DIR': str(media / '.torrenttube'),
+                'OWNERSHIP_LOG': str(log),
             }, capture_output=True, text=True, timeout=5)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn('app started', result.stdout)
