@@ -21,8 +21,9 @@
   })();
 </script>
 <link rel="stylesheet" href="{{ asset_url('app.css') }}">
+<link rel="stylesheet" href="{{ asset_url('server-home.css') }}">
 </head>
-<body{% if (request.args.get("title") or request.args.get("person")) %} class="has-title-page"{% endif %}>
+<body data-server-view="home"{% if (request.args.get("title") or request.args.get("person")) %} class="has-title-page"{% endif %}>
 <div class="bg-decor" aria-hidden="true"></div>
 
 <div class="top-bar">
@@ -33,7 +34,7 @@
     <button type="button" class="logo-mark header-back" id="detailsBack" aria-label="Back" title="Back"{% if not (request.args.get("title") or request.args.get("person")) %} hidden{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
     <div class="brand-text" id="pageBrand">
       <h1>Torrent Tube</h1>
-      <p>Paste a magnet link, search, or drop a .torrent file</p>
+      <p>Your library and download server</p>
     </div>
     <div class="language-switch" role="group" aria-label="Interface language"><button type="button" data-ui-language="uk" lang="uk" aria-label="Українська">УК</button><button type="button" data-ui-language="en" lang="en" aria-label="English">EN</button></div>
     <button class="icon-btn theme-toggle" id="themeToggle" aria-label="Toggle light/dark theme" title="Toggle theme">
@@ -44,11 +45,22 @@
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
     </button>
   </header>
+  <nav class="server-navigation" id="serverNavigation" aria-label="Main navigation">
+    <button type="button" data-view="home" aria-current="page">Home</button>
+    <button type="button" data-view="movie">Movies</button>
+    <button type="button" data-view="tv">TV Shows</button>
+    <button type="button" data-view="cartoon">Cartoons</button>
+    <button type="button" data-view="library">Library</button>
+    <button type="button" data-view="favorites">Favorites</button>
+    <span class="server-nav-divider" aria-hidden="true"></span>
+    <button type="button" data-view="discover">Discover</button>
+    <button type="button" data-view="downloads">Downloads <span id="navDownloadCount" class="nav-count" hidden></span></button>
+  </nav>
 
   <div class="searchbar">
     <div class="search-field">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-      <input type="text" id="mainInput" placeholder="Search torrents, library, or paste a magnet link" autofocus autocomplete="off">
+      <input type="text" id="mainInput" placeholder="Search torrents, library, or paste a magnet link" autocomplete="off">
       <button type="button" class="clear-field-btn" id="clearMainInput" aria-label="Clear" title="Clear"></button>
     </div>
     <input type="file" id="fileInput" accept=".torrent" style="display:none">
@@ -62,6 +74,18 @@
     </button>
   </div>
 </div>
+
+<main class="server-home" id="serverHome">
+  <section class="home-featured" id="homeFeatured" aria-label="Featured title"><div class="home-loading" role="status">Loading your library…</div></section>
+  <div class="home-content">
+    <section class="server-overview" aria-label="Server information">
+      <div class="server-overview-title"><span class="server-status-dot" id="serverStatusDot"></span><div><strong id="serverHost">Server</strong><span id="serverFolder"></span></div></div>
+      <div class="server-overview-stats" id="serverOverviewStats"></div>
+      <button type="button" class="btn-secondary" id="homeServerSettings">Server settings</button>
+    </section>
+    <div id="homeShelves"></div>
+  </div>
+</main>
 
 <div class="layout" id="layout">
   <section class="panel search-page" id="searchPage">
@@ -412,6 +436,7 @@
 </div>
 
 <script src="{{ asset_url('i18n.js') }}"></script>
+<script src="{{ asset_url('server-home.js') }}"></script>
 <script src="{{ asset_url('app.js') }}"></script>
 </body>
 </html>

@@ -17,7 +17,7 @@ class WebAssets(unittest.TestCase):
 
     def test_page_links_versioned_assets_that_are_cached_for_a_year(self):
         page = self.client.get("/").get_data(as_text=True)
-        for name in ("app.css", "app.js", "i18n.js"):
+        for name in ("app.css", "app.js", "i18n.js", "server-home.css", "server-home.js"):
             match = re.search(rf'/static/{re.escape(name)}\?v=([0-9a-f]{{12}})', page)
             self.assertIsNotNone(match, name)
             response = self.client.get(match.group(0))

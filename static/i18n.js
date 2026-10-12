@@ -1,6 +1,22 @@
 // UI language is a browser preference. API data, file paths, and folder values
 // remain unchanged. Keep source text so switching languages is reversible.
 const UI_UK = {
+  'Home':'Головна', 'Recently added':'Нове на сервері',
+  'Synced across devices':'Синхронізовано між пристроями',
+  'See all':'Переглянути всі', 'Watch':'Дивитися', 'Details':'Деталі',
+  'Your library and download server':'Ваша медіатека та сервер завантажень',
+  'Main navigation':'Головна навігація', 'Server information':'Інформація про сервер',
+  'Server settings':'Налаштування сервера', 'Connected':'Підключено', 'Connecting…':'Підключення…',
+  'Loading your library…':'Завантаження медіатеки…', 'Featured title':'Вибрана назва', 'Featured titles':'Вибрані назви',
+  'Playback progress':'Перебіг перегляду', 'Available on your server':'Доступно на вашому сервері',
+  'Your server':'Ваш сервер', 'Your next watch starts here':'Ваш наступний перегляд починається тут',
+  'Your library, favorites and viewing history in one place. Search for a title or add a torrent to grow your library.':'Медіатека, обране та історія перегляду в одному місці. Знайдіть назву або додайте торент до медіатеки.',
+  'titles':'назв', 'active downloads':'активних завантажень', 'Search enabled':'Пошук увімкнено',
+  'Search not configured':'Пошук не налаштовано', 'Could not save playback position':'Не вдалося зберегти позицію перегляду',
+  'No titles in this section yet.':'У цьому розділі ще немає назв.',
+  'Torrents':'Торенти', 'Searching...':'Шукаємо…', 'Documentaries':'Документальні',
+  'Ukrainian':'Українською', 'New':'Нове',
+  "Couldn't load the library. Try again.":'Не вдалося завантажити медіатеку. Спробуйте ще раз.',
   'Back':'Назад', 'Settings':'Налаштування', 'Toggle theme':'Змінити тему',
   'Toggle light/dark theme':'Змінити світлу або темну тему', 'Interface language':'Мова інтерфейсу',
   'Paste a magnet link, search, or drop a .torrent file':'Знайдіть назву, вставте magnet-посилання або додайте .torrent',
@@ -147,6 +163,8 @@ function translateUI(text, language) {
   let translated = UI_UK[key];
   if (!translated) {
     const patterns = [
+      [/^Resume at (.+)$/, time => `Продовжити з ${time}`],
+      [/^(\d+) season$/, n => ukrainianCount(n, 'сезон', 'сезони', 'сезонів')],
       [/^Results for “(.+)”$/, query => `Результати для «${query}»`],
       [/^Downloaded: (.+)$/, name => `Завантажено: ${name}`],
       [/^(.+) didn't open$/, app => `Не вдалося відкрити ${app}`],

@@ -558,9 +558,10 @@ async function refresh() {
 async function refreshOnce() {
   try {
     const res = await fetch("/api/torrents");
+    if (!res.ok) throw new Error('Could not reach the server');
     const body = await res.text();
     const key = `${discoverMode}|${body}`;
-    if (key === lastRefreshKey) return;
+    if (key === lastRefreshKey) { updateServerOverview(true); return; }
     const data = JSON.parse(body);
     const torrents = data.torrents || [];
     currentStreams = data.streams || [];
@@ -573,6 +574,7 @@ async function refreshOnce() {
     currentTorrentCount = torrents.filter(t => t.state !== "finished" && t.state !== "seeding").length;
     renderViewToggleBtn();
     currentTorrents = torrents;
+    updateServerOverview(true);
     clearAllBtn.disabled = torrents.length === 0;
     layoutEl.classList.toggle("downloads-empty", torrents.length === 0 && !currentStreams.length);
     layoutEl.classList.toggle("no-downloads", torrents.length === 0);
@@ -581,31 +583,30 @@ async function refreshOnce() {
     lastRefreshKey = key;  // only once it is on the page: a failed render tries again
   } catch (e) {
     // Transient network hiccup; the next poll will retry.
+    updateServerOverview(false);
   }
 }
 
 // ---------- Discover ----------
-// Discover is the main screen by default (when search is configured); the
-// round view-toggle button always represents "go to the other screen" -
-// it shows the Downloads icon + a badge while Discover is open, and the
-// Discover compass once you've switched to Downloads.
+// Discover keeps the torrent feeds and their download controls. The round
+// shortcut opens Downloads from browsing, or Home from Downloads.
 
 let currentTorrentCount = 0;
 let currentTorrents = [];
 let currentStreams = [];
 
-const DISCOVER_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>`;
+const HOME_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-8H9v8H4a1 1 0 0 1-1-1z"/></svg>`;
 
 function renderViewToggleBtn() {
-  if (discoverMode) {
+  if (document.body.dataset.serverView !== "downloads") {
     const badge = currentTorrentCount > 0 ? `<span class="btn-badge">${currentTorrentCount}</span>` : "";
     viewToggleBtn.innerHTML = `${ICONS.download}${badge}`;
     viewToggleBtn.title = "Downloads";
     viewToggleBtn.setAttribute("aria-label", "Show downloads");
   } else {
-    viewToggleBtn.innerHTML = DISCOVER_ICON;
-    viewToggleBtn.title = "Discover new releases";
-    viewToggleBtn.setAttribute("aria-label", "Discover new releases");
+    viewToggleBtn.innerHTML = HOME_ICON;
+    viewToggleBtn.title = "Home";
+    viewToggleBtn.setAttribute("aria-label", "Home");
   }
 }
 
@@ -725,6 +726,8 @@ function enterDiscover() {
     return;
   }
   discoverMode = true;
+  document.body.dataset.serverView = "discover";
+  updateServerNavigation("discover");
   renderViewToggleBtn();
   document.body.classList.add("discover-active");
   downloadsTab.classList.add("discover-mode");
@@ -739,6 +742,8 @@ function enterDiscover() {
 
 function exitDiscover() {
   discoverMode = false;
+  document.body.dataset.serverView = "downloads";
+  updateServerNavigation("downloads");
   renderViewToggleBtn();
   document.body.classList.remove("discover-active");
   downloadsTab.classList.remove("discover-mode");
@@ -754,7 +759,7 @@ function exitDiscover() {
 
 viewToggleBtn.addEventListener("click", () => {
   closeSearchDropdown();
-  if (discoverMode) exitDiscover(); else enterDiscover();
+  setServerView(document.body.dataset.serverView === "downloads" ? "home" : "downloads");
 });
 clearAllBtn.addEventListener("click", clearAllTorrents);
 discoverTabs.addEventListener("click", (e) => {
@@ -1206,6 +1211,23 @@ function vlcHelperInstalled() {
   try { return localStorage.getItem("torrenttube-vlc-helper") === "1"; } catch (e) { return false; }
 }
 
+// Infuse accepts a temporary queue as repeated url/filename parameters.
+// Pass videos themselves: an ordinary M3U can fail when opened as a video.
+function infusePlaybackLink(url, closed, files) {
+  const callbacks = closed ? `&x-success=${encodeURIComponent(closed)}&x-error=${encodeURIComponent(closed)}` : "";
+  let link = "infuse://x-callback-url/play?";
+  for (const file of files || [{ url }]) {
+    const entry = `${link.endsWith("?") ? "" : "&"}url=${encodeURIComponent(file.url)}`
+      + (file.name ? `&filename=${encodeURIComponent(file.name)}` : "")
+      + (Number.isFinite(file.position) ? `&position=${Math.max(0, Math.floor(file.position))}` : "");
+    // Keep large series from creating an enormous app link. Always include
+    // the selected episode, then as many following episodes as fit.
+    if (!link.endsWith("?") && link.length + entry.length + callbacks.length > 16000) break;
+    link += entry;
+  }
+  return link + callbacks;
+}
+
 const PLAYERS = {
   infuse: {
     name: "Infuse",
@@ -1213,9 +1235,9 @@ const PLAYERS = {
     canOpen: true,
     sub: "iPhone, iPad, Apple TV and Mac",
     store: "https://apps.apple.com/app/id1136220934",
-    // x-success is opened when the player is closed (not on pause) - that's
-    // what deletes the stream; x-error when playback fails.
-    link: (url, closed) => `infuse://x-callback-url/play?url=${encodeURIComponent(url)}&x-success=${encodeURIComponent(closed)}&x-error=${encodeURIComponent(closed)}`,
+    // Web playback omits HTTP return callbacks: they can open another tab
+    // instead of returning to the page that launched the player.
+    link: infusePlaybackLink,
   },
   vlc: {
     name: "VLC",
@@ -1228,7 +1250,7 @@ const PLAYERS = {
       : "Copies the link - paste it in VLC's Open Network",
     store: IS_ANDROID ? "https://play.google.com/store/apps/details?id=org.videolan.vlc" : "https://apps.apple.com/app/id650377962",
     link: (url, closed) => {
-      if (IS_IOS) return `vlc-x-callback://x-callback-url/stream?url=${encodeURIComponent(url)}&x-success=${encodeURIComponent(closed)}&x-error=${encodeURIComponent(closed)}`;
+      if (IS_IOS) return `vlc-x-callback://x-callback-url/stream?url=${encodeURIComponent(url)}${closed ? `&x-success=${encodeURIComponent(closed)}&x-error=${encodeURIComponent(closed)}` : ""}`;
       if (IS_ANDROID) {
         const u = new URL(url);
         return `intent://${u.host}${u.pathname}#Intent;scheme=${u.protocol.replace(":", "")};package=org.videolan.vlc;type=video/*;end`;
@@ -1385,8 +1407,8 @@ function playLink(release, torrent) {
 
 // One tap: the player opens straight away with the play link, and the
 // server starts the torrent at the same time. Nothing to wait for or stop
-// here - the player's first request waits for the file, and closing the
-// player opens /played/<token>, which deletes the stream. Both
+// here - the player's first request waits for the file, and the server
+// cleans up after media connections close. Launch and registration both
 // happen inside the tap, before any await: iOS only lets a page open an
 // app from the tap itself.
 // Tells the server what a play link plays. `start` false (a copied link)
@@ -1408,7 +1430,7 @@ function playRelease(release) {
     openVlcHelper(() => playRelease(release));
     return;
   }
-  const appLink = PLAYERS[id].link(link.url, link.closedUrl);
+  const appLink = PLAYERS[id].link(link.url, null);
   registerPlayLink(link, !!appLink);
   if (appLink) watchPlayStart(link.token);
   if (appLink) {
@@ -1897,7 +1919,7 @@ function updatePageHeader(title = null, subtitle = null) {
   brand.querySelector('h1').textContent = title || 'Torrent Tube';
   brand.querySelector('h1').toggleAttribute('data-no-i18n', !!title);
   const secondary = brand.querySelector('p');
-  secondary.textContent = title ? (subtitle && subtitle !== title ? subtitle : '') : 'Paste a magnet link, search, or drop a .torrent file';
+  secondary.textContent = title ? (subtitle && subtitle !== title ? subtitle : '') : 'Your library and download server';
   secondary.toggleAttribute('data-no-i18n', !!title && subtitle !== 'Cast & crew');
 }
 
@@ -2541,7 +2563,7 @@ function renderDetailsBody() {
   if (s.library) {
     const files = libraryFileList();
     storedFiles = !s.libraryFiles ? `<div class="dt-status" role="status">Reading the folder…</div>` : files.length ? `<div class="dt-files">${files.map((f, i) => `
-      <div class="dt-file"><div class="dt-file-name">${escapeHtml(f.name)}</div>
+      <div class="dt-file"><span class="title-file-type">${escapeHtml(f.name.split('.').pop().toUpperCase())}</span><div class="dt-file-name">${escapeHtml(f.name)}</div>
       <div class="dt-file-size">${formatBytes(f.size)}</div>
       <button type="button" class="action-btn" data-act="play-file" data-index="${i}" title="Play this exact file in ${escapeHtml(PLAYERS[playerId].name)}" aria-label="Play ${escapeHtml(f.name)}">${ICONS.play}</button></div>`).join("")}</div>`
       : `<div class="dt-status">No video files were found in this folder. Try refreshing your library.</div>`;
@@ -2549,7 +2571,7 @@ function renderDetailsBody() {
   const episodeSection = renderTitleEpisodes(s);
   const downloads = `<details class="dt-section title-downloads" id="titleDownloads"${s.showDownloads || !s.library ? " open" : ""}>
     <summary><h2 class="section-label">Downloads &amp; versions${s.releaseEpisode ? ` · ${escapeHtml(s.releaseEpisode)}` : ""}</h2><span class="title-section-note">Choose quality and manage files</span></summary>
-    ${s.library ? `<div class="title-storage-info"><h3>Library files</h3><p>${escapeHtml(s.library.category || "Library")}${s.library.versions?.length > 1 ? ` · ${s.library.versions.length} versions` : ""} · ${libraryFileList().length} video files</p>${storedFiles ? `<details class="title-file-browser"${s.showStoredFiles || (s.libraryFiles && libraryFileList().length <= 3) ? " open" : ""}><summary>Browse files</summary>${storedFiles}</details>` : ""}</div>` : ""}
+    ${s.library ? `<div class="title-storage-info"><div class="title-storage-heading"><span class="title-storage-icon">${ICONS.check}</span><div><h3>Available on your server</h3><p>${escapeHtml(s.library.category || "Library")}${s.library.versions?.length > 1 ? ` · ${s.library.versions.length} versions` : ""} · ${libraryFileList().length} video files</p></div></div>${storedFiles ? `<details class="title-file-browser"${s.showStoredFiles || (s.libraryFiles && libraryFileList().length <= 3) ? " open" : ""}><summary><span>Browse files</span><span class="title-file-count">${libraryFileList().length}</span></summary>${storedFiles}</details>` : ""}</div>` : ""}
     ${downloadReleases ? `<div class="title-tracker-releases">${s.library ? `<div class="title-tracker-target"><span>Download folder</span>${renderTitleFolderPicker(s)}</div>` : ""}${releasesHead}${downloadReleases}</div>` : searchEnabled && s.library ? `<p class="dt-status">Search torrents for a different quality or another season. <button type="button" class="dt-link-btn" data-act="find-versions">Search torrents</button></p>` : ""}
     <p class="title-storage-note">Downloaded files are added to your library.</p>
   </details>`;
@@ -2736,6 +2758,7 @@ function libraryShown() {
 async function loadFavorites() {
   try {
     const d = await fetch("/api/favorites").then(r => r.json());
+    if (JSON.stringify(favorites) === JSON.stringify(d.items || [])) return;
     favorites = d.items || [];
   } catch (e) { return; }
   refreshFavoriteBadges();
@@ -2839,11 +2862,14 @@ function openFavorite(f) {
 async function loadLibrary(refresh = false) {
   clearTimeout(libraryTimer);
   try {
-    const d = await fetch(`/api/library${refresh ? "?refresh=1" : ""}`).then(r => r.json());
+    const response = await fetch(`/api/library${refresh ? "?refresh=1" : ""}`);
+    if (!response.ok) throw new Error("Couldn't load the library. Try again.");
+    const d = await response.json();
     libraryItems = d.items || [];
     libraryPending = d.metadata_pending || 0;
     libraryLoaded = true;
-  } catch (e) { return; }
+    homeLibraryError = '';
+  } catch (e) { homeLibraryError = "Couldn't load the library. Try again."; renderServerHome(); return; }
   renderLibrary();
   renderLibraryStats();
   // The server matches new titles in the background; look again until done.
@@ -2853,7 +2879,9 @@ async function loadLibrary(refresh = false) {
 function libraryTitle(item) { return item.display_title || item.title || item.name; }
 
 function renderLibrary() {
-  const show = (libraryItems.length > 0 || favorites.length > 0) && libraryShown();
+  renderServerHome();
+  const dedicated = ['library', 'movie', 'tv', 'cartoon', 'favorites'].includes(document.body.dataset.serverView);
+  const show = dedicated || ((libraryItems.length > 0 || favorites.length > 0) && libraryShown());
   libraryPanel.hidden = !show;
   layoutEl.classList.toggle("has-library", show);
   if (!show) return;
@@ -2870,15 +2898,17 @@ function renderLibrary() {
   counts.favorites = saved.length;
   // Favorites comes after Cartoons, as in the apps.
   const tabs = [...LIBRARY_KINDS, ["favorites", "Favorites"]];
-  if (!librarySection || !counts[librarySection]) librarySection = (tabs.find(([k]) => counts[k]) || [librarySection || "movie"])[0];
-  libraryKinds.innerHTML = tabs.filter(([k]) => counts[k]).map(([k, label]) =>
+  if (!librarySection) librarySection = (tabs.find(([k]) => counts[k]) || ["movie"])[0];
+  libraryKinds.innerHTML = tabs.filter(([k]) => counts[k] || k === librarySection).map(([k, label]) =>
     `<button type="button" class="library-chip${k === librarySection ? " is-active" : ""}" data-kind="${k}">${label} · ${counts[k]}</button>`).join("");
   libraryNote.hidden = !libraryPending;
   libraryNote.textContent = libraryPending ? `Matching ${libraryPending} new title${libraryPending === 1 ? "" : "s"} on TMDB…` : "";
   libraryGrid.innerHTML = "";
   if (librarySection === "favorites") saved.forEach(f => libraryGrid.appendChild(buildFavoriteCard(f)));
   else items.filter(i => i.kind === librarySection).forEach(item => libraryGrid.appendChild(buildLibraryCard(item)));
-  if (!items.length && !saved.length) libraryGrid.innerHTML = `<div class="library-empty">Nothing in your library matches “${escapeHtml(libraryFilter.value.trim())}”.</div>`;
+  if (!libraryGrid.childElementCount) libraryGrid.innerHTML = libraryFilter.value.trim()
+    ? `<div class="library-empty">Nothing in your library matches “${escapeHtml(libraryFilter.value.trim())}”.</div>`
+    : `<div class="library-empty">No titles in this section yet.</div>`;
 }
 
 function buildLibraryCard(item) {
@@ -2922,7 +2952,14 @@ measureTopBar();
 
 libraryChips.addEventListener("click", e => {
   const chip = e.target.closest(".library-chip[data-kind]");
-  if (chip) { librarySection = chip.dataset.kind; renderLibrary(); libraryGrid.scrollTop = 0; }
+  if (chip) {
+    librarySection = chip.dataset.kind;
+    if (document.body.dataset.serverView !== 'library') {
+      document.body.dataset.serverView = librarySection;
+      updateServerNavigation(librarySection);
+    }
+    renderLibrary(); libraryGrid.scrollTop = 0;
+  }
 });
 
 libraryFilter.addEventListener("input", () => { renderLibrary(); libraryGrid.scrollTop = 0; });
@@ -3014,12 +3051,19 @@ async function loadEpisodeNames(season) {
   if (detailsState === s) renderDetailsBody();
 }
 
-// An episode plays in a playlist with every episode after it, so the
-// player goes on to the next one (and the next season), as in the apps.
+// Infuse gets direct video URLs in its own queue format; VLC gets an M3U.
+// Both start with the selected episode and continue in episode order.
 function playLibraryFrom(file) {
+  if (!file) return;
   const episodes = libraryEpisodes();
   if (!episodes) { playLibraryFile(file); return; }
   const start = episodes.findIndex(e => e.file.path === file.path);
+  if (start < 0) { playLibraryFile(file); return; }
+  if (currentPlayer() === "infuse") {
+    const queue = episodes.slice(start).map(e => ({ url: libraryMediaUrl(e.file), name: e.file.name }));
+    playLibraryUrl(queue[0].url, file, queue);
+    return;
+  }
   const files = episodes.slice(Math.max(0, start)).map(e => e.file.path);
   const token = hashHex(files.join("\n"));
   fetch("/api/library/playlist", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" },
@@ -3031,13 +3075,13 @@ function playLibraryFrom(file) {
 function playLibraryFile(file) {
   if (file) playLibraryUrl(libraryMediaUrl(file), file);
 }
-function playLibraryUrl(url, file) {
+function playLibraryUrl(url, file, queue) {
   const id = currentPlayer();
   if (id === "vlc" && VLC_HELPER_OS && !vlcHelperInstalled()) {
-    openVlcHelper(() => playLibraryUrl(url, file));
+    openVlcHelper(() => playLibraryUrl(url, file, queue));
     return;
   }
-  const appLink = PLAYERS[id].link(url, location.href);
+  const appLink = PLAYERS[id].link(url, null, queue || [{ url, name: file.name }]);
   if (appLink) location.href = appLink;
   else copyText(url, `Link copied. In ${PLAYERS[id].name}, choose File > Open Network and paste it`);
 }
@@ -3114,6 +3158,7 @@ async function init() {
     params.delete("stream_closed");
     history.replaceState(null, "", location.pathname + (params.toString() ? `?${params}` : "") + location.hash);
   }
+  setServerView("home");
   loadConfig();
   loadLimits();
   loadLibrary();
@@ -3121,14 +3166,10 @@ async function init() {
   // Hearts set on another device show when the page is looked at again.
   document.addEventListener("visibilitychange", () => { if (!document.hidden) loadFavorites(); });
   await loadDiscoverFeeds();
-  // Discover is the main screen whenever it's actually usable; if search
-  // isn't configured on this server there's nothing to discover, so stay
-  // on Downloads and just show the plain toggle button.
-  if (discoverEnabled) {
-    enterDiscover();
-  } else {
-    renderViewToggleBtn();
-  }
+  // Home uses the same server library and history as the Apple clients.
+  loadServerHistory();
+  handleServerResumeReturn();
+  setInterval(() => { if (!document.hidden) { loadServerHistory(); loadFavorites(); loadLibrary(); } }, 30000);
   refresh();
   if (params.has("title") || params.has("person")) await restoreTitleRoute();
   // Every 1.5 s while the page is in view; a tab in the background asks
