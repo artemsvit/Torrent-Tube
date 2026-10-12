@@ -2604,9 +2604,9 @@ function renderDetailsBody() {
   }
   if (s.library) {
     if (!s.category) s.category = currentCategories.includes(s.library.category) ? s.library.category : categoryForKind(d.kind) || getDefaultCategory();
+    if (searchEnabled) actions.push(`<button type="button" class="btn-secondary" data-act="find-versions">${ICONS.download}Search torrents</button>`);
     const where = (s.library.versions || []).length > 1 ? `${s.library.versions.length} versions` : s.library.category;
     actions.push(`<span class="dt-status-pill">In your library${where ? ` · ${escapeHtml(where)}` : ""}</span>`);
-    if (searchEnabled) actions.push(`<button type="button" class="btn-secondary" data-act="find-versions">${ICONS.download}Search torrents</button>`);
   } else if (s.torrent) {
     const t = s.torrent;
     const done = t.state === "finished" || t.state === "seeding";
