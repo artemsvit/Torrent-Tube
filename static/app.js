@@ -240,6 +240,7 @@ function isMagnet(value) {
 function updateGoLabel() {
   const magnet = isMagnet(mainInput.value.trim());
   goBtnLabel.textContent = magnet ? "Add" : "Search";
+  goBtn.setAttribute('aria-label', magnet ? 'Add' : 'Search');
   goBtnIcon.innerHTML = magnet ? ICONS.download : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>`;
   clearMainInputBtn.classList.toggle("is-visible", mainInput.value.length > 0);
 }

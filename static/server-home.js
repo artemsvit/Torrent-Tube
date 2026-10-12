@@ -5,6 +5,7 @@ let serverOnline = false, homeLibraryError = '', serverOverviewKey = '';
 const homeMetadata = new Map();
 
 function updateServerNavigation(view) {
+  document.getElementById('browseDiscoverBtn').setAttribute('aria-pressed', String(view === 'discover'));
   document.querySelectorAll('#serverNavigation [data-view]').forEach(button => {
     if (button.dataset.view === view) button.setAttribute('aria-current', 'page');
     else button.removeAttribute('aria-current');
@@ -33,9 +34,6 @@ function updateServerOverview(online) {
   const key = JSON.stringify([serverOnline,currentTorrentCount,libraryItems.length,speed,lastConfig.download_dir_host,lastConfig.download_dir,searchEnabled]);
   if (key === serverOverviewKey) return;
   serverOverviewKey = key;
-  const badge = document.getElementById('navDownloadCount');
-  badge.hidden = !currentTorrentCount;
-  badge.textContent = currentTorrentCount;
   document.getElementById('serverHost').textContent = location.host;
   document.getElementById('serverFolder').textContent = lastConfig.download_dir_host || lastConfig.download_dir || '';
   document.getElementById('serverStatusDot').classList.toggle('is-online', serverOnline);
@@ -183,6 +181,11 @@ document.getElementById('serverNavigation').addEventListener('click',e=>{
   const button = e.target.closest('[data-view]');
   if (button) setServerView(button.dataset.view);
 });
+document.getElementById('browseDiscoverBtn').addEventListener('click',()=>setServerView('discover'));
+const browseSearch = document.getElementById('mainInput');
+browseSearch.addEventListener('focus',()=>{ browseSearch.placeholder = 'Search torrents, library, or paste a magnet link'; });
+browseSearch.addEventListener('blur',()=>{ browseSearch.placeholder = 'Search'; });
+browseSearch.addEventListener('keydown',e=>{ if (e.key === 'Escape') browseSearch.blur(); });
 document.getElementById('serverHome').addEventListener('click',e=>{
   const view = e.target.closest('[data-home-view]');
   if (view) setServerView(view.dataset.homeView);
