@@ -2281,6 +2281,32 @@ function findTitleEpisode(number) {
   document.getElementById("titleDownloads")?.scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
 }
 
+function renderTitleFolderPicker(s) {
+  return `<div class="title-folder-picker">
+    <button type="button" class="title-folder-trigger" data-act="folder-toggle" aria-label="Download folder: ${escapeHtml(s.category || 'Choose folder')}" aria-haspopup="menu" aria-expanded="false" aria-controls="titleFolderMenu">
+      <span>${escapeHtml(s.category || 'Choose folder')}</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
+    <div class="title-folder-menu" id="titleFolderMenu" role="menu" aria-label="Download folder" hidden>${currentCategories.map(c => `<button type="button" role="menuitemradio" aria-checked="${c === s.category}" tabindex="-1" data-act="folder-choice" data-category="${escapeHtml(c)}"><span>${escapeHtml(c)}</span>${c === s.category ? ICONS.check : ''}</button>`).join('')}</div>
+  </div>`;
+}
+
+function closeTitleFolderPicker(restoreFocus = false) {
+  const menu = detailsBody.querySelector('.title-folder-menu:not([hidden])');
+  if (!menu) return;
+  menu.hidden = true;
+  const trigger = menu.parentElement.querySelector('.title-folder-trigger');
+  trigger.setAttribute('aria-expanded', 'false');
+  if (restoreFocus) trigger.focus({ preventScroll: true });
+}
+
+function openTitleFolderPicker(trigger, last = false) {
+  const menu = trigger.parentElement.querySelector('.title-folder-menu');
+  menu.hidden = false;
+  trigger.setAttribute('aria-expanded', 'true');
+  const options = [...menu.querySelectorAll('[role="menuitemradio"]')];
+  (last ? options.at(-1) : menu.querySelector('[aria-checked="true"]') || options[0])?.focus({ preventScroll: true });
+}
+
 function renderDetailsBody() {
   const body = document.getElementById("dtBody");
   if (!body || !detailsState) return;
@@ -2288,6 +2314,7 @@ function renderDetailsBody() {
 
   const focused = body.contains(document.activeElement) ? document.activeElement.closest("[data-act]") : null;
   const focusKey = focused ? { ...focused.dataset } : null;
+  const folderWasOpen = !!body.querySelector('.title-folder-menu:not([hidden])');
   // --- actions: Play in <player>, Download + folder. The trailer plays
   // from the banner's centre button; a title without a banner gets a
   // button here instead. ---
@@ -2332,8 +2359,7 @@ function renderDetailsBody() {
       : added ? "Added" : "Download";
     const bestMeta = best ? [releaseTags(best.title).find(t => t.res)?.label, best.size_label].filter(Boolean).join(" · ") : "";
     actions.push(`<button type="button" class="btn-secondary" data-act="download-best"${!best || added ? " disabled" : ""}>${added ? ICONS.check : ICONS.download}${label}${best && !added && bestMeta ? ` <span class="dt-download-meta">${escapeHtml(bestMeta)}</span>` : ""}</button>`);
-    actions.push(`<select class="inline-category-select" data-act="category" title="Download to">${currentCategories.map(c =>
-      `<option value="${escapeHtml(c)}"${c === s.category ? " selected" : ""}>${escapeHtml(c)}</option>`).join("")}</select>`);
+    actions.push(renderTitleFolderPicker(s));
   }
 
   // --- overview + facts ---
@@ -2415,7 +2441,7 @@ function renderDetailsBody() {
   const downloads = `<details class="dt-section title-downloads" id="titleDownloads"${s.showDownloads || !s.library ? " open" : ""}>
     <summary><h2 class="section-label">Downloads &amp; versions${s.releaseEpisode ? ` · ${escapeHtml(s.releaseEpisode)}` : ""}</h2><span class="title-section-note">Choose quality and manage files</span></summary>
     ${s.library ? `<div class="title-storage-info"><h3>Files on your server</h3><p>${escapeHtml(s.library.category || "Library")}${s.library.versions?.length > 1 ? ` · ${s.library.versions.length} versions` : ""} · ${libraryFileList().length} video files</p>${storedFiles ? `<details class="title-file-browser"${s.showStoredFiles || (s.libraryFiles && libraryFileList().length <= 3) ? " open" : ""}><summary>Browse server files</summary>${storedFiles}</details>` : ""}</div>` : ""}
-    ${downloadReleases ? `<div class="title-tracker-releases">${s.library ? `<label class="title-tracker-target">Download folder <select class="inline-category-select" data-act="category">${currentCategories.map(c => `<option value="${escapeHtml(c)}"${c === s.category ? " selected" : ""}>${escapeHtml(c)}</option>`).join("")}</select></label>` : ""}${releasesHead}${downloadReleases}</div>` : searchEnabled && s.library ? `<p class="dt-status">Want a different quality or another season? <button type="button" class="dt-link-btn" data-act="find-versions">Find other versions</button></p>` : ""}
+    ${downloadReleases ? `<div class="title-tracker-releases">${s.library ? `<div class="title-tracker-target"><span>Download folder</span>${renderTitleFolderPicker(s)}</div>` : ""}${releasesHead}${downloadReleases}</div>` : searchEnabled && s.library ? `<p class="dt-status">Want a different quality or another season? <button type="button" class="dt-link-btn" data-act="find-versions">Find other versions</button></p>` : ""}
     <p class="title-storage-note">Downloads remain in the selected server folder. <button type="button" class="dt-link-btn" data-act="workspace">Open Downloads &amp; storage</button></p>
   </details>`;
 
@@ -2441,6 +2467,10 @@ function renderDetailsBody() {
   const fileBrowser = body.querySelector(".title-file-browser");
   fileBrowser?.addEventListener("toggle", () => { if (detailsState === s && fileBrowser.isConnected) s.showStoredFiles = fileBrowser.open; });
 
+  if (folderWasOpen) {
+    const trigger = body.querySelector('.title-folder-trigger');
+    if (trigger) openTitleFolderPicker(trigger);
+  }
   if (focusKey?.act) {
     const selector = Object.entries(focusKey).map(([key, value]) => `[data-${key.replace(/[A-Z]/g, c => `-${c.toLowerCase()}`)}="${CSS.escape(value)}"]`).join("");
     body.querySelector(selector)?.focus({ preventScroll: true });
@@ -2480,6 +2510,16 @@ detailsBody.addEventListener("click", (e) => {
   if (!el || !detailsState) return;
   const s = detailsState;
   switch (el.dataset.act) {
+    case "folder-toggle":
+      if (el.getAttribute('aria-expanded') === 'true') closeTitleFolderPicker(true);
+      else openTitleFolderPicker(el);
+      break;
+    case "folder-choice":
+      s.category = el.dataset.category;
+      s.categoryChosen = true;
+      closeTitleFolderPicker(true);
+      renderDetailsBody();
+      break;
     case "trailer":
       if (s.trailers.length) playTrailer(s.activeTrailer || s.trailers[0].key);
       else findYoutubeTrailers();
@@ -2512,10 +2552,26 @@ detailsBody.addEventListener("click", (e) => {
     }
   }
 });
-detailsBody.addEventListener("change", (e) => {
-  const el = e.target.closest("[data-act]");
-  if (!el || !detailsState) return;
-  if (el.dataset.act === "category") Object.assign(detailsState, { category: el.value, categoryChosen: true });
+detailsBody.addEventListener('keydown', e => {
+  const picker = e.target.closest('.title-folder-picker');
+  if (!picker) return;
+  const trigger = picker.querySelector('.title-folder-trigger');
+  const menu = picker.querySelector('.title-folder-menu');
+  if (e.key === 'Escape' && !menu.hidden) {
+    e.preventDefault(); e.stopPropagation(); closeTitleFolderPicker(true); return;
+  }
+  if (e.key === 'Tab') { closeTitleFolderPicker(); return; }
+  if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
+  e.preventDefault();
+  if (menu.hidden) { openTitleFolderPicker(trigger, e.key === 'ArrowUp' || e.key === 'End'); return; }
+  const options = [...menu.querySelectorAll('[role="menuitemradio"]')];
+  const index = options.indexOf(document.activeElement);
+  const next = e.key === 'Home' ? 0 : e.key === 'End' ? options.length - 1
+    : (index + (e.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length;
+  options[next]?.focus({ preventScroll: true });
+});
+document.addEventListener('click', e => {
+  if (!e.target.closest('.title-folder-picker')) closeTitleFolderPicker();
 });
 detailsBack.addEventListener("click", detailsGoBack);
 detailsClose.addEventListener("click", () => {

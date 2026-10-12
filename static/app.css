@@ -2126,3 +2126,35 @@ body.has-title-page .brand-text p { display: none; }
     flex: 1 1 100%; order: 3; padding: 0; text-align: left; justify-content: flex-start;
   }
 }
+
+/* Title folder menu shares the page surfaces instead of the OS select popup. */
+.title-folder-picker { position: relative; flex: 0 1 auto; max-width: 100%; }
+.title-folder-trigger {
+  display: flex; align-items: center; gap: 16px; min-height: 44px; max-width: 220px;
+  padding: 10px 16px; border: 1px solid var(--border-strong); border-radius: var(--radius-pill);
+  background: var(--surface); color: var(--text); font: inherit; font-size: 14px;
+  font-weight: 600; cursor: pointer;
+}
+.title-folder-trigger > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.title-folder-trigger > svg { width: 16px; height: 16px; flex: none; color: var(--text-secondary); }
+.title-folder-trigger:hover, .title-folder-trigger[aria-expanded="true"] { background: var(--surface-hover); }
+.title-folder-menu {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 30;
+  min-width: 200px; max-width: min(320px, 80vw); max-height: 280px; overflow-y: auto;
+  padding: 6px; border: 1px solid var(--border-strong); border-radius: 16px;
+  background: #fff; box-shadow: 0 12px 32px #0004;
+}
+.title-folder-menu[hidden] { display: none; }
+.title-folder-menu button {
+  display: flex; align-items: center; justify-content: space-between; gap: 20px; width: 100%;
+  padding: 11px 12px; border: 0; border-radius: 10px; background: transparent;
+  color: var(--text); font: inherit; font-size: 14px; text-align: left; cursor: pointer;
+}
+.title-folder-menu button:hover, .title-folder-menu button:focus-visible {
+  background: var(--surface-hover); outline: none;
+}
+.title-folder-menu button[aria-checked="true"] { color: var(--accent); background: var(--accent-soft); }
+.title-folder-menu button > svg { width: 16px; height: 16px; flex: none; }
+
+html[data-theme="dark"] .title-folder-menu { background: #1c1c20; }
+.title-folder-menu button:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }

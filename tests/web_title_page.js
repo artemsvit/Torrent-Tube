@@ -34,6 +34,13 @@ vm.runInContext(section('function titleEpisodeFiles(', 'function renderDetailsBo
 vm.runInContext(section('async function postSearchResult(', 'async function addSearchResult('),context);
 vm.runInContext(section('async function downloadRelease(', 'detailsBody.addEventListener('),context);
 (async()=>{
+  context.currentCategories = ['Movies', 'TV Shows', 'Kids & <Family>'];
+  context.ICONS = {check:'<svg></svg>'};
+  const picker = context.renderTitleFolderPicker(state);
+  assert.match(picker, /aria-haspopup="menu" aria-expanded="false"/);
+  assert.match(picker, /aria-checked="true"[^>]*data-category="TV Shows"/);
+  assert.match(picker, /Kids &amp; &lt;Family>/);
+  assert.doesNotMatch(picker, /<select/);
   const html=context.renderTitleEpisodes(state);
   assert.match(html,/Play episode: 1\. First/);
   assert.match(html,/Find a version: 2\. Second/);
