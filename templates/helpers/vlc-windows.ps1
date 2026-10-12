@@ -19,7 +19,7 @@ $handler = Join-Path $dir 'open-vlc.ps1'
 @"
 param([string]`$link)
 `$target = `$link -replace '^torrenttube-vlc:', ''
-if (-not `$target.StartsWith('$origin/play/')) { exit }
+if (-not (`$target.StartsWith('$origin/play/') -or `$target.StartsWith('$origin/playlist/') -or `$target.StartsWith('$origin/media/'))) { exit }
 `$vlc = `$null
 foreach (`$key in 'HKLM:\SOFTWARE\VideoLAN\VLC', 'HKLM:\SOFTWARE\WOW6432Node\VideoLAN\VLC') {
     `$value = (Get-ItemProperty -Path `$key -ErrorAction SilentlyContinue).'(default)'

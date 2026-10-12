@@ -29,12 +29,12 @@ trap 'rm -rf "$TMP"' EXIT
 
 cat > "$TMP/helper.applescript" <<'APPLESCRIPT'
 property linkPrefix : "torrenttube-vlc:"
-property allowedPrefix : "__ORIGIN__/play/"
+property allowedOrigin : "{{ origin }}/"
 
 on open location theURL
 	if theURL does not start with linkPrefix then return
 	set target to text ((length of linkPrefix) + 1) thru -1 of theURL
-	if target does not start with allowedPrefix then return
+	if not (target starts with (allowedOrigin & "play/") or target starts with (allowedOrigin & "playlist/") or target starts with (allowedOrigin & "media/")) then return
 	try
 		do shell script "open -a VLC " & quoted form of target
 	on error
@@ -46,7 +46,6 @@ on run
 	display dialog "Torrent Tube VLC Helper is installed. \"Play in VLC\" now opens films in VLC." buttons {"OK"} default button 1 with title "Torrent Tube"
 end run
 APPLESCRIPT
-sed -i '' "s#__ORIGIN__#$ORIGIN#" "$TMP/helper.applescript"
 
 mkdir -p "$HOME/Applications"
 rm -rf "$APP"

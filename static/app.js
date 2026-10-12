@@ -1844,7 +1844,8 @@ function titlePageURL(item, torrent, season) {
 
 function openDetails(item, torrent = null, { fromHistory = false, season = null } = {}) {
   if (!item.library && item.tmdb_id) {
-    const local = libraryItems.find(t => t.tmdb_id === item.tmdb_id && t.media_type === item.media_type);
+    const type = item.media_type || item.mediaType;
+    const local = libraryItems.find(t => t.tmdb_id === item.tmdb_id && (!type || t.media_type === type));
     if (local) item = { ...item, library: local };
   }
   if (!detailsState && !personState) {
@@ -2008,6 +2009,35 @@ function releaseMatches(r, d) {
   return years.some(y => Math.abs(y - start) <= 1);
 }
 
+function seasonMatchesRelease(title, season) {
+  if (season == null) return true;
+  const s = Number(season);
+  if (!Number.isFinite(s)) return true;
+  const explicit = new RegExp(`\\b(?:s|season|сезон)\\s*0*${s}(?:e\\d+|\\b)`, "i");
+  if (explicit.test(title)) return true;
+  const rangeRegex = /\b(?:s|season|сезон)?\s*0*(\d+)\s*[-–]\s*(?:s|season|сезон)?\s*0*(\d+)\b/gi;
+  let match;
+  while ((match = rangeRegex.exec(title)) !== null) {
+    const start = Number(match[1]), end = Number(match[2]);
+    if (Number.isFinite(start) && Number.isFinite(end) && start <= s && s <= end) return true;
+  }
+  return false;
+}
+
+function episodeMatchesRelease(title, season, episode) {
+  const s = Number(season), e = Number(episode);
+  if (!Number.isFinite(s) || !Number.isFinite(e)) return false;
+  const explicit = new RegExp(`\\b(?:s\\s*0*${s}\\s*e\\s*0*${e}|0*${s}\\s*x\\s*0*${e})\\b`, "i");
+  if (explicit.test(title)) return true;
+  const rangeRegex = new RegExp(`\\b(?:s\\s*0*${s}\\s*)?e\\s*0*(\\d+)\\s*[-–]\\s*(?:e\\s*)?0*(\\d+)\\b`, "gi");
+  let match;
+  while ((match = rangeRegex.exec(title)) !== null) {
+    const start = Number(match[1]), end = Number(match[2]);
+    if (Number.isFinite(start) && Number.isFinite(end) && start <= e && e <= end) return true;
+  }
+  return false;
+}
+
 async function loadReleases(query, requestId, force = false) {
   if (detailsState && detailsState.library && !force) return;  // its own files instead
   // A grouped search card already carries every version of its title -
@@ -2019,15 +2049,39 @@ async function loadReleases(query, requestId, force = false) {
   detailsState.releases = own.length ? own : "loading";
   state.releaseError = "";
   renderDetailsBody();
+
+  const fetchQuery = async (q) => {
+    if (!q) return [];
+    try {
+      const request = releasesCache.get(q) || fetch(`/api/search?q=${encodeURIComponent(q)}&enrich=0`).then(res => res.json());
+      releasesCache.set(q, request);
+      const data = await request;
+      if (data.error) { releasesCache.delete(q); return []; }
+      return data.results || [];
+    } catch (e) {
+      releasesCache.delete(q);
+      return [];
+    }
+  };
+
   let rows = [], releaseError = "";
   try {
-    const request = releasesCache.get(query) || fetch(`/api/search?q=${encodeURIComponent(query)}&enrich=0`).then(res => res.json());
-    releasesCache.set(query, request);
-    const data = await request;
-    if (data.error) { releasesCache.delete(query); throw new Error(data.error); }
-    rows = data.results || [];
+    const queries = [query];
+    const altTitle = state.data?.original_title;
+    if (altTitle && altTitle !== query && !state.releaseEpisode) {
+      queries.push(altTitle);
+    }
+    const results = await Promise.all(queries.map(fetchQuery));
+    const merged = [];
+    const seen = new Set();
+    for (const list of results) {
+      for (const r of list) {
+        const k = releaseKey(r);
+        if (!seen.has(k)) { seen.add(k); merged.push(r); }
+      }
+    }
+    rows = merged;
   } catch (e) {
-    releasesCache.delete(query);
     releaseError = e.message || "Couldn't search for releases. Try again.";
   }
   if (requestId !== detailsRequestId || detailsState !== state || state.releaseRequest !== releaseRequest) return;
@@ -2048,9 +2102,15 @@ async function loadReleases(query, requestId, force = false) {
 // The release the big Download button grabs: the one clicked, or - for a
 // title opened from "More like this" or Downloads - the best-seeded match.
 function primaryRelease() {
-  const { item, releases } = detailsState;
+  const { item, releases, browseSeason, data } = detailsState;
   if (item.size_label) return item;
-  return Array.isArray(releases) ? releases.find(r => r.seeders > 0) || releases[0] || null : null;
+  if (!Array.isArray(releases) || !releases.length) return null;
+  if (data?.media_type === "tv" && browseSeason != null) {
+    const seasonMatch = releases.find(r => r.seeders > 0 && seasonMatchesRelease(r.title, browseSeason))
+      || releases.find(r => seasonMatchesRelease(r.title, browseSeason));
+    if (seasonMatch) return seasonMatch;
+  }
+  return releases.find(r => r.seeders > 0) || releases[0] || null;
 }
 
 async function findYoutubeTrailers() {
@@ -2316,15 +2376,74 @@ function selectTitleSeason(season) {
   renderDetailsBody();
 }
 
+async function playTrackerEpisode(season, episodeNumber) {
+  const s = detailsState;
+  if (!s) return;
+  const showTitle = s.data?.original_title || s.data?.title || s.item.clean_title || s.item.title;
+  const epCode = `S${String(season).padStart(2, "0")}E${String(episodeNumber).padStart(2, "0")}`;
+  showToast(`Finding stream for ${epCode}…`);
+
+  // 1. Try matching among already loaded releases
+  if (Array.isArray(s.releases)) {
+    const directMatch = s.releases.find(r => r.seeders > 0 && episodeMatchesRelease(r.title, season, episodeNumber));
+    if (directMatch) {
+      playRelease(directMatch);
+      return;
+    }
+  }
+
+  // 2. Query tracker specifically for this episode or season
+  const queries = [
+    `${showTitle} ${epCode}`,
+    `${showTitle} S${String(season).padStart(2, "0")}`,
+    showTitle,
+  ];
+  if (s.data?.title && s.data.title !== showTitle) {
+    queries.push(`${s.data.title} ${epCode}`);
+    queries.push(`${s.data.title} S${String(season).padStart(2, "0")}`);
+  }
+
+  for (const q of queries) {
+    try {
+      const res = await (releasesCache.get(q) || fetch(`/api/search?q=${encodeURIComponent(q)}&enrich=0`).then(r => r.json()));
+      releasesCache.set(q, Promise.resolve(res));
+      const list = (res.results || []).filter(r => releaseMatches(r, s.data));
+      const epMatch = list.find(r => r.seeders > 0 && episodeMatchesRelease(r.title, season, episodeNumber));
+      if (epMatch) {
+        playRelease(epMatch);
+        return;
+      }
+      const seasonMatch = list.find(r => r.seeders > 0 && seasonMatchesRelease(r.title, season));
+      if (seasonMatch) {
+        playRelease(seasonMatch);
+        return;
+      }
+    } catch (e) {}
+  }
+
+  // 3. Fallback: best seeded release or report none
+  const best = primaryRelease();
+  if (best) {
+    playRelease(best);
+  } else {
+    showToast(`No streams found for ${epCode}`, true);
+  }
+}
+
 function findTitleEpisode(number) {
   const s = detailsState;
   const episode = s?.episodeChoices?.find(e => e.number === number);
   if (!episode) return;
-  if (episode.source) { playLibraryFrom(episode.source.file); return; }
-  s.releaseEpisode = `S${String(s.browseSeason).padStart(2, "0")}E${String(number).padStart(2, "0")}`;
+  if (episode.source) {
+    playLibraryFrom(episode.source.file);
+    return;
+  }
+  const season = s.browseSeason != null ? s.browseSeason : 1;
+  s.releaseEpisode = `S${String(season).padStart(2, "0")}E${String(number).padStart(2, "0")}`;
   s.showDownloads = true;
-  loadReleases(`${s.data.original_title || s.data.title} ${s.releaseEpisode}`, detailsRequestId, true);
+  loadReleases(`${s.data?.original_title || s.data?.title || s.item.clean_title || s.item.title} ${s.releaseEpisode}`, detailsRequestId, true);
   document.getElementById("titleDownloads")?.scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  playTrackerEpisode(season, number);
 }
 
 function personPageURL(person, filter = 'all') {
@@ -2420,19 +2539,36 @@ function renderTitleFolderPicker(s) {
   </div>`;
 }
 
+function positionTitleFolderPicker(trigger, menu) {
+  if (!trigger || !menu) return;
+  menu.classList.remove('open-up');
+  const triggerRect = trigger.getBoundingClientRect();
+  const menuRect = menu.getBoundingClientRect();
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+  const spaceBelow = viewportHeight - triggerRect.bottom;
+  const spaceAbove = triggerRect.top;
+  const menuHeight = menuRect.offsetHeight || 160;
+  if (spaceBelow < menuHeight + 12 && spaceAbove > spaceBelow) {
+    menu.classList.add('open-up');
+  }
+}
+
 function closeTitleFolderPicker(restoreFocus = false) {
   const menu = detailsBody.querySelector('.title-folder-menu:not([hidden])');
   if (!menu) return;
   menu.hidden = true;
+  menu.classList.remove('open-up');
   const trigger = menu.parentElement.querySelector('.title-folder-trigger');
-  trigger.setAttribute('aria-expanded', 'false');
-  if (restoreFocus) trigger.focus({ preventScroll: true });
+  if (trigger) trigger.setAttribute('aria-expanded', 'false');
+  if (restoreFocus && trigger) trigger.focus({ preventScroll: true });
 }
 
 function openTitleFolderPicker(trigger, last = false) {
   const menu = trigger.parentElement.querySelector('.title-folder-menu');
+  if (!menu) return;
   menu.hidden = false;
   trigger.setAttribute('aria-expanded', 'true');
+  positionTitleFolderPicker(trigger, menu);
   const options = [...menu.querySelectorAll('[role="menuitemradio"]')];
   (last ? options.at(-1) : menu.querySelector('[aria-checked="true"]') || options[0])?.focus({ preventScroll: true });
 }
@@ -2449,8 +2585,8 @@ function renderDetailsBody() {
   // from the banner's centre button; a title without a banner gets a
   // button here instead. ---
   const actions = [];
-  const seasonFile = d.media_type === "tv" && s.browseSeason != null ? titleEpisodeFiles(s.browseSeason).sort((a,b) => a.episode - b.episode)[0]?.file : libraryFileList()[0];
-  const playable = s.library ? seasonFile : (s.torrent || primaryRelease());
+  const seasonFile = (d.media_type === "tv" && s.browseSeason != null ? titleEpisodeFiles(s.browseSeason).sort((a,b) => a.episode - b.episode)[0]?.file : null) || libraryFileList()[0];
+  const playable = s.library ? seasonFile : (s.torrent || primaryRelease() || (s.releases === "loading" || s.loading));
   const playerId = currentPlayer();
   actions.push(`<div class="play-split">
     <button type="button" class="btn-primary btn-pill play-main" data-act="play"${!playable ? " disabled" : ""}>${playerLogo(playerId)}${PLAYERS[playerId].canOpen ? "Play in" : "Copy link for"} ${escapeHtml(PLAYERS[playerId].name)}</button>
@@ -2552,9 +2688,13 @@ function renderDetailsBody() {
     releases = s.releaseError ? `<div class="dt-status is-error">${escapeHtml(s.releaseError)} <button type="button" class="dt-link-btn" data-act="retry-releases">Try again</button></div>`
       : `<div class="dt-status">No releases of this title found on the tracker.</div>`;
   }
+  const releasesControls = [
+    s.library ? renderTitleFolderPicker(s) : "",
+    Array.isArray(s.releases) && s.releases.length > RELEASES_SHOWN
+      ? `<button type="button" class="dt-link-btn" data-act="toggle-releases">${s.showAllReleases ? "Show fewer" : "Show all"}</button>` : "",
+  ].filter(Boolean).join("");
   const releasesHead = searchEnabled ? `<div class="dt-section-head"><div class="section-label">Releases${Array.isArray(s.releases) && s.releases.length ? ` · ${s.releases.length}` : ""}</div>
-    ${Array.isArray(s.releases) && s.releases.length > RELEASES_SHOWN
-      ? `<button type="button" class="dt-link-btn" data-act="toggle-releases">${s.showAllReleases ? "Show fewer" : "Show all"}</button>` : ""}</div>` : "";
+    ${releasesControls ? `<div class="dt-releases-controls">${releasesControls}</div>` : ""}</div>` : "";
 
   const downloadReleases = releases;
   // Keep exact version/file controls for the server's storage workflow.
@@ -2571,7 +2711,7 @@ function renderDetailsBody() {
   const downloads = `<details class="dt-section title-downloads" id="titleDownloads"${s.showDownloads || !s.library ? " open" : ""}>
     <summary><h2 class="section-label">Downloads &amp; versions${s.releaseEpisode ? ` · ${escapeHtml(s.releaseEpisode)}` : ""}</h2><span class="title-section-note">Choose quality and manage files</span></summary>
     ${s.library ? `<div class="title-storage-info"><div class="title-storage-heading"><span class="title-storage-icon">${ICONS.check}</span><div><h3>Available on your server</h3><p>${escapeHtml(s.library.category || "Library")}${s.library.versions?.length > 1 ? ` · ${s.library.versions.length} versions` : ""} · ${libraryFileList().length} video files</p></div></div>${storedFiles ? `<details class="title-file-browser"${s.showStoredFiles || (s.libraryFiles && libraryFileList().length <= 3) ? " open" : ""}><summary><span>Browse files</span><span class="title-file-count">${libraryFileList().length}</span></summary>${storedFiles}</details>` : ""}</div>` : ""}
-    ${downloadReleases ? `<div class="title-tracker-releases">${s.library ? `<div class="title-tracker-target"><span>Download folder</span>${renderTitleFolderPicker(s)}</div>` : ""}${releasesHead}${downloadReleases}</div>` : searchEnabled && s.library ? `<p class="dt-status">Search torrents for a different quality or another season. <button type="button" class="dt-link-btn" data-act="find-versions">Search torrents</button></p>` : ""}
+    ${downloadReleases ? `<div class="title-tracker-releases">${releasesHead}${downloadReleases}</div>` : searchEnabled && s.library ? `<p class="dt-status">Search torrents for a different quality or another season. <button type="button" class="dt-link-btn" data-act="find-versions">Search torrents</button></p>` : ""}
     <p class="title-storage-note">Downloaded files are added to your library.</p>
   </details>`;
 
@@ -2677,8 +2817,24 @@ detailsBody.addEventListener("click", (e) => {
       else findYoutubeTrailers();
       break;
     case "download-best": { const best = primaryRelease(); if (best) downloadRelease(best); break; }
-    case "play": if (s.library) { const eps = libraryEpisodes(); const chosen = titleEpisodeFiles(s.browseSeason).sort((a,b) => a.episode - b.episode)[0]?.file; playLibraryFrom(chosen || (eps ? eps[0].file : libraryFileList()[0])); } else playRelease(s.torrent ? null : primaryRelease()); break;
-    case "play-file": playLibraryFile(libraryFileList()[Number(el.dataset.index)]); break;
+    case "play":
+      if (s.library) {
+        const eps = libraryEpisodes();
+        const chosen = titleEpisodeFiles(s.browseSeason).sort((a,b) => a.episode - b.episode)[0]?.file;
+        playLibraryFrom(chosen || (eps ? eps[0].file : libraryFileList()[0]));
+      } else if (s.torrent) {
+        playRelease(null);
+      } else {
+        const best = primaryRelease();
+        if (best) {
+          playRelease(best);
+        } else if (s.data?.media_type === "tv") {
+          playTrackerEpisode(s.browseSeason != null ? s.browseSeason : 1, 1);
+        } else {
+          showToast("Searching for streams…");
+        }
+      }
+      break;
     case "play-episode": playLibraryFrom(libraryEpisodes()[Number(el.dataset.index)].file); break;
     case "browse-season": selectTitleSeason(Number(el.dataset.season)); break;
     case "browse-episode": findTitleEpisode(Number(el.dataset.number)); break;
@@ -2724,6 +2880,14 @@ detailsBody.addEventListener('keydown', e => {
 document.addEventListener('click', e => {
   if (!e.target.closest('.title-folder-picker')) closeTitleFolderPicker();
 });
+window.addEventListener('resize', () => {
+  const menu = detailsBody.querySelector('.title-folder-menu:not([hidden])');
+  if (menu) positionTitleFolderPicker(menu.parentElement.querySelector('.title-folder-trigger'), menu);
+}, { passive: true });
+window.addEventListener('scroll', () => {
+  const menu = detailsBody.querySelector('.title-folder-menu:not([hidden])');
+  if (menu) positionTitleFolderPicker(menu.parentElement.querySelector('.title-folder-trigger'), menu);
+}, { passive: true });
 detailsBack.addEventListener("click", detailsGoBack);
 // Keeps the Discover panel's fixed height in sync with the real (sticky)
 // header height, same pattern Music Tube uses for its queue panel.

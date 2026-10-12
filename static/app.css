@@ -554,7 +554,8 @@
      chrome changing 100vh, etc.) would otherwise leave the page itself
      scrollable by that sliver. Hard-disable page scroll while Discover is
      open so scrolling can only ever happen inside the card list. */
-  body.discover-active { overflow: hidden; }
+  body.discover-active:not(.has-title-page) { overflow: hidden; }
+  body.has-title-page { overflow-y: auto !important; }
   .panel.discover-mode #discoverHeader { flex-shrink: 0; }
   .panel.discover-mode .search-dropdown.discover-grid.is-open {
     display: block;
@@ -2000,37 +2001,36 @@
    Downloads, exact files, and the existing player picker stay available. */
 body.has-title-page #layout,
 body.has-title-page > .top-bar .searchbar { display: none; }
-.title-page { display: none; width: min(100%, 1480px); margin: 0 auto; padding-bottom: 64px; }
+.title-page { display: none; width: 100%; margin: 0; padding-bottom: 64px; }
 .title-page.is-open:not([hidden]) { display: block; }
+#detailsModal.title-page,
+#detailsModal.title-page .details-box,
 .title-page .details-box,
 .title-page .details-box.has-banner {
-  max-width: none; max-height: none; width: 100%; padding: 0; overflow: visible;
+  max-width: none; max-height: none !important; width: 100%; padding: 0; overflow: visible !important;
   border: 0; border-radius: 0; box-shadow: none; background: transparent;
   backdrop-filter: none; -webkit-backdrop-filter: none; outline: none;
 }
-.title-page .dt-topbar {
-  position: sticky; top: var(--topbar-h, 72px); height: 64px;
-  display: flex; align-items: center; justify-content: space-between; gap: 16px;
-  padding: 10px clamp(20px, 4vw, 52px); z-index: 8;
-  background: var(--bg-base); border-bottom: 1px solid var(--border);
+body.has-title-page .top-bar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--surface-solid);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
 }
-.title-page .dt-topbtn {
-  position: static; width: auto; height: 40px; padding: 0 16px; gap: 8px;
-  border-radius: var(--radius-pill); color: var(--text); background: var(--surface);
-  font-size: 14px; font-weight: 600;
-}
-.title-page .dt-topbtn:hover { background: var(--surface-hover); }
-.title-page .dt-close::before, .title-page .dt-close::after { display: none; }
-.title-page .dt-media { aspect-ratio: auto; height: clamp(340px, 46vw, 590px); background-position: center 30%; }
+.title-page .dt-media { width: 100%; aspect-ratio: auto; height: clamp(340px, 46vw, 590px); background-position: center 30%; }
 .title-page .dt-media::after { background: linear-gradient(180deg, transparent 25%, rgba(0,0,0,.35) 55%, rgba(0,0,0,.9) 100%); }
-.title-page .dt-hero.has-backdrop .dt-info { padding: 0 clamp(20px, 4vw, 52px) 34px; }
+.title-page .dt-hero.has-backdrop .dt-info { max-width: 1480px; left: 0; right: 0; margin: 0 auto; padding: 0 clamp(20px, 4vw, 52px) 34px; }
 .title-page .dt-title { font-size: clamp(30px, 4.4vw, 52px); line-height: 1.06; letter-spacing: -.035em; text-wrap: balance; }
 .title-page .dt-meta { font-size: 15px; gap: 12px; }
 .title-page .dt-sub { font-size: 16px; }
-.title-page .dt-hero.no-backdrop { padding: 40px clamp(20px, 4vw, 52px) 0; }
+.title-page .dt-hero.no-backdrop { max-width: 1480px; margin: 0 auto; padding: 40px clamp(20px, 4vw, 52px) 0; }
 .title-page .dt-hero.no-backdrop .dt-poster { width: 150px; }
+.title-page .dt-hero.is-playing .dt-info { max-width: 1480px; margin: 0 auto; padding: 14px clamp(20px, 4vw, 52px) 0; }
 .title-page .dt-body,
 .title-page .details-box.has-banner .dt-body {
+  max-width: 1480px; margin: 0 auto;
   padding: 28px clamp(20px, 4vw, 52px) 40px; background: transparent;
   backdrop-filter: none; -webkit-backdrop-filter: none;
 }
@@ -2084,7 +2084,7 @@ body.has-title-page > .top-bar .searchbar { display: none; }
 .title-file-browser { margin: 14px 0 24px; }
 .title-file-browser > summary { cursor: pointer; color: var(--accent); font-size: 14px; margin-bottom: 12px; }
 .title-tracker-releases { margin-top: 20px; }
-.title-tracker-target { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; font-size: 13px; color: var(--text-secondary); }
+.dt-releases-controls { display: flex; align-items: center; gap: 12px; }
 .title-page .dt-release-title { display: block; font-size: 13px; white-space: normal; }
 .title-page .dt-release { padding: 14px 12px; }
 .title-page .dt-file-name { font-size: 13px; }
@@ -2115,7 +2115,6 @@ body.has-title-page > .top-bar .searchbar { display: none; }
   .title-page *, .title-page *::before, .title-page *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
 
-body.has-title-page .brand-text p { display: none; }
 .title-page .dt-actions > .dt-status-pill {
   flex: 0 1 auto; height: auto; min-height: 24px; padding: 0 4px;
   background: transparent; color: var(--text-secondary); border-radius: 0;
@@ -2143,6 +2142,11 @@ body.has-title-page .brand-text p { display: none; }
   min-width: 200px; max-width: min(320px, 80vw); max-height: 280px; overflow-y: auto;
   padding: 6px; border: 1px solid var(--border-strong); border-radius: 16px;
   background: #fff; box-shadow: 0 12px 32px #0004;
+}
+.title-folder-menu.open-up {
+  top: auto;
+  bottom: calc(100% + 8px);
+  box-shadow: 0 -12px 32px #0004;
 }
 .title-folder-menu[hidden] { display: none; }
 .title-folder-menu button {
@@ -2187,20 +2191,21 @@ html[data-theme="dark"] .title-folder-menu { background: #1c1c20; }
 }
 
 /* A single contextual header replaces the separate title toolbar. */
-.header-back { border: 0; cursor: pointer; width: 36px; height: 36px; border-radius: 10px; }
-.header-back svg { width: 20px; height: 20px; }
+.header-back { border: 0; cursor: pointer; width: 30px; height: 30px; border-radius: 9px; padding: 0; }
+.header-back svg { width: 15px; height: 15px; }
 .logo-mark[hidden] { display: none; }
 body.has-title-page #homeLogo { display: none; }
 body.has-title-page .brand-text p { display: block; }
 .brand-text.has-page-title h1, .brand-text.has-page-title p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.brand-text.has-page-title h1 { font-size: 16px; }
+.brand-text.has-page-title h1 { font-size: 14.5px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+.brand-text.has-page-title p { font-size: 12px; color: var(--text-secondary); margin: 1px 0 0; }
 .language-switch { display: flex; gap: 2px; padding: 3px; border: 1px solid var(--border); border-radius: var(--radius-pill); flex: none; }
 .language-switch button { background: transparent; border: 0; border-radius: var(--radius-pill); padding: 6px 8px; color: var(--text-secondary); font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
 .language-switch button[aria-pressed="true"] { background: var(--surface-hover); color: var(--text); }
 .language-switch button:focus-visible, .header-back:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 @media (max-width: 640px) {
   .top-bar header { gap: 8px; }
-  .brand-text.has-page-title h1 { font-size: 14px; }
-  .brand-text.has-page-title p { font-size: 11px; }
+  .brand-text.has-page-title h1 { font-size: 14.5px; }
+  .brand-text.has-page-title p { font-size: 12px; }
   .language-switch button { padding: 6px; }
 }
