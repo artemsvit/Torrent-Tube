@@ -36,7 +36,8 @@ jobs:
       - name: Server tests inside the image
         run: >
           docker run --rm --entrypoint python3
-          -v "$PWD/tests:/app/tests:ro" -w /app torrenttube:test
+          -v "$PWD/tests:/app/tests:ro" -v "$PWD/nas-update.sh:/app/nas-update.sh:ro"
+          -w /app torrenttube:test
           -m unittest discover -s tests
       # The container as the NAS runs it: starts, serves the page and its
       # script, and answers the API.

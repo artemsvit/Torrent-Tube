@@ -58,13 +58,22 @@ tab. It needs the repository secrets `DOCKERHUB_USERNAME` and
 
 The NAS updates itself: `nas-update.sh` (next to `docker-compose.yml` in
 `/volume1/docker/torrenttube`) runs every hour from DSM Task Scheduler. It
-pulls `latest`, and when Docker Hub has a new image it recreates the container
-and deletes the old image, so only one stays. It never restarts while a film
-is streaming; it tries again the next hour. It writes what it did to
+checks playback before pulling `latest`, then recreates the container with that
+image while preserving its configured folders and settings. It checks the new
+image ID and waits for the app to respond before removing the old image. A
+stopped container is restarted even when its image is already current. While a
+film is streaming, it defers the pull until the next run. It writes what it did to
 `nas-update.log` in the same folder. Set it up once in DSM: Control Panel →
 Task Scheduler → Create → Scheduled Task → User-defined script; User: root;
 Schedule: daily, every hour; Run command:
 `/volume1/docker/torrenttube/nas-update.sh`.
+
+After changing the updater in this repository, replace that file on the NAS
+with the current `nas-update.sh`; updating the Docker image does not update a
+DSM scheduled script. The scheduled command stays the same. If a recreation
+fails, `nas-update.log` contains the Compose error and retains the old image.
+An older image can temporarily appear as `<none>` after pulling a new `latest`
+tag. This does not mean the updater built an untagged image.
 
 By hand, from a machine with Docker:
 
