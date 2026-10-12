@@ -2669,8 +2669,7 @@ function renderDetailsBody() {
   if (s.releases === "loading") {
     releases = `<div class="dt-status">Searching the tracker…</div>`;
   } else if (Array.isArray(s.releases) && s.releases.length) {
-    const shown = s.showAllReleases ? s.releases : s.releases.slice(0, RELEASES_SHOWN);
-    releases = `<div class="dt-releases">${shown.map((r, i) => {
+    releases = `<div class="dt-releases">${s.releases.map((r, i) => {
       const key = releaseKey(r);
       const tags = releaseTags(r.title).map(t => `<span class="dt-tag${t.res ? " is-res" : ""}">${escapeHtml(t.label)}</span>`).join("");
       const isCurrent = item.size_label && key === releaseKey(item);
@@ -2689,11 +2688,7 @@ function renderDetailsBody() {
     releases = s.releaseError ? `<div class="dt-status is-error">${escapeHtml(s.releaseError)} <button type="button" class="dt-link-btn" data-act="retry-releases">Try again</button></div>`
       : `<div class="dt-status">No releases of this title found on the tracker.</div>`;
   }
-  const releasesControls = [
-    s.library ? renderTitleFolderPicker(s) : "",
-    Array.isArray(s.releases) && s.releases.length > RELEASES_SHOWN
-      ? `<button type="button" class="dt-link-btn" data-act="toggle-releases">${s.showAllReleases ? "Show fewer" : "Show all"}</button>` : "",
-  ].filter(Boolean).join("");
+  const releasesControls = s.library ? renderTitleFolderPicker(s) : "";
   const releasesHead = searchEnabled ? `<div class="dt-section-head"><div class="section-label">Releases${Array.isArray(s.releases) && s.releases.length ? ` · ${s.releases.length}` : ""}</div>
     ${releasesControls ? `<div class="dt-releases-controls">${releasesControls}</div>` : ""}</div>` : "";
 
@@ -2842,11 +2837,10 @@ detailsBody.addEventListener("click", (e) => {
     case "retry-episodes": delete s.episodeNames[s.browseSeason]; delete s.episodeErrors[s.browseSeason]; renderDetailsBody(); break;
     case "retry-releases": loadReleases(s.releaseEpisode ? `${s.data.original_title || s.data.title} ${s.releaseEpisode}` : s.data.title, detailsRequestId, true); break;
     case "find-versions": s.showDownloads = true; s.releaseEpisode = null; loadReleases(s.data.title, detailsRequestId, true); break;
-    case "play-release": playRelease((s.showAllReleases ? s.releases : s.releases.slice(0, RELEASES_SHOWN))[Number(el.dataset.index)]); break;
+    case "play-release": playRelease(s.releases[Number(el.dataset.index)]); break;
     case "pick-player": openPlayerPicker(); break;
     case "favorite": toggleFavorite(s); break;
-    case "download-release": downloadRelease((s.showAllReleases ? s.releases : s.releases.slice(0, RELEASES_SHOWN))[Number(el.dataset.index)]); break;
-    case "toggle-releases": s.showAllReleases = !s.showAllReleases; renderDetailsBody(); break;
+    case "download-release": downloadRelease(s.releases[Number(el.dataset.index)]); break;
     case "more": {
       const overviewEl = detailsBody.querySelector(".dt-overview");
       const expanded = overviewEl.classList.toggle("is-expanded");
