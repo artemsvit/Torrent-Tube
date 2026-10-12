@@ -270,7 +270,10 @@ document.addEventListener("keydown", (e) => {
   if (getAppModal.classList.contains("is-open")) { closeGetApp(); return; }
   if (helperModal.classList.contains("is-open")) { closeVlcHelper(); return; }
   if (playerModal.classList.contains("is-open")) { closePlayerPicker(); return; }
-  if (detailsModal.classList.contains("is-open")) { closeDetails(); return; }
+  if (settingsModal.classList.contains("is-open")) { closeSettings(); return; }
+  if (uploadModal.classList.contains("is-open")) { closeUploadModal(); return; }
+  if (confirmModal.classList.contains("is-open")) { closeConfirm(false); return; }
+  if (detailsModal.classList.contains("is-open")) { detailsGoBack(); return; }
   closeSearchDropdown(); closeUploadModal(); closeSettings(); closeConfirm(false);
 });
 
@@ -1728,7 +1731,8 @@ const RELEASES_SHOWN = 5;
 
 let detailsRequestId = 0;
 let detailsState = null;
-let detailsHistory = [];
+let titleReturnFocus = null;
+let titleWorkspaceScroll = 0;
 const detailsCache = new Map();
 const releasesCache = new Map();
 
@@ -1802,10 +1806,39 @@ function roughTitle(raw) {
     .replace(/\b(19|20)\d{2}\b.*$/, "").trim() || raw;
 }
 
-function openDetails(item, torrent = null, { push = false } = {}) {
-  if (push && detailsState) detailsHistory.push({ item: detailsState.item, torrent: detailsState.torrent });
-  if (!push) detailsHistory = [];
-  setDetailsBackVisible(detailsHistory.length > 0);
+function titlePageURL(item, torrent, season) {
+  const url = new URL(location.href);
+  ["title", "type", "id", "library", "torrent", "season"].forEach(k => url.searchParams.delete(k));
+  url.searchParams.set("title", item.clean_title || item.title);
+  if (item.tmdb_id && item.media_type) {
+    url.searchParams.set("type", item.media_type);
+    url.searchParams.set("id", item.tmdb_id);
+  }
+  if (item.library) url.searchParams.set("library", item.library.id);
+  if (torrent) url.searchParams.set("torrent", torrent.id);
+  if (season != null) url.searchParams.set("season", season);
+  return url;
+}
+
+function openDetails(item, torrent = null, { fromHistory = false, season = null } = {}) {
+  if (!item.library && item.tmdb_id) {
+    const local = libraryItems.find(t => t.tmdb_id === item.tmdb_id && t.media_type === item.media_type);
+    if (local) item = { ...item, library: local };
+  }
+  if (!detailsState) {
+    titleReturnFocus = document.activeElement;
+    titleWorkspaceScroll = window.scrollY;
+    if (!fromHistory) history.replaceState({ ...history.state, ttWorkspace: true, ttScroll: titleWorkspaceScroll }, "", location.href);
+  } else if (!fromHistory) {
+    history.replaceState({ ...history.state, ttScroll: window.scrollY }, "", location.href);
+  }
+  if (!fromHistory) {
+    const depth = (history.state?.ttDepth || 0) + 1;
+    history.pushState({ ttTitle: { item, torrent }, ttDepth: depth, ttSeason: season }, "", titlePageURL(item, torrent, season));
+  }
+  setDetailsBackVisible(true);
+  detailsModal.hidden = false;
+  document.body.classList.add("has-title-page");
 
   const requestId = ++detailsRequestId;
   destroyTrailerPlayer(detailsState);
@@ -1813,18 +1846,20 @@ function openDetails(item, torrent = null, { push = false } = {}) {
   loadYouTubeApi().catch(() => {});
   detailsState = {
     item, torrent,
-    data: { title: item.clean_title || item.title, poster: item.poster, rating: item.rating, overview: item.overview },
+    data: { title: item.clean_title || item.title, poster: item.poster, rating: item.rating, overview: item.overview, tmdb_id: item.tmdb_id, media_type: item.media_type || item.library?.media_type || (item.library?.kind === "tv" ? "tv" : null) },
     loading: true, error: "",
     trailers: [], trailerSource: null, activeTrailer: null, playing: false, findingTrailer: false, noTrailer: false,
     releases: item.releases || null, showAllReleases: false, added: new Set(),
-    category: null,
+    category: null, browseSeason: season, releaseRequest: 0,
     library: item.library || null, libraryFiles: null,
   };
   if (item.library) loadLibraryFiles(requestId);
   renderDetailsHero();
   renderDetailsBody();
   detailsModal.classList.add("is-open");
-  detailsModal.querySelector(".modal-box").scrollTop = 0;
+  window.scrollTo({ top: 0 });
+  detailsModal.querySelector(".details-box").focus({ preventScroll: true });
+  document.title = `${item.clean_title || item.title} · Torrent Tube`;
 
   const cacheKey = item.tmdb_id && item.media_type ? `${item.media_type}:${item.tmdb_id}` : `title:${item.title}`;
   const params = item.tmdb_id && item.media_type
@@ -1841,6 +1876,7 @@ function openDetails(item, torrent = null, { push = false } = {}) {
       renderDetailsBody();
       if (detailsState.trailers.length) prepareTrailerPlayer(detailsState.trailers[0].key);
       loadReleases(data.title, requestId);
+      if (fromHistory && history.state?.ttScroll) window.scrollTo({ top: history.state.ttScroll });
     })
     .catch(e => {
       detailsCache.delete(cacheKey);
@@ -1858,23 +1894,60 @@ function setDetailsBackVisible(visible) {
   detailsModal.querySelector(".details-box").classList.toggle("has-back", visible);
 }
 
-function closeDetails() {
+function closeDetails({ updateURL = true } = {}) {
   destroyTrailerPlayer(detailsState);
   detailsModal.classList.remove("is-open");
-  detailsRequestId++;          // drop any response still in flight
-  detailsBody.innerHTML = "";  // also stops a playing trailer
+  detailsModal.hidden = true;
+  document.body.classList.remove("has-title-page");
+  detailsRequestId++;
+  detailsBody.innerHTML = "";
   detailsState = null;
-  detailsHistory = [];
+  document.title = "Torrent Tube";
+  if (updateURL) {
+    const url = new URL(location.href);
+    ["title", "type", "id", "library", "torrent", "season"].forEach(k => url.searchParams.delete(k));
+    history.replaceState({ ttWorkspace: true, ttScroll: titleWorkspaceScroll }, "", url);
+  }
+  window.scrollTo({ top: history.state?.ttScroll ?? titleWorkspaceScroll });
+  if (titleReturnFocus?.isConnected) titleReturnFocus.focus({ preventScroll: true });
 }
 
 function detailsGoBack() {
-  const prev = detailsHistory.pop();
-  if (!prev) return;
-  const history = detailsHistory;
-  openDetails(prev.item, prev.torrent);
-  detailsHistory = history;
-  setDetailsBackVisible(detailsHistory.length > 0);
+  if (history.state?.ttDepth > 0) history.back();
+  else closeDetails();
 }
+
+async function restoreTitleRoute() {
+  const params = new URLSearchParams(location.search);
+  if (!params.has("title")) { closeDetails({ updateURL: false }); return; }
+  const previous = history.state?.ttTitle;
+  const sameIdentity = params.has("id") ? String(previous?.item.tmdb_id) === params.get("id") && previous?.item.media_type === params.get("type")
+    : previous?.item.title === params.get("title") || previous?.item.clean_title === params.get("title");
+  const cached = sameIdentity && (!params.has("library") || previous?.item.library?.id === params.get("library")) ? previous : null;
+  let item = cached?.item || { title: params.get("title"), clean_title: params.get("title"),
+    tmdb_id: Number(params.get("id")) || null, media_type: params.get("type") };
+  let torrent = cached?.torrent || null;
+  // A share link or reload restores the local playback source from the server.
+  if (params.has("library") && !item.library) {
+    try {
+      const data = await fetch("/api/library").then(r => r.json());
+      const local = (data.items || []).find(t => t.id === params.get("library"));
+      if (local) item = { ...item, library: local, poster: local.poster, rating: local.rating };
+    } catch (e) { showToast("Couldn't read the server library", true); }
+  }
+  if (params.has("torrent") && !torrent) {
+    try {
+      const data = await fetch("/api/torrents").then(r => r.json());
+      torrent = (data.torrents || []).find(t => t.id === params.get("torrent")) || null;
+    } catch (e) { showToast("Couldn't read downloads", true); }
+  }
+  // Ignore a late restore after the user has already navigated elsewhere.
+  if (location.search !== params.toString() && new URLSearchParams(location.search).toString() !== params.toString()) return;
+  const rawSeason = params.get("season");
+  const season = rawSeason == null ? null : Number(rawSeason);
+  openDetails(item, torrent, { fromHistory: true, season: Number.isInteger(season) && season >= 0 ? season : null });
+}
+window.addEventListener("popstate", restoreTitleRoute);
 
 // Does a tracker row belong to this title? The tracker search is by name,
 // so "Дюна" also returns "Дюна: Частина друга (2024)" - the year tells
@@ -1890,15 +1963,18 @@ function releaseMatches(r, d) {
   return years.some(y => Math.abs(y - start) <= 1);
 }
 
-async function loadReleases(query, requestId) {
-  if (detailsState && detailsState.library) return;  // its own files instead
+async function loadReleases(query, requestId, force = false) {
+  if (detailsState && detailsState.library && !force) return;  // its own files instead
   // A grouped search card already carries every version of its title -
   // show those straight away, then add whatever the title search finds.
-  const own = detailsState.item.releases || [];
+  const state = detailsState;
+  const releaseRequest = ++state.releaseRequest;
+  const own = state.releaseEpisode ? [] : state.item.releases || [];
   if (!searchEnabled || !query) { detailsState.releases = own; renderDetailsBody(); return; }
   detailsState.releases = own.length ? own : "loading";
+  state.releaseError = "";
   renderDetailsBody();
-  let rows = [];
+  let rows = [], releaseError = "";
   try {
     const request = releasesCache.get(query) || fetch(`/api/search?q=${encodeURIComponent(query)}&enrich=0`).then(res => res.json());
     releasesCache.set(query, request);
@@ -1907,10 +1983,12 @@ async function loadReleases(query, requestId) {
     rows = data.results || [];
   } catch (e) {
     releasesCache.delete(query);
+    releaseError = e.message || "Couldn't search for releases. Try again.";
   }
-  if (requestId !== detailsRequestId) return;
+  if (requestId !== detailsRequestId || detailsState !== state || state.releaseRequest !== releaseRequest) return;
+  state.releaseError = releaseError;
   const { item, data: d } = detailsState;
-  const current = item.size_label ? releaseKey(item) : null;
+  const current = !state.releaseEpisode && item.size_label ? releaseKey(item) : null;
   const known = new Set([current, ...own.map(releaseKey)]);
   rows = rows.filter(r => !known.has(releaseKey(r)) && releaseMatches(r, d));
   rows = [...own.filter(r => releaseKey(r) !== current), ...rows];
@@ -2107,6 +2185,9 @@ function renderDetailsHero() {
     if (!brand || brand.dataset.seed !== (d.title || "")) { brand?.remove(); media.insertAdjacentHTML("afterbegin", brandArt(d.title, true)); }
   } else brand?.remove();
   hero.className = `dt-hero ${hasBackdrop ? "has-backdrop" : "no-backdrop"}${playing ? " is-playing" : ""}${s.playerReady ? " player-ready" : ""}`;
+  const playerSlot = hero.querySelector(".dt-player-slot");
+  playerSlot.setAttribute("aria-hidden", playing ? "false" : "true");
+  playerSlot.querySelector("iframe")?.setAttribute("tabindex", playing ? "0" : "-1");
   detailsModal.querySelector(".details-box").classList.toggle("has-banner", hasBackdrop);
 
   let overlay = "";
@@ -2131,22 +2212,94 @@ function renderDetailsHero() {
     </div>`;
 }
 
+function titleEpisodeFiles(season) {
+  const files = [];
+  for (const file of libraryFileList()) {
+    const identity = episodeOf(file);
+    if (identity && identity.season === season) files.push({ ...identity, file });
+  }
+  return files;
+}
+
+function renderTitleEpisodes(s) {
+  if (s.data.media_type !== "tv") return "";
+  const local = libraryFileList().map(episodeOf).filter(Boolean);
+  const seasons = [...new Set([...(s.data.season_list || []).map(x => x.number), ...local.map(x => x.season)])].sort((a, b) => a - b);
+  if (!seasons.length) return "";
+  if (!seasons.includes(s.browseSeason)) s.browseSeason = seasons.find(n => n > 0) ?? seasons[0];
+  const season = s.browseSeason;
+  if (!s.episodeNames?.[season]) loadEpisodeNames(season);
+  const pending = !s.episodeNames?.[season] || s.episodeNames[season] === "loading";
+  const known = pending ? {} : s.episodeNames[season];
+  const files = titleEpisodeFiles(season);
+  const numbers = new Set(Object.keys(known).map(Number));
+  files.forEach(f => { for (let n = f.episode; n <= f.last; n++) numbers.add(n); });
+  s.episodeChoices = [...numbers].sort((a, b) => a - b).map(number => ({ number, info: known[number] || {}, source: files.find(f => number >= f.episode && number <= f.last) }));
+  const cards = s.episodeChoices.map(({ number, info, source }) => {
+    const available = !!source;
+    const action = available ? "Play episode" : searchEnabled ? "Find a version" : "Not on server";
+    const combined = source && source.last > source.episode ? ` · Episodes ${source.episode}–${source.last} in one file` : "";
+    return `<article class="title-episode-card">
+      <button type="button" class="title-episode-action" data-act="browse-episode" data-number="${number}"${!available && !searchEnabled ? " disabled" : ""} aria-label="${escapeHtml(`${action}: ${number}. ${info.name || `Episode ${number}`}`)}">
+        <div class="title-episode-art">${info.still ? `<img src="${escapeHtml(info.still)}" alt="" loading="lazy">` : `<span class="title-episode-placeholder">${PLAY_ICON}</span>`}
+          <span class="title-episode-badge${available ? " is-available" : ""}">${available ? "On your server" : searchEnabled ? "Find a version" : "Not on server"}</span>
+          ${info.runtime ? `<span class="title-episode-runtime">${info.runtime} min</span>` : ""}
+        </div>
+        <h3>${number}. ${escapeHtml(info.name || `Episode ${number}`)}</h3>
+      </button>
+      <p class="title-episode-overview">${escapeHtml(info.overview || (source ? "" : "Episode details are not available yet."))}</p>
+      ${combined ? `<p class="title-episode-file-note">${escapeHtml(combined.slice(3))}</p>` : ""}
+    </article>`;
+  }).join("");
+  const error = s.episodeErrors?.[season];
+  const status = error ? `<div class="dt-status is-error">Couldn't load episode details. <button class="dt-link-btn" data-act="retry-episodes">Try again</button></div>`
+    : pending && !cards ? `<div class="dt-status" role="status">Loading episodes…</div>`
+    : !cards ? `<div class="dt-status">No episodes are listed for this season yet.</div>` : "";
+  return `<section class="dt-section title-episodes" aria-label="Episodes">
+    <div class="dt-section-head"><h2 class="section-label">Episodes</h2><span class="title-section-note">${s.episodeChoices.length ? `${s.episodeChoices.length} episodes` : ""}</span></div>
+    <div class="dt-seasons-pick" role="group" aria-label="Choose season">${seasons.map(n => `<button type="button" class="library-chip${n === season ? " is-active" : ""}" data-act="browse-season" data-season="${n}" aria-pressed="${n === season}">${n === 0 ? "Specials" : `Season ${n}`}</button>`).join("")}</div>
+    ${status}<div class="title-episode-row">${cards}</div>
+  </section>`;
+}
+
+function selectTitleSeason(season) {
+  const s = detailsState;
+  if (!s || !Number.isInteger(season) || season < 0) return;
+  s.browseSeason = season;
+  history.replaceState({ ...history.state, ttSeason: season }, "", titlePageURL(s.item, s.torrent, season));
+  renderDetailsBody();
+}
+
+function findTitleEpisode(number) {
+  const s = detailsState;
+  const episode = s?.episodeChoices?.find(e => e.number === number);
+  if (!episode) return;
+  if (episode.source) { playLibraryFrom(episode.source.file); return; }
+  s.releaseEpisode = `S${String(s.browseSeason).padStart(2, "0")}E${String(number).padStart(2, "0")}`;
+  s.showDownloads = true;
+  loadReleases(`${s.data.original_title || s.data.title} ${s.releaseEpisode}`, detailsRequestId, true);
+  document.getElementById("titleDownloads")?.scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+}
+
 function renderDetailsBody() {
   const body = document.getElementById("dtBody");
   if (!body || !detailsState) return;
   const s = detailsState, d = s.data, item = s.item;
 
+  const focused = body.contains(document.activeElement) ? document.activeElement.closest("[data-act]") : null;
+  const focusKey = focused ? { ...focused.dataset } : null;
   // --- actions: Play in <player>, Download + folder. The trailer plays
   // from the banner's centre button; a title without a banner gets a
   // button here instead. ---
   const actions = [];
-  const playable = s.library ? libraryFileList()[0] : (s.torrent || primaryRelease());
+  const seasonFile = d.media_type === "tv" && s.browseSeason != null ? titleEpisodeFiles(s.browseSeason).sort((a,b) => a.episode - b.episode)[0]?.file : libraryFileList()[0];
+  const playable = s.library ? seasonFile : (s.torrent || primaryRelease());
   const playerId = currentPlayer();
   actions.push(`<div class="play-split">
     <button type="button" class="btn-primary btn-pill play-main" data-act="play"${!playable ? " disabled" : ""}>${playerLogo(playerId)}${PLAYERS[playerId].canOpen ? "Play in" : "Copy link for"} ${escapeHtml(PLAYERS[playerId].name)}</button>
     <button type="button" class="btn-primary btn-pill play-more" data-act="pick-player" title="Choose the player" aria-label="Choose the player">${CHEVRON_DOWN}</button>
   </div>`);
-  const saved = favorites.some(f => f.id === favoriteId(s));
+  const saved = titleFavorites(s).length > 0;
   actions.push(`<button type="button" class="btn-secondary dt-favorite${saved ? " is-saved" : ""}" data-act="favorite" aria-pressed="${saved}" title="${saved ? "Remove from Favorites" : "Add to Favorites"}">${saved ? ICONS.heartFilled : ICONS.heart}${saved ? "Unfavorite" : "Favorite"}</button>`);
   if (!detailsHasBanner(s) && !s.playing && !s.loading) {
     if (s.noTrailer) {
@@ -2157,8 +2310,10 @@ function renderDetailsBody() {
     }
   }
   if (s.library) {
+    if (!s.category) s.category = currentCategories.includes(s.library.category) ? s.library.category : categoryForKind(d.kind) || getDefaultCategory();
     const where = (s.library.versions || []).length > 1 ? `${s.library.versions.length} versions` : s.library.category;
     actions.push(`<span class="dt-status-pill">In your library${where ? ` · ${escapeHtml(where)}` : ""}</span>`);
+    if (searchEnabled) actions.push(`<button type="button" class="btn-secondary" data-act="find-versions">${ICONS.download}Find other versions</button>`);
   } else if (s.torrent) {
     const t = s.torrent;
     const done = t.state === "finished" || t.state === "seeding";
@@ -2216,10 +2371,6 @@ function renderDetailsBody() {
       ${p.role ? `<div class="dt-person-role">${escapeHtml(p.role)}</div>` : ""}
     </a>`).join("");
 
-  // --- seasons ---
-  const seasons = (d.season_list || []).map(se =>
-    `<span class="dt-chip"><b>S${se.number}</b>${se.year ? ` · ${se.year}` : ""}${se.episodes ? ` · ${se.episodes} ep.` : ""}</span>`).join("");
-
   // --- releases ---
   let releases = "";
   if (s.releases === "loading") {
@@ -2242,47 +2393,31 @@ function renderDetailsBody() {
       </div>`;
     }).join("")}</div>`;
   } else if (Array.isArray(s.releases) && searchEnabled) {
-    releases = `<div class="dt-status">No releases of this title found on the tracker.</div>`;
+    releases = s.releaseError ? `<div class="dt-status is-error">${escapeHtml(s.releaseError)} <button type="button" class="dt-link-btn" data-act="retry-releases">Try again</button></div>`
+      : `<div class="dt-status">No releases of this title found on the tracker.</div>`;
   }
   const releasesHead = searchEnabled ? `<div class="dt-section-head"><div class="section-label">Releases${Array.isArray(s.releases) && s.releases.length ? ` · ${s.releases.length}` : ""}</div>
     ${Array.isArray(s.releases) && s.releases.length > RELEASES_SHOWN
       ? `<button type="button" class="dt-link-btn" data-act="toggle-releases">${s.showAllReleases ? "Show fewer" : "Show all"}</button>` : ""}</div>` : "";
 
-  // --- a library title's own files (its versions' videos, episodes in order) ---
-  const episodes = s.library && s.libraryFiles ? libraryEpisodes() : null;
-  if (episodes) {
-    const seasons = [...new Set(episodes.map(e => e.season))];
-    if (!seasons.includes(s.librarySeason)) s.librarySeason = seasons[0];
-    const names = (s.episodeNames || {})[s.librarySeason];
-    if (!names) loadEpisodeNames(s.librarySeason);
-    const known = names && names !== "loading" ? names : {};
-    releases = `${seasons.length > 1 ? `<div class="dt-seasons-pick">${seasons.map(n =>
-        `<button type="button" class="library-chip${n === s.librarySeason ? " is-active" : ""}" data-act="lib-season" data-season="${n}">Season ${n}</button>`).join("")}</div>` : ""}
-      <div class="dt-files">${episodes.map((e, i) => e.season !== s.librarySeason ? "" : (() => {
-        const info = known[e.episode] || {};
-        // Two episodes in one file: both names, both run times.
-        const second = e.last > e.episode ? known[e.last] || {} : null;
-        const number = second ? `${e.episode}–${e.last}` : `${e.episode}`;
-        const title = second ? [info.name, second.name].filter(Boolean).join(" & ") : info.name;
-        const runtime = (info.runtime || 0) + (second && second.runtime || 0);
-        const sub = [runtime ? `${runtime} min` : "", info.overview || ""].filter(Boolean).join(" · ") || e.file.name;
-        return `<button type="button" class="dt-episode" data-act="play-episode" data-index="${i}" title="Play from here in ${escapeHtml(PLAYERS[playerId].name)} - the next episodes follow">
-          ${info.still ? `<img class="dt-episode-still" src="${escapeHtml(info.still)}" alt="" loading="lazy">` : `<div class="dt-episode-still"></div>`}
-          <div class="dt-episode-text"><div class="dt-episode-title">${number}. ${escapeHtml(title || `Episode ${number}`)}</div><div class="dt-episode-sub">${escapeHtml(sub)}</div></div>
-          <span class="action-btn">${ICONS.play}</span></button>`; })()).join("")}</div>`;
-  } else if (s.library) {
+  const downloadReleases = releases;
+  // Keep exact version/file controls for the server's storage workflow.
+  let storedFiles = "";
+  if (s.library) {
     const files = libraryFileList();
-    const list = !s.libraryFiles ? `<div class="dt-status">Reading the folder…</div>`
-      : `<div class="dt-files">${files.map((f, i) => `<div class="dt-file">
-          <div class="dt-file-name" title="${escapeHtml(f.path)}">${escapeHtml(f.name)}</div>
-          <div class="dt-file-size">${formatBytes(f.size)}</div>
-          <button type="button" class="action-btn" data-act="play-file" data-index="${i}" title="Play in ${escapeHtml(PLAYERS[playerId].name)}">${ICONS.play}</button>
-        </div>`).join("")}</div>`;
-    releases = list;
+    storedFiles = !s.libraryFiles ? `<div class="dt-status" role="status">Reading the folder…</div>` : files.length ? `<div class="dt-files">${files.map((f, i) => `
+      <div class="dt-file"><div class="dt-file-name">${escapeHtml(f.name)}</div>
+      <div class="dt-file-size">${formatBytes(f.size)}</div>
+      <button type="button" class="action-btn" data-act="play-file" data-index="${i}" title="Play this exact file in ${escapeHtml(PLAYERS[playerId].name)}" aria-label="Play ${escapeHtml(f.name)}">${ICONS.play}</button></div>`).join("")}</div>`
+      : `<div class="dt-status">No video files were found in this folder. Refresh the library in Downloads &amp; storage.</div>`;
   }
-  const filesHead = !s.library ? "" : episodes
-    ? `<div class="dt-section-head"><div class="section-label">Episodes</div></div>`
-    : `<div class="dt-section-head"><div class="section-label">${libraryFileList().length > 1 ? "Versions" : "File"}</div></div>`;
+  const episodeSection = renderTitleEpisodes(s);
+  const downloads = `<details class="dt-section title-downloads" id="titleDownloads"${s.showDownloads || !s.library ? " open" : ""}>
+    <summary><h2 class="section-label">Downloads &amp; versions${s.releaseEpisode ? ` · ${escapeHtml(s.releaseEpisode)}` : ""}</h2><span class="title-section-note">Choose quality and manage files</span></summary>
+    ${s.library ? `<div class="title-storage-info"><h3>Files on your server</h3><p>${escapeHtml(s.library.category || "Library")}${s.library.versions?.length > 1 ? ` · ${s.library.versions.length} versions` : ""} · ${libraryFileList().length} video files</p>${storedFiles ? `<details class="title-file-browser"${s.showStoredFiles || (s.libraryFiles && libraryFileList().length <= 3) ? " open" : ""}><summary>Browse server files</summary>${storedFiles}</details>` : ""}</div>` : ""}
+    ${downloadReleases ? `<div class="title-tracker-releases">${s.library ? `<label class="title-tracker-target">Download folder <select class="inline-category-select" data-act="category">${currentCategories.map(c => `<option value="${escapeHtml(c)}"${c === s.category ? " selected" : ""}>${escapeHtml(c)}</option>`).join("")}</select></label>` : ""}${releasesHead}${downloadReleases}</div>` : searchEnabled && s.library ? `<p class="dt-status">Want a different quality or another season? <button type="button" class="dt-link-btn" data-act="find-versions">Find other versions</button></p>` : ""}
+    <p class="title-storage-note">Downloads remain in the selected server folder. <button type="button" class="dt-link-btn" data-act="workspace">Open Downloads &amp; storage</button></p>
+  </details>`;
 
   // --- more like this ---
   const recs = (d.recommendations || []).map((r, i) => `
@@ -2294,16 +2429,22 @@ function renderDetailsBody() {
 
   body.innerHTML = `
     <div class="dt-actions">${actions.join("")}</div>
-    <div class="dt-cols">
-      <div>${overview}</div>
-      ${facts.length ? `<div class="dt-facts">${facts.join("")}</div>` : ""}
-    </div>
-    ${people ? `<div class="dt-section"><div class="dt-section-head"><div class="section-label">Cast &amp; crew</div></div><div class="dt-row">${people}</div></div>` : ""}
-    ${seasons && !(s.library && s.libraryFiles && libraryEpisodes()) ? `<div class="dt-section"><div class="dt-section-head"><div class="section-label">Seasons</div></div><div class="dt-seasons">${seasons}</div></div>` : ""}
-    ${s.library ? `<div class="dt-section">${filesHead}${releases}</div>` : releasesHead || releases ? `<div class="dt-section">${releasesHead}${releases}</div>` : ""}
-    ${recs ? `<div class="dt-section"><div class="dt-section-head"><div class="section-label">More like this</div></div><div class="dt-row">${recs}</div></div>` : ""}
+    <div class="title-overview">${overview}</div>
+    ${episodeSection}
+    ${people ? `<section class="dt-section"><div class="dt-section-head"><h2 class="section-label">Cast &amp; crew</h2></div><div class="dt-row">${people}</div></section>` : ""}
+    ${facts.length ? `<section class="dt-section"><div class="dt-section-head"><h2 class="section-label">Information</h2></div><div class="dt-facts">${facts.join("")}</div></section>` : ""}
+    ${downloads}
+    ${recs ? `<section class="dt-section"><div class="dt-section-head"><h2 class="section-label">More like this</h2></div><div class="dt-row">${recs}</div></section>` : ""}
   `;
+  const storage = document.getElementById("titleDownloads");
+  storage.addEventListener("toggle", () => { if (detailsState === s && storage.isConnected) s.showDownloads = storage.open; });
+  const fileBrowser = body.querySelector(".title-file-browser");
+  fileBrowser?.addEventListener("toggle", () => { if (detailsState === s && fileBrowser.isConnected) s.showStoredFiles = fileBrowser.open; });
 
+  if (focusKey?.act) {
+    const selector = Object.entries(focusKey).map(([key, value]) => `[data-${key.replace(/[A-Z]/g, c => `-${c.toLowerCase()}`)}="${CSS.escape(value)}"]`).join("");
+    body.querySelector(selector)?.focus({ preventScroll: true });
+  }
   // Only offer "More" when the clamp actually cut something off.
   const overviewEl = body.querySelector(".dt-overview");
   const moreBtn = body.querySelector('[data-act="more"]');
@@ -2344,10 +2485,15 @@ detailsBody.addEventListener("click", (e) => {
       else findYoutubeTrailers();
       break;
     case "download-best": { const best = primaryRelease(); if (best) downloadRelease(best); break; }
-    case "play": if (s.library) { const eps = libraryEpisodes(); playLibraryFrom(eps ? eps[0].file : libraryFileList()[0]); } else playRelease(s.torrent ? null : primaryRelease()); break;
+    case "play": if (s.library) { const eps = libraryEpisodes(); const chosen = titleEpisodeFiles(s.browseSeason).sort((a,b) => a.episode - b.episode)[0]?.file; playLibraryFrom(chosen || (eps ? eps[0].file : libraryFileList()[0])); } else playRelease(s.torrent ? null : primaryRelease()); break;
     case "play-file": playLibraryFile(libraryFileList()[Number(el.dataset.index)]); break;
     case "play-episode": playLibraryFrom(libraryEpisodes()[Number(el.dataset.index)].file); break;
-    case "lib-season": s.librarySeason = Number(el.dataset.season); renderDetailsBody(); break;
+    case "browse-season": selectTitleSeason(Number(el.dataset.season)); break;
+    case "browse-episode": findTitleEpisode(Number(el.dataset.number)); break;
+    case "retry-episodes": delete s.episodeNames[s.browseSeason]; delete s.episodeErrors[s.browseSeason]; renderDetailsBody(); break;
+    case "retry-releases": loadReleases(s.releaseEpisode ? `${s.data.original_title || s.data.title} ${s.releaseEpisode}` : s.data.title, detailsRequestId, true); break;
+    case "find-versions": s.showDownloads = true; s.releaseEpisode = null; loadReleases(s.data.title, detailsRequestId, true); break;
+    case "workspace": detailsClose.click(); break;
     case "play-release": playRelease((s.showAllReleases ? s.releases : s.releases.slice(0, RELEASES_SHOWN))[Number(el.dataset.index)]); break;
     case "pick-player": openPlayerPicker(); break;
     case "favorite": toggleFavorite(s); break;
@@ -2372,8 +2518,13 @@ detailsBody.addEventListener("change", (e) => {
   if (el.dataset.act === "category") Object.assign(detailsState, { category: el.value, categoryChosen: true });
 });
 detailsBack.addEventListener("click", detailsGoBack);
-detailsClose.addEventListener("click", closeDetails);
-detailsModal.addEventListener("click", e => { if (e.target === detailsModal) closeDetails(); });
+detailsClose.addEventListener("click", () => {
+  closeDetails();
+  closeSearchDropdown();
+  if (discoverMode) exitDiscover();
+  document.getElementById("list").scrollIntoView({ block: "start" });
+});
+
 
 // Keeps the Discover panel's fixed height in sync with the real (sticky)
 // header height, same pattern Music Tube uses for its queue panel.
@@ -2469,7 +2620,9 @@ async function sendFavorites(path, body) {
 function favoriteId(s) {
   if (s.library) return s.library.id;
   const item = s.item;
-  return item.download_link ?? item.magnet ?? item.title;
+  if (item.download_link || item.magnet) return item.download_link ?? item.magnet;
+  const id = s.data?.tmdb_id || item.tmdb_id, type = s.data?.media_type || item.media_type;
+  return id && type ? `tmdb:${type}:${id}` : item.title;
 }
 
 function favoriteEntry(s) {
@@ -2486,9 +2639,13 @@ function favoriteEntry(s) {
   return entry;
 }
 
+function titleFavorites(s) {
+  const entry = favoriteEntry(s);
+  return favorites.filter(f => f.id === entry.id || (entry.tmdb_id && f.tmdb_id === entry.tmdb_id && f.media_type === entry.media_type));
+}
 function toggleFavorite(s) {
-  const id = favoriteId(s);
-  if (favorites.some(f => f.id === id)) sendFavorites("/api/favorites/remove", { ids: [id] });
+  const saved = titleFavorites(s);
+  if (saved.length) sendFavorites("/api/favorites/remove", { ids: saved.map(f => f.id) });
   else sendFavorites("/api/favorites", { items: [favoriteEntry(s)] });
 }
 
@@ -2667,9 +2824,16 @@ async function loadEpisodeNames(season) {
   try {
     const d = await fetch(`/api/episodes?id=${encodeURIComponent(id)}&season=${season}`).then(r => r.json());
     if (detailsState !== s) return;
+    if (d.error) throw new Error(d.error);
     s.episodeNames[season] = Object.fromEntries((d.episodes || []).map(e => [e.number, e]));
-  } catch (e) { s.episodeNames[season] = {}; }
-  renderDetailsBody();
+    s.episodeErrors = s.episodeErrors || {};
+    delete s.episodeErrors[season];
+  } catch (e) {
+    if (detailsState !== s) return;
+    s.episodeNames[season] = {};
+    s.episodeErrors = { ...s.episodeErrors, [season]: true };
+  }
+  if (detailsState === s) renderDetailsBody();
 }
 
 // An episode plays in a playlist with every episode after it, so the
@@ -2788,6 +2952,7 @@ async function init() {
     renderViewToggleBtn();
   }
   refresh();
+  if (new URLSearchParams(location.search).has("title")) await restoreTitleRoute();
   // Every 1.5 s while the page is in view; a tab in the background asks
   // nothing and catches up the moment it is shown again.
   setInterval(() => { if (!document.hidden) refresh(); }, 1500);

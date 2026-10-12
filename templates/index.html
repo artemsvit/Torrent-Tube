@@ -19,7 +19,7 @@
 </script>
 <link rel="stylesheet" href="{{ asset_url('app.css') }}">
 </head>
-<body>
+<body{% if request.args.get("title") %} class="has-title-page"{% endif %}>
 <div class="bg-decor" aria-hidden="true"></div>
 
 <div class="top-bar">
@@ -307,15 +307,15 @@
   </div>
 </div>
 
-<div class="modal-overlay" id="detailsModal">
-  <div class="modal-box details-box" role="dialog" aria-modal="true" aria-label="Details">
+<main class="title-page{% if request.args.get("title") %} is-open{% endif %}" id="detailsModal" aria-label="Title details"{% if not request.args.get("title") %} hidden{% endif %}>
+  <article class="details-box" tabindex="-1">
     <div class="dt-topbar">
-    <button type="button" class="dt-topbtn dt-back" id="detailsBack" aria-label="Back" title="Back" hidden><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
-    <button type="button" class="dt-topbtn dt-close" id="detailsClose" aria-label="Close" title="Close"></button>
+    <button type="button" class="dt-topbtn dt-back" id="detailsBack" aria-label="Back" title="Back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg><span>Back</span></button>
+    <button type="button" class="dt-topbtn dt-close" id="detailsClose" aria-label="Downloads and storage" title="Downloads and storage">Downloads &amp; storage</button>
     </div>
-    <div id="detailsBody"></div>
-  </div>
-</div>
+    <div id="detailsBody">{% if request.args.get("title") %}<div class="dt-body" role="status">Loading title…</div>{% endif %}</div>
+  </article>
+</main>
 
 <div class="modal-overlay" id="playerModal">
   <div class="modal-box player-box" role="dialog" aria-modal="true" aria-labelledby="playerModalTitle">

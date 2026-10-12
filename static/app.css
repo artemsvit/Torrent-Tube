@@ -1995,3 +1995,134 @@
     .search-dropdown .search-result-actions .inline-category-select { flex: 1; }
     .search-dropdown .search-result-actions .btn-add-result { flex: 1; justify-content: center; }
   }
+
+/* Title pages use the same cinematic hierarchy as the Apple clients.
+   Downloads, exact files, and the existing player picker stay available. */
+body.has-title-page #layout,
+body.has-title-page > .top-bar .searchbar { display: none; }
+.title-page { display: none; width: min(100%, 1480px); margin: 0 auto; padding-bottom: 64px; }
+.title-page.is-open:not([hidden]) { display: block; }
+.title-page .details-box,
+.title-page .details-box.has-banner {
+  max-width: none; max-height: none; width: 100%; padding: 0; overflow: visible;
+  border: 0; border-radius: 0; box-shadow: none; background: transparent;
+  backdrop-filter: none; -webkit-backdrop-filter: none; outline: none;
+}
+.title-page .dt-topbar {
+  position: sticky; top: var(--topbar-h, 72px); height: 64px;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 10px clamp(20px, 4vw, 52px); z-index: 8;
+  background: var(--bg-base); border-bottom: 1px solid var(--border);
+}
+.title-page .dt-topbtn {
+  position: static; width: auto; height: 40px; padding: 0 16px; gap: 8px;
+  border-radius: var(--radius-pill); color: var(--text); background: var(--surface);
+  font-size: 14px; font-weight: 600;
+}
+.title-page .dt-topbtn:hover { background: var(--surface-hover); }
+.title-page .dt-close::before, .title-page .dt-close::after { display: none; }
+.title-page .dt-media { aspect-ratio: auto; height: clamp(340px, 46vw, 590px); background-position: center 30%; }
+.title-page .dt-media::after { background: linear-gradient(180deg, transparent 25%, rgba(0,0,0,.35) 55%, rgba(0,0,0,.9) 100%); }
+.title-page .dt-hero.has-backdrop .dt-info { padding: 0 clamp(20px, 4vw, 52px) 34px; }
+.title-page .dt-title { font-size: clamp(30px, 4.4vw, 52px); line-height: 1.06; letter-spacing: -.035em; text-wrap: balance; }
+.title-page .dt-meta { font-size: 15px; gap: 12px; }
+.title-page .dt-sub { font-size: 16px; }
+.title-page .dt-hero.no-backdrop { padding: 40px clamp(20px, 4vw, 52px) 0; }
+.title-page .dt-hero.no-backdrop .dt-poster { width: 150px; }
+.title-page .dt-body,
+.title-page .details-box.has-banner .dt-body {
+  padding: 28px clamp(20px, 4vw, 52px) 40px; background: transparent;
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+}
+.title-page .dt-actions { gap: 12px; --dt-action-h: 44px; margin-bottom: 26px; }
+.title-page .dt-actions > .play-split { flex: 0 1 auto; }
+.title-page .dt-actions .play-main { padding: 0 24px; font-size: 16px; }
+.title-page .title-overview { max-width: 78ch; }
+.title-page .dt-overview { display: block; -webkit-line-clamp: unset; font-size: 16px; line-height: 1.65; margin: 10px 0 0; text-wrap: pretty; }
+.title-page .dt-tagline { font-size: 17px; font-weight: 600; font-style: normal; }
+.title-page .dt-section { margin-top: 42px; }
+.title-page .dt-section-head { margin-bottom: 18px; }
+.title-page .section-label { margin: 0; color: var(--text); font-size: 23px; font-weight: 700; letter-spacing: -.02em; text-transform: none; }
+.title-section-note { color: var(--text-secondary); font-size: 13px; font-weight: 400; }
+.title-page .dt-seasons-pick { display: flex; overflow-x: auto; gap: 10px; padding-bottom: 16px; margin: 0; }
+.title-page .dt-seasons-pick .library-chip { flex-shrink: 0; padding: 10px 20px; font-size: 15px; }
+.title-episode-row { display: flex; gap: 20px; overflow-x: auto; padding: 4px 0 14px; scroll-snap-type: x proximity; scrollbar-width: thin; }
+.title-episode-card { flex: 0 0 290px; min-width: 0; scroll-snap-align: start; }
+.title-episode-action { display: block; width: 100%; padding: 0; border: 0; border-radius: 12px; background: transparent; color: var(--text); text-align: left; }
+.title-episode-art { position: relative; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 12px; background: var(--surface); }
+.title-episode-art img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.title-episode-art::after { content: ''; position: absolute; inset: 40% 0 0; background: linear-gradient(transparent, rgba(0,0,0,.65)); pointer-events: none; }
+.title-episode-placeholder { display: grid; place-items: center; height: 100%; color: var(--text-secondary); }
+.title-episode-placeholder svg { width: 32px; height: 32px; }
+.title-episode-badge, .title-episode-runtime { position: absolute; z-index: 1; bottom: 10px; font-size: 11px; font-weight: 600; color: white; background: rgba(0,0,0,.58); padding: 5px 8px; border-radius: 6px; }
+.title-episode-badge { left: 10px; }
+.title-episode-badge.is-available { background: rgba(6,104,225,.85); }
+.title-episode-runtime { right: 10px; font-variant-numeric: tabular-nums; }
+.title-episode-action h3 { font-size: 16px; font-weight: 600; margin: 12px 0 8px; line-height: 1.4; }
+.title-episode-action:hover:not(:disabled) h3 { color: var(--accent); }
+.title-episode-overview { font-size: 13px; line-height: 1.5; color: var(--text-secondary); margin: 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.title-episode-file-note { font-size: 12px; color: var(--text-secondary); }
+.title-page .dt-row { gap: 20px; padding: 3px 0 12px; }
+.title-page .dt-person { width: 112px; }
+.title-page .dt-avatar { width: 96px; height: 96px; margin: 0 auto 10px; }
+.title-page .dt-person-name { font-size: 15px; line-height: 1.35; min-height: 40px; }
+.title-page .dt-person-role { font-size: 13px; line-height: 1.4; }
+.title-page .dt-rec { width: 168px; }
+.title-page .dt-rec img { width: 100%; border-radius: 12px; }
+.title-page .dt-rec-title { font-size: 15px; line-height: 1.35; margin-top: 10px; }
+.title-page .dt-rec-year { font-size: 12px; margin-top: 3px; }
+.title-page .dt-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 24px; font-size: 15px; line-height: 1.5; }
+.title-page .dt-facts .k { display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
+.title-page .dt-facts .dt-minor { display: block; }
+.title-downloads { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 20px 0; scroll-margin-top: calc(var(--topbar-h, 72px) + 82px); }
+.title-downloads > summary { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; cursor: pointer; }
+.title-downloads > summary::after { content: '+'; color: var(--text-secondary); font-size: 22px; }
+.title-downloads[open] > summary::after { content: '−'; }
+.title-downloads[open] > summary { margin-bottom: 22px; }
+.title-storage-info h3 { font-size: 16px; margin: 0 0 8px; }
+.title-storage-info p, .title-storage-note { color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
+.title-file-browser { margin: 14px 0 24px; }
+.title-file-browser > summary { cursor: pointer; color: var(--accent); font-size: 14px; margin-bottom: 12px; }
+.title-tracker-releases { margin-top: 20px; }
+.title-tracker-target { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; font-size: 13px; color: var(--text-secondary); }
+.title-page .dt-release-title { display: block; font-size: 13px; white-space: normal; }
+.title-page .dt-release { padding: 14px 12px; }
+.title-page .dt-file-name { font-size: 13px; }
+.title-page button:focus-visible, .title-page a:focus-visible, .title-page summary:focus-visible,
+.title-page select:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+@media (max-width: 640px) {
+  .title-page { padding-bottom: env(safe-area-inset-bottom); }
+  .title-page .dt-topbar { height: 58px; padding: 8px 16px; }
+  .title-page .dt-topbtn { font-size: 12px; padding: 0 12px; }
+  .title-page .dt-media { height: 340px; }
+  .title-page .dt-hero.has-backdrop .dt-info { padding: 0 20px 24px; }
+  .title-page .dt-body { padding: 22px 20px 32px; }
+  .title-page .dt-actions > .play-split { flex: 1 1 100%; }
+  .title-page .dt-actions .play-main { font-size: 15px; padding: 0 18px; }
+  .title-page .dt-actions > [data-act="download-best"] { flex: 1 1 auto; }
+  .title-page .section-label { font-size: 21px; }
+  .title-episode-card { flex-basis: 260px; }
+  .title-page .dt-person { width: 104px; }
+  .title-page .dt-rec { width: 144px; }
+  .title-page .dt-facts { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 18px; }
+  .title-page .dt-release { gap: 8px; flex-wrap: wrap; }
+  .title-page .dt-release-main { flex: 1 1 65%; }
+  .title-page .dt-release-stats { font-size: 11px; }
+  .title-page .dt-hero.no-backdrop { padding: 24px 20px 0; }
+  .title-page .dt-hero.no-backdrop .dt-poster { width: 90px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .title-page *, .title-page *::before, .title-page *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+
+body.has-title-page .brand-text p { display: none; }
+.title-page .dt-actions > .dt-status-pill {
+  flex: 0 1 auto; height: auto; min-height: 24px; padding: 0 4px;
+  background: transparent; color: var(--text-secondary); border-radius: 0;
+  white-space: normal; font-size: 13px; line-height: 1.4;
+}
+@media (max-width: 640px) {
+  .title-page .dt-actions > .dt-status-pill {
+    flex: 1 1 100%; order: 3; padding: 0; text-align: left; justify-content: flex-start;
+  }
+}

@@ -323,6 +323,19 @@ mpv), or the server has to remux to HLS first.
 This has no authentication, like the rest of the app. Keep it on your
 local network.
 
+## Web title pages
+
+Open a film or show to browse a dedicated page with its artwork, full description,
+cast, information, and recommendations. Title links can be bookmarked and browser
+Back returns to the previous title or the library.
+
+TV shows have season controls and episode cards. Episodes on the server play in
+the chosen external player; missing episodes lead to release choices. Downloads
+still use the selected server folder. **Downloads & versions** keeps exact file
+and quality choices together, and **Downloads & storage** returns to the existing
+library and download controls. Browsing a season or missing episode does not add
+a torrent by itself.
+
 ## Apple TV, iPhone, iPad and Mac apps
 
 Native apps live in [`appletv`](appletv/README.md): Apple TV (with Top Shelf),
