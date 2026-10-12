@@ -26,6 +26,14 @@ const context={URL, console, detailsState:state, detailsRequestId:1, searchEnabl
     :new Promise(resolve=>pending.push({url,resolve:data=>resolve({json:async()=>data})}))
 };
 vm.createContext(context);
+const translations = fs.readFileSync(require('node:path').join(__dirname, '../static/i18n.js'), 'utf8');
+vm.runInContext(translations.slice(0, translations.indexOf('(() => {')), context);
+assert.equal(context.translateUI('Search torrents', 'uk'), 'Шукати торенти');
+assert.equal(context.translateUI('In your library · 3 versions', 'uk'), 'У вашій бібліотеці · 3 версії');
+assert.equal(context.translateUI('2 seasons', 'uk'), '2 сезони');
+assert.equal(context.translateUI('11 episodes', 'uk'), '11 серій');
+assert.equal(context.translateUI('Search torrents', 'en'), 'Search torrents');
+assert.equal(context.translateUI('S02E05.mkv', 'uk'), 'S02E05.mkv');
 vm.runInContext(section('function titlePageURL(', 'function openDetails('),context);
 vm.runInContext(section('function releaseKey(', 'function categoryForKind('),context);
 vm.runInContext(section('function releaseMatches(', 'async function loadReleases('),context);
@@ -51,8 +59,8 @@ vm.runInContext(section('async function downloadRelease(', 'detailsBody.addEvent
   assert.doesNotMatch(picker, /<select/);
   const html=context.renderTitleEpisodes(state);
   assert.match(html,/Play episode: 1\. First/);
-  assert.match(html,/Find a version: 2\. Second/);
-  assert.match(html,/On your server/);
+  assert.match(html,/Search torrents: 2\. Second/);
+  assert.match(html,/In your library/);
   context.selectTitleSeason(1);
   assert.equal(new URL(calls.find(c=>c.kind==='route').url).searchParams.get('season'),'1');
   state.browseSeason=2; context.renderTitleEpisodes(state);

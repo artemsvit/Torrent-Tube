@@ -2185,3 +2185,22 @@ html[data-theme="dark"] .title-folder-menu { background: #1c1c20; }
   .person-photo { width: 80px; height: 80px; }
   .person-title-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 14px; }
 }
+
+/* A single contextual header replaces the separate title toolbar. */
+.header-back { border: 0; cursor: pointer; width: 36px; height: 36px; border-radius: 10px; }
+.header-back svg { width: 20px; height: 20px; }
+.logo-mark[hidden] { display: none; }
+body.has-title-page #homeLogo { display: none; }
+body.has-title-page .brand-text p { display: block; }
+.brand-text.has-page-title h1, .brand-text.has-page-title p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.brand-text.has-page-title h1 { font-size: 16px; }
+.language-switch { display: flex; gap: 2px; padding: 3px; border: 1px solid var(--border); border-radius: var(--radius-pill); flex: none; }
+.language-switch button { background: transparent; border: 0; border-radius: var(--radius-pill); padding: 6px 8px; color: var(--text-secondary); font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
+.language-switch button[aria-pressed="true"] { background: var(--surface-hover); color: var(--text); }
+.language-switch button:focus-visible, .header-back:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@media (max-width: 640px) {
+  .top-bar header { gap: 8px; }
+  .brand-text.has-page-title h1 { font-size: 14px; }
+  .brand-text.has-page-title p { font-size: 11px; }
+  .language-switch button { padding: 6px; }
+}

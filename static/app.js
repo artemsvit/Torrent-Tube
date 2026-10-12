@@ -1185,7 +1185,6 @@ async function addSearchResult(result, category, actionsEl, container, allResult
 
 const detailsModal = document.getElementById("detailsModal");
 const detailsBody = document.getElementById("detailsBody");
-const detailsClose = document.getElementById("detailsClose");
 const detailsBack = document.getElementById("detailsBack");
 const PLAY_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7-11-7z"/></svg>`;
 
@@ -1892,9 +1891,20 @@ function openDetails(item, torrent = null, { fromHistory = false, season = null 
     });
 }
 
+function updatePageHeader(title = null, subtitle = null) {
+  const brand = document.getElementById('pageBrand');
+  brand.classList.toggle('has-page-title', !!title);
+  brand.querySelector('h1').textContent = title || 'Torrent Tube';
+  brand.querySelector('h1').toggleAttribute('data-no-i18n', !!title);
+  const secondary = brand.querySelector('p');
+  secondary.textContent = title ? (subtitle && subtitle !== title ? subtitle : '') : 'Paste a magnet link, search, or drop a .torrent file';
+  secondary.toggleAttribute('data-no-i18n', !!title && subtitle !== 'Cast & crew');
+}
+
 // The box knows whether Back is showing, so the trailer strip can make room.
 function setDetailsBackVisible(visible) {
   detailsBack.hidden = !visible;
+  document.getElementById("homeLogo").hidden = visible;
   detailsModal.querySelector(".details-box").classList.toggle("has-back", visible);
 }
 
@@ -1907,6 +1917,8 @@ function closeDetails({ updateURL = true } = {}) {
   detailsBody.innerHTML = "";
   detailsState = null;
   personState = null;
+  setDetailsBackVisible(false);
+  updatePageHeader();
   document.title = "Torrent Tube";
   if (updateURL) {
     const url = new URL(location.href);
@@ -2165,6 +2177,7 @@ async function prepareTrailerPlayer(key) {
 function detailsHasBanner(s) { return !!s.data.backdrop || !s.loading; }
 
 function renderDetailsHero() {
+  if (detailsState) updatePageHeader(detailsState.data.title, detailsState.data.original_title);
   const { data: d, playing } = detailsState;
   // Built once per title, then only its parts are updated - the player
   // slot must survive re-renders (moving or re-creating an iframe
@@ -2249,12 +2262,12 @@ function renderTitleEpisodes(s) {
   s.episodeChoices = [...numbers].sort((a, b) => a - b).map(number => ({ number, info: known[number] || {}, source: files.find(f => number >= f.episode && number <= f.last) }));
   const cards = s.episodeChoices.map(({ number, info, source }) => {
     const available = !!source;
-    const action = available ? "Play episode" : searchEnabled ? "Find a version" : "Not on server";
+    const action = available ? "Play episode" : searchEnabled ? "Search torrents" : "Not in your library";
     const combined = source && source.last > source.episode ? ` · Episodes ${source.episode}–${source.last} in one file` : "";
     return `<article class="title-episode-card">
       <button type="button" class="title-episode-action" data-act="browse-episode" data-number="${number}"${!available && !searchEnabled ? " disabled" : ""} aria-label="${escapeHtml(`${action}: ${number}. ${info.name || `Episode ${number}`}`)}">
         <div class="title-episode-art">${info.still ? `<img src="${escapeHtml(info.still)}" alt="" loading="lazy">` : `<span class="title-episode-placeholder">${PLAY_ICON}</span>`}
-          <span class="title-episode-badge${available ? " is-available" : ""}">${available ? "On your server" : searchEnabled ? "Find a version" : "Not on server"}</span>
+          <span class="title-episode-badge${available ? " is-available" : ""}">${available ? "In your library" : searchEnabled ? "Search torrents" : "Not in your library"}</span>
           ${info.runtime ? `<span class="title-episode-runtime">${info.runtime} min</span>` : ""}
         </div>
         <h3>${number}. ${escapeHtml(info.name || `Episode ${number}`)}</h3>
@@ -2311,6 +2324,7 @@ function renderPersonPage() {
   const s = personState;
   if (!s) return;
   const p = s.data || s.person;
+  updatePageHeader(p.name, "Cast & crew");
   const titles = personTitles(s);
   const filters = [['all', 'All'], ['movie', 'Movies'], ['tv', 'TV Shows']];
   const cards = titles.map(({ item, index }) => {
@@ -2318,7 +2332,7 @@ function renderPersonPage() {
     const local = libraryItems.some(t => t.tmdb_id === item.tmdbId && t.media_type === item.mediaType);
     const saved = favorites.some(t => t.tmdb_id === item.tmdbId && t.media_type === item.mediaType);
     return `<a class="person-title-card" href="${escapeHtml(titlePageURL(title, null, null))}" data-act="person-title" data-index="${index}">
-      <div class="person-title-art"><span class="person-poster-fallback" aria-hidden="true">${ICONS.play}</span>${item.poster ? `<img src="${escapeHtml(item.poster)}" alt="" loading="lazy">` : ''}${saved ? `<span class="person-favorite" aria-label="Favorite">${ICONS.heart}</span>` : ''}${local ? '<span class="person-library-badge">In your library</span>' : ''}</div>
+      <div class="person-title-art"><span class="person-poster-fallback" aria-hidden="true">${ICONS.play}</span>${item.poster ? `<img src="${escapeHtml(item.poster)}" alt="" loading="lazy">` : ''}${saved ? `<span class="person-favorite" aria-label="In Favorites">${ICONS.heart}</span>` : ''}${local ? '<span class="person-library-badge">In your library</span>' : ''}</div>
       <h3>${escapeHtml(item.title)}</h3><p>${escapeHtml([item.year, item.mediaType === 'tv' ? 'TV show' : 'Movie', item.rating ? `★ ${item.rating}` : null].filter(Boolean).join(' · '))}</p>
     </a>`;
   }).join('');
@@ -2435,7 +2449,7 @@ function renderDetailsBody() {
     if (!s.category) s.category = currentCategories.includes(s.library.category) ? s.library.category : categoryForKind(d.kind) || getDefaultCategory();
     const where = (s.library.versions || []).length > 1 ? `${s.library.versions.length} versions` : s.library.category;
     actions.push(`<span class="dt-status-pill">In your library${where ? ` · ${escapeHtml(where)}` : ""}</span>`);
-    if (searchEnabled) actions.push(`<button type="button" class="btn-secondary" data-act="find-versions">${ICONS.download}Find other versions</button>`);
+    if (searchEnabled) actions.push(`<button type="button" class="btn-secondary" data-act="find-versions">${ICONS.download}Search torrents</button>`);
   } else if (s.torrent) {
     const t = s.torrent;
     const done = t.state === "finished" || t.state === "seeding";
@@ -2530,14 +2544,14 @@ function renderDetailsBody() {
       <div class="dt-file"><div class="dt-file-name">${escapeHtml(f.name)}</div>
       <div class="dt-file-size">${formatBytes(f.size)}</div>
       <button type="button" class="action-btn" data-act="play-file" data-index="${i}" title="Play this exact file in ${escapeHtml(PLAYERS[playerId].name)}" aria-label="Play ${escapeHtml(f.name)}">${ICONS.play}</button></div>`).join("")}</div>`
-      : `<div class="dt-status">No video files were found in this folder. Refresh the library in Downloads &amp; storage.</div>`;
+      : `<div class="dt-status">No video files were found in this folder. Try refreshing your library.</div>`;
   }
   const episodeSection = renderTitleEpisodes(s);
   const downloads = `<details class="dt-section title-downloads" id="titleDownloads"${s.showDownloads || !s.library ? " open" : ""}>
     <summary><h2 class="section-label">Downloads &amp; versions${s.releaseEpisode ? ` · ${escapeHtml(s.releaseEpisode)}` : ""}</h2><span class="title-section-note">Choose quality and manage files</span></summary>
-    ${s.library ? `<div class="title-storage-info"><h3>Files on your server</h3><p>${escapeHtml(s.library.category || "Library")}${s.library.versions?.length > 1 ? ` · ${s.library.versions.length} versions` : ""} · ${libraryFileList().length} video files</p>${storedFiles ? `<details class="title-file-browser"${s.showStoredFiles || (s.libraryFiles && libraryFileList().length <= 3) ? " open" : ""}><summary>Browse server files</summary>${storedFiles}</details>` : ""}</div>` : ""}
-    ${downloadReleases ? `<div class="title-tracker-releases">${s.library ? `<div class="title-tracker-target"><span>Download folder</span>${renderTitleFolderPicker(s)}</div>` : ""}${releasesHead}${downloadReleases}</div>` : searchEnabled && s.library ? `<p class="dt-status">Want a different quality or another season? <button type="button" class="dt-link-btn" data-act="find-versions">Find other versions</button></p>` : ""}
-    <p class="title-storage-note">Downloads remain in the selected server folder. <button type="button" class="dt-link-btn" data-act="workspace">Open Downloads &amp; storage</button></p>
+    ${s.library ? `<div class="title-storage-info"><h3>Library files</h3><p>${escapeHtml(s.library.category || "Library")}${s.library.versions?.length > 1 ? ` · ${s.library.versions.length} versions` : ""} · ${libraryFileList().length} video files</p>${storedFiles ? `<details class="title-file-browser"${s.showStoredFiles || (s.libraryFiles && libraryFileList().length <= 3) ? " open" : ""}><summary>Browse files</summary>${storedFiles}</details>` : ""}</div>` : ""}
+    ${downloadReleases ? `<div class="title-tracker-releases">${s.library ? `<div class="title-tracker-target"><span>Download folder</span>${renderTitleFolderPicker(s)}</div>` : ""}${releasesHead}${downloadReleases}</div>` : searchEnabled && s.library ? `<p class="dt-status">Search torrents for a different quality or another season. <button type="button" class="dt-link-btn" data-act="find-versions">Search torrents</button></p>` : ""}
+    <p class="title-storage-note">Downloaded files are added to your library.</p>
   </details>`;
 
   // --- more like this ---
@@ -2650,7 +2664,6 @@ detailsBody.addEventListener("click", (e) => {
     case "retry-episodes": delete s.episodeNames[s.browseSeason]; delete s.episodeErrors[s.browseSeason]; renderDetailsBody(); break;
     case "retry-releases": loadReleases(s.releaseEpisode ? `${s.data.original_title || s.data.title} ${s.releaseEpisode}` : s.data.title, detailsRequestId, true); break;
     case "find-versions": s.showDownloads = true; s.releaseEpisode = null; loadReleases(s.data.title, detailsRequestId, true); break;
-    case "workspace": detailsClose.click(); break;
     case "play-release": playRelease((s.showAllReleases ? s.releases : s.releases.slice(0, RELEASES_SHOWN))[Number(el.dataset.index)]); break;
     case "pick-player": openPlayerPicker(); break;
     case "favorite": toggleFavorite(s); break;
@@ -2691,14 +2704,6 @@ document.addEventListener('click', e => {
   if (!e.target.closest('.title-folder-picker')) closeTitleFolderPicker();
 });
 detailsBack.addEventListener("click", detailsGoBack);
-detailsClose.addEventListener("click", () => {
-  closeDetails();
-  closeSearchDropdown();
-  if (discoverMode) exitDiscover();
-  document.getElementById("list").scrollIntoView({ block: "start" });
-});
-
-
 // Keeps the Discover panel's fixed height in sync with the real (sticky)
 // header height, same pattern Music Tube uses for its queue panel.
 function syncTopBarHeight() {

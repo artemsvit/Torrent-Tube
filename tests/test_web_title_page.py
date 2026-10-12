@@ -19,7 +19,9 @@ class WebTitlePage(unittest.TestCase):
         details = page.split('<main class="title-page is-open"')[1].split('</main>')[0]
         self.assertNotIn('role="dialog"', details)
         self.assertIn('Loading title…', details)
-        self.assertIn('Downloads &amp; storage', details)
+        self.assertNotIn('dt-topbar', details)
+        self.assertNotIn('id="detailsClose"', page)
+        self.assertIn('class="logo-mark header-back" id="detailsBack"', page)
 
     def test_person_links_render_the_same_page_shell(self):
         page = server.app.test_client().get("/?person=2524&name=Tom+Hardy").get_data(as_text=True)
