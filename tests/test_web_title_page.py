@@ -21,6 +21,11 @@ class WebTitlePage(unittest.TestCase):
         self.assertIn('Loading title…', details)
         self.assertIn('Downloads &amp; storage', details)
 
+    def test_person_links_render_the_same_page_shell(self):
+        page = server.app.test_client().get("/?person=2524&name=Tom+Hardy").get_data(as_text=True)
+        self.assertIn('<body class="has-title-page">', page)
+        self.assertIn('<main class="title-page is-open"', page)
+
     @unittest.skipUnless(shutil.which("node"), "Node is required for the browser-helper checks")
     def test_seasons_sources_and_download_workflow(self):
         result = subprocess.run([shutil.which("node"), str(Path(__file__).with_name("web_title_page.js"))], capture_output=True, text=True, timeout=15)

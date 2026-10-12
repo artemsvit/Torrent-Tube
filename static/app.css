@@ -2158,3 +2158,30 @@ body.has-title-page .brand-text p { display: none; }
 
 html[data-theme="dark"] .title-folder-menu { background: #1c1c20; }
 .title-folder-menu button:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+
+/* Cast pages use the client photo header and a responsive poster grid. */
+.person-header { display: flex; align-items: center; gap: 24px; margin: 8px 0 32px; }
+.person-photo { position: relative; display: grid; place-items: center; flex: none; width: 120px; height: 120px; overflow: hidden; border-radius: 50%; background: var(--surface); }
+.person-photo img { position: absolute; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
+.person-photo span { font-size: 40px; color: var(--text-secondary); }
+.person-header h1 { font-size: clamp(26px, 4vw, 40px); line-height: 1.15; margin: 0 0 10px; }
+.person-header p { margin: 0; color: var(--text-secondary); font-size: 14px; }
+.person-header .person-eyebrow { margin-bottom: 8px; font-size: 12px; }
+.person-filters { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 28px; }
+.person-title-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 28px 20px; }
+.person-title-card { min-width: 0; color: var(--text); text-decoration: none; border-radius: 12px; }
+.person-title-art { position: relative; aspect-ratio: 2 / 3; overflow: hidden; border-radius: 12px; background: var(--surface); }
+.person-title-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.person-poster-fallback { display: grid; place-items: center; height: 100%; color: var(--text-tertiary); }
+.person-poster-fallback svg { width: 32px; height: 32px; }
+.person-title-card:hover .person-title-art { box-shadow: inset 0 0 0 2px var(--accent); }
+.person-title-card h3 { font-size: 15px; line-height: 1.35; margin: 10px 0 5px; }
+.person-title-card p { color: var(--text-secondary); font-size: 12px; line-height: 1.5; margin: 0; }
+.person-favorite { position: absolute; top: 8px; right: 8px; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: #0009; color: white; }
+.person-favorite svg { width: 16px; height: 16px; }
+.person-library-badge { position: absolute; bottom: 8px; left: 8px; right: 8px; width: fit-content; padding: 5px 8px; border-radius: 8px; background: #000c; color: white; font-size: 11px; }
+@media (max-width: 640px) {
+  .person-header { gap: 16px; }
+  .person-photo { width: 80px; height: 80px; }
+  .person-title-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 14px; }
+}

@@ -1731,6 +1731,8 @@ const RELEASES_SHOWN = 5;
 
 let detailsRequestId = 0;
 let detailsState = null;
+let personState = null;
+const personCache = new Map();
 let titleReturnFocus = null;
 let titleWorkspaceScroll = 0;
 const detailsCache = new Map();
@@ -1808,7 +1810,7 @@ function roughTitle(raw) {
 
 function titlePageURL(item, torrent, season) {
   const url = new URL(location.href);
-  ["title", "type", "id", "library", "torrent", "season"].forEach(k => url.searchParams.delete(k));
+  ["title", "type", "id", "library", "torrent", "season", "person", "name", "filter"].forEach(k => url.searchParams.delete(k));
   url.searchParams.set("title", item.clean_title || item.title);
   if (item.tmdb_id && item.media_type) {
     url.searchParams.set("type", item.media_type);
@@ -1825,7 +1827,7 @@ function openDetails(item, torrent = null, { fromHistory = false, season = null 
     const local = libraryItems.find(t => t.tmdb_id === item.tmdb_id && t.media_type === item.media_type);
     if (local) item = { ...item, library: local };
   }
-  if (!detailsState) {
+  if (!detailsState && !personState) {
     titleReturnFocus = document.activeElement;
     titleWorkspaceScroll = window.scrollY;
     if (!fromHistory) history.replaceState({ ...history.state, ttWorkspace: true, ttScroll: titleWorkspaceScroll }, "", location.href);
@@ -1841,6 +1843,8 @@ function openDetails(item, torrent = null, { fromHistory = false, season = null 
   document.body.classList.add("has-title-page");
 
   const requestId = ++detailsRequestId;
+  personState = null;
+  detailsModal.setAttribute("aria-label", "Title details");
   destroyTrailerPlayer(detailsState);
   detailsBody.innerHTML = "";  // fresh banner (and player slot) per title
   loadYouTubeApi().catch(() => {});
@@ -1902,10 +1906,11 @@ function closeDetails({ updateURL = true } = {}) {
   detailsRequestId++;
   detailsBody.innerHTML = "";
   detailsState = null;
+  personState = null;
   document.title = "Torrent Tube";
   if (updateURL) {
     const url = new URL(location.href);
-    ["title", "type", "id", "library", "torrent", "season"].forEach(k => url.searchParams.delete(k));
+    ["title", "type", "id", "library", "torrent", "season", "person", "name", "filter"].forEach(k => url.searchParams.delete(k));
     history.replaceState({ ttWorkspace: true, ttScroll: titleWorkspaceScroll }, "", url);
   }
   window.scrollTo({ top: history.state?.ttScroll ?? titleWorkspaceScroll });
@@ -1919,6 +1924,13 @@ function detailsGoBack() {
 
 async function restoreTitleRoute() {
   const params = new URLSearchParams(location.search);
+  if (params.has("person")) {
+    const id = Number(params.get("person"));
+    if (Number.isSafeInteger(id) && id > 0) {
+      openPerson({ id, name: params.get("name") || "Cast & crew" }, { fromHistory: true, filter: params.get("filter") });
+      return;
+    }
+  }
   if (!params.has("title")) { closeDetails({ updateURL: false }); return; }
   const previous = history.state?.ttTitle;
   const sameIdentity = params.has("id") ? String(previous?.item.tmdb_id) === params.get("id") && previous?.item.media_type === params.get("type")
@@ -2281,6 +2293,89 @@ function findTitleEpisode(number) {
   document.getElementById("titleDownloads")?.scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
 }
 
+function personPageURL(person, filter = 'all') {
+  const url = titlePageURL({}, null, null);
+  url.searchParams.delete('title');
+  url.searchParams.set('person', person.id);
+  url.searchParams.set('name', person.name || 'Cast & crew');
+  if (['movie', 'tv'].includes(filter)) url.searchParams.set('filter', filter);
+  return url;
+}
+
+function personTitles(s) {
+  return (s.data?.titles || []).map((item, index) => ({ item, index }))
+    .filter(({ item }) => s.filter === 'all' || item.mediaType === s.filter);
+}
+
+function renderPersonPage() {
+  const s = personState;
+  if (!s) return;
+  const p = s.data || s.person;
+  const titles = personTitles(s);
+  const filters = [['all', 'All'], ['movie', 'Movies'], ['tv', 'TV Shows']];
+  const cards = titles.map(({ item, index }) => {
+    const title = { title: item.title, tmdb_id: item.tmdbId, media_type: item.mediaType };
+    const local = libraryItems.some(t => t.tmdb_id === item.tmdbId && t.media_type === item.mediaType);
+    const saved = favorites.some(t => t.tmdb_id === item.tmdbId && t.media_type === item.mediaType);
+    return `<a class="person-title-card" href="${escapeHtml(titlePageURL(title, null, null))}" data-act="person-title" data-index="${index}">
+      <div class="person-title-art"><span class="person-poster-fallback" aria-hidden="true">${ICONS.play}</span>${item.poster ? `<img src="${escapeHtml(item.poster)}" alt="" loading="lazy">` : ''}${saved ? `<span class="person-favorite" aria-label="Favorite">${ICONS.heart}</span>` : ''}${local ? '<span class="person-library-badge">In your library</span>' : ''}</div>
+      <h3>${escapeHtml(item.title)}</h3><p>${escapeHtml([item.year, item.mediaType === 'tv' ? 'TV show' : 'Movie', item.rating ? `★ ${item.rating}` : null].filter(Boolean).join(' · '))}</p>
+    </a>`;
+  }).join('');
+  detailsBody.innerHTML = `<div class="dt-body person-page">
+    <header class="person-header"><div class="person-photo">${p.photo ? `<img src="${escapeHtml(p.photo)}" alt="">` : ''}<span aria-hidden="true">${escapeHtml((p.name || '?').charAt(0))}</span></div>
+      <div><p class="person-eyebrow">Cast &amp; crew</p><h1>${escapeHtml(p.name || 'Cast & crew')}</h1>${s.data ? `<p>${s.data.titles.length} films and TV shows</p>` : ''}</div></header>
+    <div class="person-filters" role="group" aria-label="Filter titles">${filters.map(([value, label]) => `<button type="button" class="library-chip${s.filter === value ? ' is-active' : ''}" data-act="person-filter" data-filter="${value}" aria-pressed="${s.filter === value}">${label}</button>`).join('')}</div>
+    ${s.loading ? '<p class="dt-status" role="status">Loading films and TV shows…</p>' : s.error ? `<div class="dt-status is-error" role="alert">${escapeHtml(s.error)} <button class="dt-link-btn" data-act="person-retry">Try again</button></div>` : !cards ? '<p class="dt-status">No titles are listed here yet.</p>' : `<div class="person-title-grid">${cards}</div>`}
+  </div>`;
+  detailsBody.querySelectorAll('.person-page img').forEach(img => {
+    const fallback = () => { img.hidden = true; };
+    img.addEventListener('error', fallback);
+    img.addEventListener('load', () => { img.hidden = false; });
+  });
+}
+
+async function openPerson(person, { fromHistory = false, filter = 'all' } = {}) {
+  if (!detailsState && !personState) {
+    titleReturnFocus = document.activeElement;
+    titleWorkspaceScroll = window.scrollY;
+    if (!fromHistory) history.replaceState({ ...history.state, ttWorkspace: true, ttScroll: titleWorkspaceScroll }, '', location.href);
+  } else if (!fromHistory) history.replaceState({ ...history.state, ttScroll: window.scrollY }, '', location.href);
+  if (!fromHistory) history.pushState({ ttPerson: person, ttDepth: (history.state?.ttDepth || 0) + 1 }, '', personPageURL(person, filter));
+  const requestId = ++detailsRequestId;
+  destroyTrailerPlayer(detailsState);
+  detailsState = null;
+  const state = personState = { person, filter: ['movie', 'tv'].includes(filter) ? filter : 'all', loading: true, data: null, error: '' };
+  detailsModal.hidden = false;
+  detailsModal.classList.add('is-open');
+  detailsModal.setAttribute('aria-label', 'Cast & crew');
+  document.body.classList.add('has-title-page');
+  setDetailsBackVisible(true);
+  document.title = `${person.name || 'Cast & crew'} · Torrent Tube`;
+  renderPersonPage();
+  window.scrollTo({ top: fromHistory ? history.state?.ttScroll || 0 : 0 });
+  detailsModal.querySelector('.details-box').focus({ preventScroll: true });
+  try {
+    let data = personCache.get(person.id);
+    if (!data) {
+      const response = await fetch(`/api/person?id=${encodeURIComponent(person.id)}`);
+      data = await response.json();
+      if (data.error) throw new Error(data.error);
+      if (!response.ok) throw new Error('Could not load films and TV shows.');
+      personCache.set(person.id, data);
+    }
+    if (detailsRequestId !== requestId || personState !== state) return;
+    state.data = data;
+    document.title = `${data.name || person.name} · Torrent Tube`;
+  } catch (e) {
+    if (detailsRequestId !== requestId || personState !== state) return;
+    state.error = e.message || 'Could not load films and TV shows.';
+  }
+  state.loading = false;
+  renderPersonPage();
+  if (fromHistory) window.scrollTo({ top: history.state?.ttScroll || 0 });
+}
+
 function renderTitleFolderPicker(s) {
   return `<div class="title-folder-picker">
     <button type="button" class="title-folder-trigger" data-act="folder-toggle" aria-label="Download folder: ${escapeHtml(s.category || 'Choose folder')}" aria-haspopup="menu" aria-expanded="false" aria-controls="titleFolderMenu">
@@ -2391,7 +2486,7 @@ function renderDetailsBody() {
 
   // --- cast & crew ---
   const people = (d.people || []).map(p => `
-    <a class="dt-person" href="https://www.themoviedb.org/person/${encodeURIComponent(p.id)}" target="_blank" rel="noopener" title="${escapeHtml(p.name)}">
+    <a class="dt-person" href="${escapeHtml(personPageURL(p))}" data-act="person" data-person-id="${escapeHtml(p.id)}" title="${escapeHtml(p.name)}">
       ${p.photo ? `<img class="dt-avatar" src="${escapeHtml(p.photo)}" alt="" loading="lazy">` : `<div class="dt-avatar">${escapeHtml((p.name || "?").charAt(0))}</div>`}
       <div class="dt-person-name">${escapeHtml(p.name)}</div>
       ${p.role ? `<div class="dt-person-role">${escapeHtml(p.role)}</div>` : ""}
@@ -2507,7 +2602,29 @@ async function downloadRelease(release) {
 
 detailsBody.addEventListener("click", (e) => {
   const el = e.target.closest("[data-act]");
-  if (!el || !detailsState) return;
+  if (!el) return;
+  // Keep normal link behavior for new tabs and copied links.
+  if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  if (el.dataset.act === 'person' && detailsState) {
+    e.preventDefault();
+    const person = (detailsState.data.people || []).find(p => String(p.id) === el.dataset.personId);
+    if (person) openPerson(person);
+    return;
+  }
+  if (personState) {
+    if (el.dataset.act === 'person-filter') {
+      personState.filter = el.dataset.filter;
+      history.replaceState({ ...history.state, ttScroll: window.scrollY }, '', personPageURL(personState.person, personState.filter));
+      renderPersonPage();
+      detailsBody.querySelector(`[data-filter="${personState.filter}"]`)?.focus({ preventScroll: true });
+    } else if (el.dataset.act === 'person-title') {
+      e.preventDefault();
+      const item = personState.data.titles[Number(el.dataset.index)];
+      if (item) openDetails({ title: item.title, clean_title: item.title, tmdb_id: item.tmdbId, media_type: item.mediaType, poster: item.poster, rating: item.rating });
+    } else if (el.dataset.act === 'person-retry') openPerson(personState.person, { fromHistory: true, filter: personState.filter });
+    return;
+  }
+  if (!detailsState) return;
   const s = detailsState;
   switch (el.dataset.act) {
     case "folder-toggle":
@@ -3008,7 +3125,7 @@ async function init() {
     renderViewToggleBtn();
   }
   refresh();
-  if (new URLSearchParams(location.search).has("title")) await restoreTitleRoute();
+  if (params.has("title") || params.has("person")) await restoreTitleRoute();
   // Every 1.5 s while the page is in view; a tab in the background asks
   // nothing and catches up the moment it is shown again.
   setInterval(() => { if (!document.hidden) refresh(); }, 1500);

@@ -34,6 +34,14 @@ vm.runInContext(section('function titleEpisodeFiles(', 'function renderDetailsBo
 vm.runInContext(section('async function postSearchResult(', 'async function addSearchResult('),context);
 vm.runInContext(section('async function downloadRelease(', 'detailsBody.addEventListener('),context);
 (async()=>{
+  const personURL = new URL(context.personPageURL({id:2524,name:'Tom Hardy'}, 'tv'));
+  assert.equal(personURL.searchParams.get('person'), '2524');
+  assert.equal(personURL.searchParams.get('filter'), 'tv');
+  assert.equal(personURL.searchParams.has('title'), false);
+  const credits = {filter:'tv',data:{titles:[{title:'Movie',mediaType:'movie'},{title:'Show',mediaType:'tv'}]}};
+  assert.equal(context.personTitles(credits)[0].index, 1, 'Filtering must preserve the source index for opening the correct title');
+  credits.filter = 'all';
+  assert.equal(context.personTitles(credits).length, 2);
   context.currentCategories = ['Movies', 'TV Shows', 'Kids & <Family>'];
   context.ICONS = {check:'<svg></svg>'};
   const picker = context.renderTitleFolderPicker(state);
