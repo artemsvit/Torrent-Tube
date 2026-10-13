@@ -2889,6 +2889,7 @@ if (window.ResizeObserver) new ResizeObserver(syncTopBarHeight).observe(topBarEl
 const libraryPanel = document.getElementById("libraryPanel");
 const libraryChips = document.getElementById("libraryChips");
 const libraryKinds = document.getElementById("libraryKinds");
+const libraryKindsSelect = document.getElementById("libraryKindsSelect");
 const libraryFilter = document.getElementById("libraryFilter");
 const libraryGrid = document.getElementById("libraryGrid");
 const libraryNote = document.getElementById("libraryNote");
@@ -3046,8 +3047,14 @@ function renderLibrary() {
   // Favorites comes after Cartoons, as in the apps.
   const tabs = [...LIBRARY_KINDS, ["favorites", "Favorites"]];
   if (!librarySection) librarySection = (tabs.find(([k]) => counts[k]) || ["movie"])[0];
-  libraryKinds.innerHTML = tabs.filter(([k]) => counts[k] || k === librarySection).map(([k, label]) =>
+  const availableTabs = tabs.filter(([k]) => counts[k] || k === librarySection);
+  libraryKinds.innerHTML = availableTabs.map(([k, label]) =>
     `<button type="button" class="library-chip${k === librarySection ? " is-active" : ""}" data-kind="${k}">${label} · ${counts[k]}</button>`).join("");
+  if (libraryKindsSelect) {
+    libraryKindsSelect.innerHTML = availableTabs.map(([k, label]) =>
+      `<option value="${k}"${k === librarySection ? " selected" : ""}>${label} (${counts[k]})</option>`).join("");
+    libraryKindsSelect.value = librarySection;
+  }
   libraryNote.hidden = !libraryPending;
   libraryNote.textContent = libraryPending ? `Matching ${libraryPending} new title${libraryPending === 1 ? "" : "s"} on TMDB…` : "";
   libraryGrid.innerHTML = "";
@@ -3106,6 +3113,16 @@ libraryChips.addEventListener("click", e => {
     renderLibrary(); libraryGrid.scrollTop = 0;
   }
 });
+
+if (libraryKindsSelect) {
+  libraryKindsSelect.addEventListener("change", () => {
+    librarySection = libraryKindsSelect.value;
+    document.body.dataset.serverView = 'library';
+    updateServerNavigation('library');
+    renderLibrary();
+    libraryGrid.scrollTop = 0;
+  });
+}
 
 libraryFilter.addEventListener("input", () => { renderLibrary(); libraryGrid.scrollTop = 0; });
 libraryFilter.addEventListener("keydown", e => { if (e.key === "Escape" && libraryFilter.value) { e.stopPropagation(); libraryFilter.value = ""; renderLibrary(); } });
