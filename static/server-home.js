@@ -163,12 +163,35 @@ async function handleServerResumeReturn() {
   history.replaceState(history.state,'',url);
 }
 
+function closeServerNavigation() {
+  const nav = document.getElementById('serverNavigation');
+  const toggle = document.getElementById('navToggleBtn');
+  if (nav?.classList) nav.classList.remove('is-open');
+  if (toggle?.setAttribute) toggle.setAttribute('aria-expanded', 'false');
+}
+
+document.getElementById('navToggleBtn').addEventListener('click',e=>{
+  const nav = document.getElementById('serverNavigation');
+  const toggle = e.currentTarget;
+  const open = nav.classList.toggle('is-open');
+  toggle.setAttribute('aria-expanded', String(open));
+});
 document.getElementById('serverNavigation').addEventListener('click',e=>{
   const button = e.target.closest('[data-view]');
-  if (button) setServerView(button.dataset.view);
+  if (button) {
+    closeServerNavigation();
+    setServerView(button.dataset.view);
+  }
+});
+document.addEventListener('click',e=>{
+  if (!e.target?.closest) return;
+  if (!e.target.closest('#serverNavigation') && !e.target.closest('#navToggleBtn')) closeServerNavigation();
+});
+document.addEventListener('keydown',e=>{
+  if (e.key === 'Escape') closeServerNavigation();
 });
 const browseSearch = document.getElementById('mainInput');
-browseSearch.addEventListener('focus',()=>{ browseSearch.placeholder = 'Search torrents, library, or paste a magnet link'; });
+browseSearch.addEventListener('focus',()=>{ closeServerNavigation(); browseSearch.placeholder = 'Search torrents, library, or paste a magnet link'; });
 browseSearch.addEventListener('blur',()=>{ browseSearch.placeholder = 'Search'; });
 browseSearch.addEventListener('keydown',e=>{ if (e.key === 'Escape') browseSearch.blur(); });
 document.getElementById('serverHome').addEventListener('click',e=>{
