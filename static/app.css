@@ -1151,12 +1151,62 @@
      player is what lets every browser (Safari, iOS included) start it
      with sound; our own click handler alone can't. Clipped, nothing else
      on the banner can hit the player (its title/channel links). */
-  .dt-player-slot { position: absolute; inset: 0; z-index: 1; opacity: 0; pointer-events: none; clip-path: circle(34px at 50% 50%); }
-  .dt-hero.player-ready .dt-player-slot { pointer-events: auto; }
-  .dt-hero.player-ready .dt-hero-play { pointer-events: none; }
-  .dt-hero.is-playing .dt-player-slot { opacity: 1; pointer-events: auto; clip-path: none; z-index: 3; }
-  .dt-media-overlay { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+  .dt-player-slot { position: absolute; inset: 0; z-index: 1; opacity: 0; pointer-events: none; }
+  .dt-hero.is-playing .dt-player-slot { opacity: 1; pointer-events: auto; z-index: 3; }
+  .dt-media-overlay { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
   .dt-media-overlay > * { pointer-events: auto; }
+  .dt-trailer-header {
+    position: absolute;
+    top: 14px;
+    left: 16px;
+    right: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    pointer-events: none;
+    z-index: 6;
+  }
+  .dt-trailer-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-radius: var(--radius-pill);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    pointer-events: auto;
+  }
+  .dt-trailer-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    padding: 0;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1.5px solid rgba(255, 255, 255, 0.4);
+    color: #fff;
+    cursor: pointer;
+    pointer-events: auto;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    transition: transform 0.15s, background 0.15s;
+    margin-left: auto;
+  }
+  .dt-trailer-close:hover {
+    background: rgba(0, 0, 0, 0.9);
+    transform: scale(1.08);
+  }
+  .dt-trailer-close:active {
+    transform: scale(0.95);
+  }
   .dt-hero-rest { display: contents; }
   /* body's desktop zoom (--ui-zoom) isn't passed on to an iframe's own
      content in Safari - YouTube lays out for a 12% bigger box and the

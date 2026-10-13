@@ -5,7 +5,7 @@ const UI_UK = {
   'Loading the torrent catalog…':'Завантаження каталогу торентів…',
   'Could not load the torrent catalog. Check Search in Settings.':'Не вдалося завантажити каталог торентів. Перевірте пошук у налаштуваннях.',
   'Nothing here right now.':'Тут поки нічого немає.',
-  'Home':'Головна', 'Recently added':'Нове на сервері',
+  'Home':'Головна', 'Recently added':'Нове на сервері', 'New on your server':'Нове на вашому сервері',
   'Synced across devices':'Синхронізовано між пристроями',
   'See all':'Переглянути всі', 'Watch':'Дивитися', 'Details':'Деталі',
   'Online library':'Онлайн-медіатека',

@@ -2128,14 +2128,29 @@ async function findYoutubeTrailers() {
 // or as soon as it is.
 function playTrailer(key) {
   const s = detailsState;
+  if (!s) return;
   Object.assign(s, { activeTrailer: key, playing: true });
   renderDetailsHero();
   renderDetailsBody();
   if (s.player && s.playerKey === key) {
-    if (s.playerReady) s.player.playVideo();
+    if (s.playerReady) {
+      try { s.player.playVideo(); } catch (e) {}
+    }
   } else {
     prepareTrailerPlayer(key);
   }
+}
+
+function closeTrailer() {
+  const s = detailsState;
+  if (!s) return;
+  s.playing = false;
+  if (s.player) {
+    try { s.player.pauseVideo(); } catch (e) {}
+    try { s.player.cueVideoById(s.activeTrailer || s.playerKey); } catch (e) {}
+  }
+  renderDetailsHero();
+  renderDetailsBody();
 }
 
 function destroyTrailerPlayer(s) {
@@ -2179,8 +2194,15 @@ async function prepareTrailerPlayer(key) {
   if (s.player && s.playerKey === key) return;
   destroyTrailerPlayer(s);
   s.playerKey = key;
-  try { await loadYouTubeApi(); } catch (e) { return; }
   const mount = document.getElementById("dtPlayer");
+  try {
+    await loadYouTubeApi();
+  } catch (e) {
+    if (s.playing && mount) {
+      mount.innerHTML = `<iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(key)}?autoplay=1&playsinline=1&rel=0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen style="position:absolute;inset:0;width:100%;height:100%;border:0;"></iframe>`;
+    }
+    return;
+  }
   if (!mount || detailsState !== s || s.playerKey !== key) return;
   const lang = subtitleLanguage();
   const trailer = s.trailers.find(t => t.key === key);
@@ -2202,33 +2224,32 @@ async function prepareTrailerPlayer(key) {
     host: "https://www.youtube-nocookie.com",
     videoId: key,
     playerVars: {
-      autoplay: 0, rel: 0, playsinline: 1,
+      autoplay: s.playing ? 1 : 0, rel: 0, playsinline: 1,
       ...(wantSubs ? { cc_load_policy: 1, cc_lang_pref: lang, hl: lang } : {}),
     },
     events: {
       onReady: (e) => {
         if (s.player !== e.target) return;
         s.playerReady = true;
-        if (s.playing) e.target.playVideo();  // asked for before it was ready
-        else if (detailsState === s) renderDetailsHero();  // arms the tap-through
+        if (s.playing) {
+          try { e.target.playVideo(); } catch (err) {}
+        } else if (detailsState === s) renderDetailsHero();
       },
       // The caption track list arrives once the captions module loads;
       // if it never shows up the video has no captions at all.
       onApiChange: (e) => pickSubtitles(e.target),
       onStateChange: (e) => {
         if (s.player !== e.target || detailsState !== s) return;
-        // Ended: back to the banner, with the trailer cued again (not
-        // seeked - a seek reports PLAYING for a moment, which would read
-        // as a new tap) so the play button works again instantly.
+        // Ended: back to the banner, with the trailer cued again
         if (e.data === YT.PlayerState.ENDED) {
           s.playing = false;
           subsDone = !wantSubs;
-          e.target.cueVideoById(key);
+          try { e.target.cueVideoById(key); } catch (err) {}
           renderDetailsHero();
           renderDetailsBody();
           return;
         }
-        // Started by the tap going through to YouTube's own button.
+        // Started by user interaction in YouTube player
         if (e.data === YT.PlayerState.PLAYING && !s.playing) {
           Object.assign(s, { playing: true, activeTrailer: key });
           renderDetailsHero();
@@ -2288,13 +2309,15 @@ function renderDetailsHero() {
 
   let overlay = "";
   if (playing) {
-    overlay = "";
-  } else if (hasBackdrop && !s.loading && s.noTrailer) {
-    const q = [d.title, d.year, "trailer"].filter(Boolean).join(" ");
-    overlay = `<a class="dt-hero-play" href="${escapeHtml(youtubeSearchUrl(q))}" target="_blank" rel="noopener"><span class="dt-hero-play-icon">${PLAY_ICON}</span>Search YouTube</a>`;
-  } else if (hasBackdrop && !s.loading) {
-    overlay = `<button type="button" class="dt-hero-play" data-act="trailer"${s.findingTrailer ? " disabled" : ""} aria-label="Play trailer">
-      <span class="dt-hero-play-icon">${s.findingTrailer ? `<span class="spinner-ring"></span>` : PLAY_ICON}</span>${s.findingTrailer ? "Finding trailer…" : "Trailer"}</button>`;
+    overlay = `<div class="dt-trailer-header">
+      <span class="dt-trailer-badge">Trailer</span>
+      <button type="button" class="dt-trailer-close" data-act="close-trailer" aria-label="Close trailer" title="Close trailer">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>`;
+  } else if (hasBackdrop && !s.loading && s.trailers && s.trailers.length > 0) {
+    overlay = `<button type="button" class="dt-hero-play" data-act="trailer" aria-label="Play trailer">
+      <span class="dt-hero-play-icon">${PLAY_ICON}</span>Trailer</button>`;
   }
   const showBackdrop = !!d.backdrop && !playing;
   media.style.backgroundImage = showBackdrop ? `url('${d.backdrop.replace(/'/g, "%27")}')` : "";
@@ -2589,11 +2612,8 @@ function renderDetailsBody() {
   const saved = titleFavorites(s).length > 0;
   actions.push(`<button type="button" class="btn-secondary dt-favorite${saved ? " is-saved" : ""}" data-act="favorite" aria-pressed="${saved}" title="${saved ? "Remove from Favorites" : "Add to Favorites"}">${saved ? ICONS.heartFilled : ICONS.heart}${saved ? "Unfavorite" : "Favorite"}</button>`);
   if (!detailsHasBanner(s) && !s.playing && !s.loading) {
-    if (s.noTrailer) {
-      const q = [d.title || item.title, d.year, "trailer"].filter(Boolean).join(" ");
-      actions.push(`<a class="btn-secondary" href="${escapeHtml(youtubeSearchUrl(q))}" target="_blank" rel="noopener">${PLAY_ICON}Search YouTube</a>`);
-    } else {
-      actions.push(`<button type="button" class="btn-secondary" data-act="trailer"${s.findingTrailer ? " disabled" : ""}>${PLAY_ICON}${s.findingTrailer ? "Finding trailer…" : "Trailer"}</button>`);
+    if (s.trailers && s.trailers.length > 0) {
+      actions.push(`<button type="button" class="btn-secondary" data-act="trailer">${PLAY_ICON}Trailer</button>`);
     }
   }
   if (s.library) {
@@ -2802,8 +2822,10 @@ detailsBody.addEventListener("click", (e) => {
       renderDetailsBody();
       break;
     case "trailer":
-      if (s.trailers.length) playTrailer(s.activeTrailer || s.trailers[0].key);
-      else findYoutubeTrailers();
+      if (s.trailers && s.trailers.length) playTrailer(s.activeTrailer || s.trailers[0].key);
+      break;
+    case "close-trailer":
+      closeTrailer();
       break;
     case "download-best": { const best = primaryRelease(); if (best) downloadRelease(best); break; }
     case "play":

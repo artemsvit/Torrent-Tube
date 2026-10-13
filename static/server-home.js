@@ -193,8 +193,22 @@ function buildContinueCard(entry) {
   return card;
 }
 
+function buildHomeLibraryCard(item) {
+  const card = document.createElement('button');
+  card.type = 'button'; card.className = 'lib-card catalog-card';
+  const poster = item.poster ? `<img src="${escapeHtml(item.poster.replace('/w200/','/w342/'))}" alt="" loading="lazy">` : brandArt(libraryTitle(item));
+  const sub = [item.year, item.rating > 0 ? `★ ${item.rating.toFixed(1)}` : ''].filter(Boolean).join(' · ');
+  card.innerHTML = `<div class="lib-poster">${poster}</div><div class="lib-title" data-no-i18n>${escapeHtml(libraryTitle(item))}</div>${sub ? `<div class="lib-sub">${escapeHtml(sub)}</div>` : ''}`;
+  card.onclick = () => {
+    if (typeof openLibraryTitle === 'function') openLibraryTitle(item);
+    else openDetails(item);
+  };
+  return card;
+}
+
 function renderServerHome() {
-  const key = JSON.stringify([catalogLoaded,catalogError,[...catalogFeeds],favorites,serverHistory]);
+  const libItems = typeof libraryItems !== 'undefined' ? libraryItems : [];
+  const key = JSON.stringify([catalogLoaded,catalogError,[...catalogFeeds],favorites,serverHistory,libItems.length,libItems[0]?.id]);
   if (key === homeRenderKey) return;
   homeRenderKey = key;
   renderHomeHero();
@@ -202,6 +216,9 @@ function renderServerHome() {
   root.replaceChildren();
   appendHomeShelf(root,'Continue Watching',null,serverHistory,buildContinueCard);
   for (const [feed,label] of CATALOG_SECTIONS) appendHomeShelf(root,label,{movies:'movie',tv:'tv',cartoons:'cartoon'}[feed] || null,catalogEntries(feed),buildCatalogCard);
+  if (libItems.length) {
+    appendHomeShelf(root,'New on your server','library',libItems,buildHomeLibraryCard);
+  }
 }
 
 async function loadServerHistory() {
