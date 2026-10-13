@@ -268,6 +268,10 @@ body[data-server-view="library"] #cataloguePanel, body[data-server-view="downloa
   margin: -16px -16px 14px -16px;
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
+  border-radius: var(--radius-lg, 20px) var(--radius-lg, 20px) 0 0;
+  transition: border-radius .15s ease;
+}
+.library-panel .panel-header.is-stuck {
   border-radius: 0;
 }
 @media (max-width: 1250px) {
@@ -416,6 +420,9 @@ body[data-server-view="library"] #cataloguePanel, body[data-server-view="downloa
     top: calc(var(--topbar-h, 56px) - 2px);
     margin: -16px -16px 14px -16px;
     padding: 10px 16px;
+    border-radius: var(--radius-lg, 20px) var(--radius-lg, 20px) 0 0;
+  }
+  .library-panel .panel-header.is-stuck {
     border-radius: 0;
   }
 

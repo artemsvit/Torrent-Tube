@@ -2914,6 +2914,17 @@ if (window.ResizeObserver) new ResizeObserver(syncTopBarHeight).observe(topBarEl
 // /api/library: one card per title (copies merged as versions), matched on
 // TMDB, sorted into Movies, TV Shows and Cartoons - the same as the apps.
 const libraryPanel = document.getElementById("libraryPanel");
+const libraryHeader = libraryPanel ? libraryPanel.querySelector(".panel-header") : null;
+function updateLibraryHeaderStickyState() {
+  if (!libraryHeader || libraryPanel.hidden) return;
+  const topBarH = topBarEl ? topBarEl.offsetHeight : 60;
+  const rect = libraryHeader.getBoundingClientRect();
+  const isStuck = rect.top <= topBarH;
+  libraryHeader.classList.toggle("is-stuck", isStuck);
+}
+window.addEventListener("scroll", updateLibraryHeaderStickyState, { passive: true });
+window.addEventListener("resize", updateLibraryHeaderStickyState, { passive: true });
+
 const libraryChips = document.getElementById("libraryChips");
 const libraryKinds = document.getElementById("libraryKinds");
 const libraryKindsSelect = document.getElementById("libraryKindsSelect");
