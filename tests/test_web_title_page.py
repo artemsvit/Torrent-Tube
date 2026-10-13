@@ -29,6 +29,11 @@ class WebTitlePage(unittest.TestCase):
         self.assertIn('<main class="title-page is-open"', page)
 
     @unittest.skipUnless(shutil.which("node"), "Node is required for the browser-helper checks")
+    def test_catalog_sources_and_header(self):
+        result = subprocess.run([shutil.which("node"), str(Path(__file__).with_name("web_catalog.js"))], capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    @unittest.skipUnless(shutil.which("node"), "Node is required for the browser-helper checks")
     def test_server_home_history(self):
         result = subprocess.run([shutil.which("node"), str(Path(__file__).with_name("web_server_home.js"))], capture_output=True, text=True, timeout=15)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

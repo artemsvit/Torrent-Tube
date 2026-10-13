@@ -1,6 +1,10 @@
 // UI language is a browser preference. API data, file paths, and folder values
 // remain unchanged. Keep source text so switching languages is reversible.
 const UI_UK = {
+  'Interface':'Інтерфейс', 'Theme':'Тема', 'Close search':'Закрити пошук',
+  'Loading the torrent catalog…':'Завантаження каталогу торентів…',
+  'Could not load the torrent catalog. Check Search in Settings.':'Не вдалося завантажити каталог торентів. Перевірте пошук у налаштуваннях.',
+  'Nothing here right now.':'Тут поки нічого немає.',
   'Home':'Головна', 'Recently added':'Нове на сервері',
   'Synced across devices':'Синхронізовано між пристроями',
   'See all':'Переглянути всі', 'Watch':'Дивитися', 'Details':'Деталі',
@@ -163,6 +167,7 @@ function translateUI(text, language) {
   let translated = UI_UK[key];
   if (!translated) {
     const patterns = [
+      [/^(\d+) titles$/, n => ukrainianCount(n, 'назва', 'назви', 'назв')],
       [/^Resume at (.+)$/, time => `Продовжити з ${time}`],
       [/^(\d+) season$/, n => ukrainianCount(n, 'сезон', 'сезони', 'сезонів')],
       [/^Results for “(.+)”$/, query => `Результати для «${query}»`],

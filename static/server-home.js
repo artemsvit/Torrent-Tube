@@ -3,6 +3,9 @@
 let serverHistory = [], homeFeaturedIndex = 0, homeRenderKey = "", homeHeroRequest = 0;
 let homeLibraryError = '';
 const homeMetadata = new Map();
+const catalogFeeds = new Map(), catalogRequests = new Map(), catalogEnriched = new Set(), catalogErrors = new Map();
+const CATALOG_SECTIONS = [['new','New releases'],['popular','Popular'],['movies','Movies'],['tv','TV Shows'],['cartoons','Cartoons']];
+let catalogLoaded = false, catalogError = '', catalogPage = 0, catalogLoading = false, catalogUpdatedAt = 0;
 
 function updateServerNavigation(view) {
   const navigationView = view === 'favorites' ? 'library' : view;
@@ -16,16 +19,106 @@ function setServerView(view) {
   closeSearchDropdown();
   if (detailsState || personState) closeDetails();
   if (view === 'discover') view = 'home';
+  if (view === 'favorites') { librarySection = 'favorites'; view = 'library'; }
   if (discoverMode) exitDiscover();
   document.body.dataset.serverView = view;
   updateServerNavigation(view);
   renderViewToggleBtn();
-  if (['movie', 'tv', 'cartoon', 'favorites'].includes(view)) librarySection = view;
   renderLibrary();
   // The Library destination stays useful when the optional split-view
   // library setting was disabled or there are no titles yet.
-  if (['library', 'movie', 'tv', 'cartoon', 'favorites'].includes(view)) libraryPanel.hidden = false;
+  libraryPanel.hidden = view !== 'library';
+  catalogPage = 0;
+  renderCatalogPage();
+  setHeaderSearch(false);
   window.scrollTo({top:0});
+}
+
+function catalogFeedForView(view) { return {movie:'movies',tv:'tv',cartoon:'cartoons'}[view]; }
+
+function catalogEntries(feed) {
+  const groups = new Map();
+  for (const row of catalogFeeds.get(feed) || []) {
+    const kind = feed === 'tv' ? 'tv' : feed === 'cartoons' ? 'cartoon'
+      : /cartoon|animation|мульт/i.test(row.suggested_category || '') ? 'cartoon'
+      : /\bS\d+E?\d*|season|сезон/i.test(row.title || '') || /tv|series|серіал/i.test(row.suggested_category || '') ? 'tv' : 'movie';
+    const title = row.clean_title || roughTitle(row.title);
+    const key = `${kind}:${plainText(title)}`;
+    const known = groups.get(key);
+    if (known) { known.releases.push(row); continue; }
+    groups.set(key,{...row,id:row.download_link || row.magnet || row.details_link || row.title,
+      display_title:title,kind,media_type:kind === 'tv' ? 'tv' : 'movie',releases:[row]});
+  }
+  return [...groups.values()];
+}
+
+async function loadCatalogFeed(feed) {
+  if (catalogRequests.has(feed)) return catalogRequests.get(feed);
+  const request = (async()=>{
+    const response = await fetch(`/api/discover?feed=${encodeURIComponent(feed)}`);
+    const data = await response.json();
+    if (!response.ok || data.error) throw new Error(data.error || 'Could not load the torrent catalog');
+    catalogFeeds.set(feed,data.results || []);
+    return data.results || [];
+  })();
+  catalogRequests.set(feed,request);
+  try { const rows = await request; catalogErrors.delete(feed); return rows; }
+  catch (e) { catalogRequests.delete(feed); catalogErrors.set(feed,'Could not load the torrent catalog. Check Search in Settings.'); throw e; }
+}
+
+async function loadServerCatalog(refresh = false) {
+  if (catalogLoading) return;
+  catalogLoading = true;
+  if (refresh) catalogRequests.clear();
+  catalogError = '';
+  const results = await Promise.allSettled(CATALOG_SECTIONS.map(([feed])=>loadCatalogFeed(feed)));
+  catalogLoaded = true;
+  catalogLoading = false;
+  catalogUpdatedAt = Date.now();
+  if (results.every(r=>r.status === 'rejected')) catalogError = 'Could not load the torrent catalog. Check Search in Settings.';
+  renderServerHome(); renderCatalogPage();
+  enrichCatalogItems(CATALOG_SECTIONS.flatMap(([feed])=>catalogEntries(feed).slice(0,20)));
+}
+
+async function enrichCatalogItems(items) {
+  const titles = [...new Set(items.flatMap(i=>i.releases || [i]).map(i=>i.title))].filter(t=>!catalogEnriched.has(t));
+  if (!titles.length) return;
+  titles.forEach(t=>catalogEnriched.add(t));
+  for (let start=0;start<titles.length;start+=64) {
+    const batch = titles.slice(start,start+64);
+    try {
+      const response = await fetch('/api/discover/enrich',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({titles:batch})});
+      if (!response.ok) throw new Error('Metadata unavailable');
+      const metadata = await response.json();
+      for (const rows of catalogFeeds.values()) for (const row of rows) if (metadata[row.title]) Object.assign(row,metadata[row.title]);
+      renderServerHome(); renderCatalogPage();
+    } catch (e) { batch.forEach(t=>catalogEnriched.delete(t)); }
+  }
+}
+
+function buildCatalogCard(item) {
+  const card = document.createElement('button');
+  card.type = 'button'; card.className = 'lib-card catalog-card';
+  card.innerHTML = `<div class="lib-poster">${item.poster ? `<img src="${escapeHtml(item.poster.replace('/w200/','/w342/'))}" alt="" loading="lazy">` : brandArt(libraryTitle(item))}</div><div class="lib-title" data-no-i18n>${escapeHtml(libraryTitle(item))}</div><div class="lib-sub">${item.rating ? `★ ${item.rating.toFixed(1)} · ` : ''}${escapeHtml(item.size_label || '')}</div>`;
+  card.onclick = ()=>openDetails(item);
+  return card;
+}
+
+function renderCatalogPage() {
+  const feed = catalogFeedForView(document.body.dataset.serverView), panel = document.getElementById('cataloguePanel');
+  panel.hidden = !feed;
+  if (!feed) return;
+  const items = catalogEntries(feed), size = 36;
+  catalogPage = Math.min(catalogPage,Math.max(0,Math.ceil(items.length/size)-1));
+  document.getElementById('catalogueTitle').textContent = CATALOG_SECTIONS.find(([id])=>id === feed)[1];
+  document.getElementById('catalogueCount').textContent = `${items.length} titles`;
+  const grid = document.getElementById('catalogueGrid'); grid.replaceChildren();
+  const visible = items.slice(catalogPage*size,(catalogPage+1)*size);
+  visible.forEach(item=>grid.appendChild(buildCatalogCard(item)));
+  if (!visible.length) grid.innerHTML = `<div class="library-empty" role="status">${catalogErrors.get(feed) || catalogError || (catalogLoaded ? 'Nothing here right now.' : 'Loading…')}</div>`;
+  const pagination = document.getElementById('cataloguePagination');
+  pagination.innerHTML = items.length > size ? `<button type="button" class="btn-secondary" data-catalog-page="-1"${catalogPage ? '' : ' disabled'}>Prev</button><span>Page ${catalogPage+1} of ${Math.ceil(items.length/size)}</span><button type="button" class="btn-secondary" data-catalog-page="1"${(catalogPage+1)*size >= items.length ? ' disabled' : ''}>Next</button>` : '';
+  enrichCatalogItems(visible);
 }
 
 function featuredLibraryItems(items) {
@@ -46,12 +139,12 @@ function homeTime(seconds) {
 
 function renderHomeHero() {
   const hero = document.getElementById('homeFeatured');
-  const items = featuredLibraryItems(libraryItems);
+  const items = featuredLibraryItems(catalogEntries('new').concat(catalogEntries('movies').slice(0,2),catalogEntries('tv').slice(0,2),catalogEntries('cartoons').slice(0,2)));
   if (!items.length) {
-    if (!libraryLoaded) {
-      hero.innerHTML = `<div class="home-loading" role="status">${homeLibraryError ? `${escapeHtml(homeLibraryError)} <button type="button" class="btn-secondary" id="homeLibraryRetry">Try again</button>` : 'Loading your library…'}</div>`;
+    if (!catalogLoaded || catalogError) {
+      hero.innerHTML = `<div class="home-loading" role="status">${catalogError ? `${escapeHtml(catalogError)} <button type="button" class="btn-secondary" id="homeLibraryRetry">Try again</button>` : 'Loading the torrent catalog…'}</div>`;
       const retry = document.getElementById('homeLibraryRetry');
-      if (retry) retry.onclick = () => loadLibrary(true);
+      if (retry) retry.onclick = () => loadServerCatalog();
       return;
     }
     hero.innerHTML = `<div class="home-hero-copy home-empty"><span class="home-eyebrow">Your server</span><h2>Your next watch starts here</h2><p>Your library, favorites and viewing history in one place. Search for a title or add a torrent to grow your library.</p><div class="home-hero-actions"><button type="button" class="btn-primary btn-pill" data-home-search>Search</button><button type="button" class="btn-secondary" data-home-view="downloads">Downloads</button></div></div>`;
@@ -61,21 +154,17 @@ function renderHomeHero() {
   const item = items[homeFeaturedIndex], data = homeMetadata.get(item.id) || item;
   const title = libraryTitle(item), art = data.backdrop || data.banner;
   hero.innerHTML = `${art ? `<img class="home-hero-art" src="${escapeHtml(art)}" alt="">` : `<div class="home-hero-placeholder">${brandArt(title, true)}</div>`}
-    <div class="home-hero-shade"></div><div class="home-hero-copy"><span class="home-eyebrow">In your library</span>
+    <div class="home-hero-shade"></div><div class="home-hero-copy"><span class="home-eyebrow">New releases</span>
     <h2 data-no-i18n>${escapeHtml(title)}</h2><div class="home-hero-meta"><span>${{movie:'Movie',tv:'TV show',cartoon:'Cartoon'}[item.kind] || 'Movie'}</span>${data.year || item.year ? `<span>${escapeHtml(String(data.year || item.year))}</span>` : ''}${item.rating ? `<span class="home-rating">★ ${item.rating.toFixed(1)}</span>` : ''}${item.seasons ? `<span>${item.seasons} seasons</span>` : ''}</div>
     <p data-no-i18n>${escapeHtml(data.overview || item.overview || '')}</p>
     <div class="home-hero-actions"><button type="button" class="btn-primary btn-pill" id="homeHeroPlay">${ICONS.play}Watch</button><button type="button" class="btn-secondary" id="homeHeroDetails">Details</button><button type="button" class="btn-secondary home-hero-favorite" id="homeHeroFavorite" aria-pressed="${isFavorite(item.id)}" aria-label="${isFavorite(item.id) ? 'Remove from Favorites' : 'Add to Favorites'}">${isFavorite(item.id) ? ICONS.heartFilled : ICONS.heart}</button></div></div>
     <div class="home-hero-pages" role="group" aria-label="Featured titles">${items.map((i,n)=>`<button type="button" data-featured="${n}" aria-label="${escapeHtml(libraryTitle(i))}" aria-pressed="${n === homeFeaturedIndex}"></button>`).join('')}</div>`;
-  document.getElementById('homeHeroDetails').onclick = () => openLibraryTitle(item);
-  document.getElementById('homeHeroPlay').onclick = async () => {
-    try {
-      const data = await fetch('/api/playback/prepare', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:item.id})}).then(r=>r.json());
-      if (!data.files?.length) throw new Error(data.error || 'No video files were found');
-      const file = data.files.find(f=>f.index === data.selected) || data.files[0];
-      playLibraryFile(item.kind === 'tv' || item.kind === 'cartoon' ? data.files[0] : file);
-    } catch (e) { showToast(e.message, true); }
+  document.getElementById('homeHeroDetails').onclick = () => openDetails(item);
+  document.getElementById('homeHeroPlay').onclick = () => {
+    openDetails(item);
+    if (!detailsState.library && (item.magnet || item.download_link)) playRelease(item);
   };
-  document.getElementById('homeHeroFavorite').onclick = () => toggleFavorite({library:item,item:{title,poster:item.poster},data:{tmdb_id:item.tmdb_id,media_type:item.media_type,title}});
+  document.getElementById('homeHeroFavorite').onclick = () => toggleFavorite({library:null,item,data:{tmdb_id:item.tmdb_id,media_type:item.media_type,title}});
   const request = ++homeHeroRequest;
   if (!homeMetadata.has(item.id) && item.tmdb_id && item.media_type) {
     fetch(`/api/details?type=${encodeURIComponent(item.media_type)}&id=${item.tmdb_id}`).then(r=>r.json()).then(data=>{
@@ -105,16 +194,14 @@ function buildContinueCard(entry) {
 }
 
 function renderServerHome() {
-  const key = JSON.stringify([libraryLoaded,homeLibraryError,libraryItems,favorites,serverHistory]);
+  const key = JSON.stringify([catalogLoaded,catalogError,[...catalogFeeds],favorites,serverHistory]);
   if (key === homeRenderKey) return;
   homeRenderKey = key;
   renderHomeHero();
   const root = document.getElementById('homeShelves');
   root.replaceChildren();
   appendHomeShelf(root,'Continue Watching',null,serverHistory,buildContinueCard);
-  appendHomeShelf(root,'Recently added','library',libraryItems,buildLibraryCard);
-  for (const [kind,label] of LIBRARY_KINDS) appendHomeShelf(root,label,kind,libraryItems.filter(i=>i.kind === kind),buildLibraryCard);
-  appendHomeShelf(root,'Favorites','favorites',favorites,buildFavoriteCard);
+  for (const [feed,label] of CATALOG_SECTIONS) appendHomeShelf(root,label,{movies:'movie',tv:'tv',cartoons:'cartoon'}[feed] || null,catalogEntries(feed),buildCatalogCard);
 }
 
 async function loadServerHistory() {
@@ -191,14 +278,29 @@ document.addEventListener('keydown',e=>{
   if (e.key === 'Escape') closeServerNavigation();
 });
 const browseSearch = document.getElementById('mainInput');
+function setHeaderSearch(open) {
+  document.querySelector('.top-bar').classList.toggle('header-search-open',open);
+  const button = document.getElementById('searchToggleBtn');
+  button.setAttribute('aria-expanded',String(open));
+  button.setAttribute('aria-label',open ? 'Close search' : 'Search');
+  button.title = open ? 'Close search' : 'Search';
+  button.innerHTML = open ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg>' : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/></svg>';
+  if (open) { closeServerNavigation(); browseSearch.placeholder = 'Search torrents, library, or paste a magnet link'; browseSearch.focus(); }
+  else { browseSearch.blur(); closeSearchDropdown(); }
+}
+document.getElementById('searchToggleBtn').addEventListener('click',()=>setHeaderSearch(!document.querySelector('.top-bar').classList.contains('header-search-open')));
 browseSearch.addEventListener('focus',()=>{ closeServerNavigation(); browseSearch.placeholder = 'Search torrents, library, or paste a magnet link'; });
 browseSearch.addEventListener('blur',()=>{ browseSearch.placeholder = 'Search'; });
-browseSearch.addEventListener('keydown',e=>{ if (e.key === 'Escape') browseSearch.blur(); });
+browseSearch.addEventListener('keydown',e=>{ if (e.key === 'Escape') { setHeaderSearch(false); document.getElementById('searchToggleBtn').focus(); } });
 document.getElementById('serverHome').addEventListener('click',e=>{
-  if (e.target.closest('[data-home-search]')) browseSearch.focus();
+  if (e.target.closest('[data-home-search]')) setHeaderSearch(true);
   const view = e.target.closest('[data-home-view]');
   if (view) setServerView(view.dataset.homeView);
   const featured = e.target.closest('[data-featured]');
   if (featured) { homeFeaturedIndex = Number(featured.dataset.featured); renderHomeHero(); }
 });
 document.addEventListener('visibilitychange',()=>{ if (!document.hidden) loadServerHistory(); });
+document.getElementById('cataloguePagination').addEventListener('click',e=>{
+  const button = e.target.closest('[data-catalog-page]');
+  if (button) { catalogPage += Number(button.dataset.catalogPage); renderCatalogPage(); window.scrollTo({top:0}); }
+});

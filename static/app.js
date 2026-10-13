@@ -35,7 +35,6 @@ const themeToggleBtn = document.getElementById("themeToggle");
 const dropZone = document.getElementById("dropZone");
 const searchDropdown = document.getElementById("searchDropdown");
 
-const viewToggleBtn = document.getElementById("viewToggleBtn");
 const downloadsTab = document.getElementById("downloadsTab");
 const streamsPanel = document.getElementById("streamsPanel");
 const streamsList = document.getElementById("streamsList");
@@ -597,16 +596,9 @@ let currentStreams = [];
 const HOME_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-8H9v8H4a1 1 0 0 1-1-1z"/></svg>`;
 
 function renderViewToggleBtn() {
-  if (document.body.dataset.serverView !== "downloads") {
-    const badge = currentTorrentCount > 0 ? `<span class="btn-badge">${currentTorrentCount}</span>` : "";
-    viewToggleBtn.innerHTML = `${ICONS.download}${badge}`;
-    viewToggleBtn.title = "Downloads";
-    viewToggleBtn.setAttribute("aria-label", "Show downloads");
-  } else {
-    viewToggleBtn.innerHTML = HOME_ICON;
-    viewToggleBtn.title = "Home";
-    viewToggleBtn.setAttribute("aria-label", "Home");
-  }
+  const badge = document.getElementById('navDownloadCount');
+  badge.hidden = !currentTorrentCount;
+  badge.textContent = currentTorrentCount;
 }
 
 let discoverMode = false;
@@ -756,10 +748,6 @@ function exitDiscover() {
   refresh();
 }
 
-viewToggleBtn.addEventListener("click", () => {
-  closeSearchDropdown();
-  setServerView(document.body.dataset.serverView === "downloads" ? "home" : "downloads");
-});
 clearAllBtn.addEventListener("click", clearAllTorrents);
 discoverTabs.addEventListener("click", (e) => {
   const btn = e.target.closest(".discover-tab");
@@ -1844,6 +1832,7 @@ function titlePageURL(item, torrent, season) {
 }
 
 function openDetails(item, torrent = null, { fromHistory = false, season = null } = {}) {
+  setHeaderSearch(false);
   if (!item.library && item.tmdb_id) {
     const type = item.media_type || item.mediaType;
     const local = libraryItems.find(t => t.tmdb_id === item.tmdb_id && (!type || t.media_type === type));
@@ -3038,7 +3027,7 @@ function libraryTitle(item) { return item.display_title || item.title || item.na
 
 function renderLibrary() {
   renderServerHome();
-  const dedicated = ['library', 'movie', 'tv', 'cartoon', 'favorites'].includes(document.body.dataset.serverView);
+  const dedicated = ['library', 'favorites'].includes(document.body.dataset.serverView);
   const show = dedicated || ((libraryItems.length > 0 || favorites.length > 0) && libraryShown());
   libraryPanel.hidden = !show;
   layoutEl.classList.toggle("has-library", show);
@@ -3112,10 +3101,8 @@ libraryChips.addEventListener("click", e => {
   const chip = e.target.closest(".library-chip[data-kind]");
   if (chip) {
     librarySection = chip.dataset.kind;
-    if (document.body.dataset.serverView !== 'library') {
-      document.body.dataset.serverView = librarySection;
-      updateServerNavigation(librarySection);
-    }
+    document.body.dataset.serverView = 'library';
+    updateServerNavigation('library');
     renderLibrary(); libraryGrid.scrollTop = 0;
   }
 });
@@ -3317,6 +3304,7 @@ async function init() {
     history.replaceState(null, "", location.pathname + (params.toString() ? `?${params}` : "") + location.hash);
   }
   setServerView("home");
+  loadServerCatalog();
   loadConfig();
   loadLimits();
   loadLibrary();
@@ -3326,7 +3314,10 @@ async function init() {
   // Home uses the same server library and history as the Apple clients.
   loadServerHistory();
   handleServerResumeReturn();
-  setInterval(() => { if (!document.hidden) { loadServerHistory(); loadFavorites(); loadLibrary(); } }, 30000);
+  setInterval(() => { if (!document.hidden) {
+    loadServerHistory(); loadFavorites(); loadLibrary();
+    if (Date.now() - catalogUpdatedAt > 300000) loadServerCatalog(true);
+  } }, 30000);
   refresh();
   if (params.has("title") || params.has("person")) await restoreTitleRoute();
   // Every 1.5 s while the page is in view; a tab in the background asks
