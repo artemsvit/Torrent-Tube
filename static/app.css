@@ -422,7 +422,7 @@
     /* The title and count on one line, the tabs below in one sideways row. */
     /* The search on its own line, the tabs below in one sideways row. */
     .library-panel .library-chips { flex-wrap: wrap; }
-    .library-panel .library-chips .library-filter { order: -1; flex-basis: 100%; margin-left: 0; }
+    .library-panel .library-chips .library-filter { flex-basis: 100%; margin-left: 0; }
     .library-filter input { width: 100%; }
     .library-panel .library-kinds { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; flex-basis: 100%; }
     .library-panel .library-kinds::-webkit-scrollbar { display: none; }

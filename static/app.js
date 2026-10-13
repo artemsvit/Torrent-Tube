@@ -2467,10 +2467,14 @@ function renderPersonPage() {
     </a>`;
   }).join('');
   detailsBody.innerHTML = `<div class="dt-body person-page">
-    <header class="person-header"><div class="person-photo">${p.photo ? `<img src="${escapeHtml(p.photo)}" alt="">` : ''}<span aria-hidden="true">${escapeHtml((p.name || '?').charAt(0))}</span></div>
-      <div><p class="person-eyebrow">Cast &amp; crew</p><h1>${escapeHtml(p.name || 'Cast & crew')}</h1>${s.data ? `<p>${s.data.titles.length} films and TV shows</p>` : ''}</div></header>
-    <div class="person-filters" role="group" aria-label="Filter titles">${filters.map(([value, label]) => `<button type="button" class="library-chip${s.filter === value ? ' is-active' : ''}" data-act="person-filter" data-filter="${value}" aria-pressed="${s.filter === value}">${label}</button>`).join('')}</div>
-    ${s.loading ? '<p class="dt-status" role="status">Loading films and TV shows…</p>' : s.error ? `<div class="dt-status is-error" role="alert">${escapeHtml(s.error)} <button class="dt-link-btn" data-act="person-retry">Try again</button></div>` : !cards ? '<p class="dt-status">No titles are listed here yet.</p>' : `<div class="person-title-grid">${cards}</div>`}
+    <div class="person-top-bar">
+      <header class="person-header"><div class="person-photo">${p.photo ? `<img src="${escapeHtml(p.photo)}" alt="">` : ''}<span aria-hidden="true">${escapeHtml((p.name || '?').charAt(0))}</span></div>
+        <div><p class="person-eyebrow">Cast &amp; crew</p><h1>${escapeHtml(p.name || 'Cast & crew')}</h1>${s.data ? `<p>${s.data.titles.length} films and TV shows</p>` : ''}</div></header>
+      <div class="person-filters" role="group" aria-label="Filter titles">${filters.map(([value, label]) => `<button type="button" class="library-chip${s.filter === value ? ' is-active' : ''}" data-act="person-filter" data-filter="${value}" aria-pressed="${s.filter === value}">${label}</button>`).join('')}</div>
+    </div>
+    <div class="person-content">
+      ${s.loading ? '<p class="dt-status" role="status">Loading films and TV shows…</p>' : s.error ? `<div class="dt-status is-error" role="alert">${escapeHtml(s.error)} <button class="dt-link-btn" data-act="person-retry">Try again</button></div>` : !cards ? '<p class="dt-status">No titles are listed here yet.</p>' : `<div class="person-title-grid">${cards}</div>`}
+    </div>
   </div>`;
   detailsBody.querySelectorAll('.person-page img').forEach(img => {
     const fallback = () => { img.hidden = true; };

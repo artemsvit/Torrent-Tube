@@ -278,6 +278,14 @@ document.addEventListener('keydown',e=>{
   if (e.key === 'Escape') closeServerNavigation();
 });
 const browseSearch = document.getElementById('mainInput');
+function searchPlaceholderForScreen(expanded = false) {
+  const isMobile = typeof window !== 'undefined' && typeof window.innerWidth === 'number' ? window.innerWidth <= 640 : false;
+  const isUk = typeof document !== 'undefined' && document.documentElement ? document.documentElement.lang === 'uk' : false;
+  if (isMobile) return isUk ? 'Пошук' : 'Search';
+  if (!expanded) return isUk ? 'Пошук' : 'Search';
+  return isUk ? 'Пошук у бібліотеці й торентах або magnet' : 'Search torrents, library, or paste a magnet link';
+}
+
 function setHeaderSearch(open) {
   document.querySelector('.top-bar').classList.toggle('header-search-open',open);
   const button = document.getElementById('searchToggleBtn');
@@ -285,12 +293,18 @@ function setHeaderSearch(open) {
   button.setAttribute('aria-label',open ? 'Close search' : 'Search');
   button.title = open ? 'Close search' : 'Search';
   button.innerHTML = open ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg>' : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/></svg>';
-  if (open) { closeServerNavigation(); browseSearch.placeholder = 'Search torrents, library, or paste a magnet link'; browseSearch.focus(); }
-  else { browseSearch.blur(); closeSearchDropdown(); }
+  if (open) {
+    closeServerNavigation();
+    browseSearch.placeholder = searchPlaceholderForScreen(true);
+    browseSearch.focus();
+  } else {
+    browseSearch.blur();
+    closeSearchDropdown();
+  }
 }
 document.getElementById('searchToggleBtn').addEventListener('click',()=>setHeaderSearch(!document.querySelector('.top-bar').classList.contains('header-search-open')));
-browseSearch.addEventListener('focus',()=>{ closeServerNavigation(); browseSearch.placeholder = 'Search torrents, library, or paste a magnet link'; });
-browseSearch.addEventListener('blur',()=>{ browseSearch.placeholder = 'Search'; });
+browseSearch.addEventListener('focus',()=>{ closeServerNavigation(); browseSearch.placeholder = searchPlaceholderForScreen(true); });
+browseSearch.addEventListener('blur',()=>{ browseSearch.placeholder = searchPlaceholderForScreen(false); });
 browseSearch.addEventListener('keydown',e=>{ if (e.key === 'Escape') { setHeaderSearch(false); document.getElementById('searchToggleBtn').focus(); } });
 document.getElementById('serverHome').addEventListener('click',e=>{
   if (e.target.closest('[data-home-search]')) setHeaderSearch(true);
