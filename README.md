@@ -82,13 +82,13 @@ docker login -u artsvit
 docker buildx build --platform linux/amd64 -t artsvit/torrenttube:latest --push .
 ```
 
-### docker-compose
+### Universal docker-compose
 
-Jackett is bundled as its own service, so `docker compose up -d` alone gives
-you a working Search/Discover tab once you've entered a couple of API keys
-(see "Search" below) — nothing else to install separately.
+`docker-compose.yml` bundles Jackett so you get an out-of-the-box working setup on Linux, macOS, Windows (Docker Desktop), and Synology NAS:
 
 ```yaml
+name: torrenttube
+
 services:
   jackett:
     image: lscr.io/linuxserver/jackett:latest
@@ -97,19 +97,15 @@ services:
     ports:
       - "9117:9117"
     volumes:
-      - /volume1/docker/jackett/config:/config
+      - ./jackett-config:/config
+      - ./downloads:/downloads
     environment:
-      - PUID=1026
-      - PGID=100
-      - TZ=Etc/UTC
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-Etc/UTC}
 
   torrenttube:
     image: artsvit/torrenttube:latest
-    # To build from source instead of pulling the published image, comment
-    # out the `image:` line above and uncomment this:
-    # build:
-    #   context: .
-    #   network: host  # needed on some NAS/router setups; see below
     container_name: torrenttube
     restart: unless-stopped
     depends_on:
@@ -119,40 +115,23 @@ services:
       - "6881:6881"
       - "6881:6881/udp"
     volumes:
-      - /volume1/homes/artsvit/Media:/downloads
+      - ./downloads:/downloads
     environment:
-      - PUID=1026
-      - PGID=100
-      - TZ=Etc/UTC
-      # Must match real subfolder names under the mounted volume above.
-      - TORRENTTUBE_CATEGORIES=Cartoon,Movies,TV Shows
-      # Points at the bundled jackett service by its compose service name -
-      # only needed if you're using an external Jackett instance instead.
-      # The API keys themselves are entered from the app's own Settings
-      # screen once it's running (see "Search" below), not here.
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-Etc/UTC}
+      - TORRENTTUBE_CATEGORIES=Movies,TV Shows,Cartoon
       - JACKETTAPI_URL=http://jackett:9117
-    dns:
-      - 1.1.1.1
-      - 8.8.8.8
 ```
 
-If building on a NAS whose Docker daemon shares a host with a DNS-filtering
-container (like Pi-hole), `apt-get` inside the build can hang resolving
-`deb.debian.org` — the embedded Docker resolver loops back through it. The
-`network: host` build option and the explicit `dns:` at runtime above route
-around that; both are already set in this repo's `docker-compose.yml`.
+#### Platform configuration:
+- **macOS / Windows (Docker Desktop)**: Works out of the box with default `./downloads`. Files appear in your local directory.
+- **Linux**: Set `PUID` and `PGID` to match your user (run `id` in terminal, e.g. `PUID=1000 PGID=1000`).
+- **Synology NAS (Container Manager)**:
+  - Change `./downloads` to your media shared folder (e.g. `/volume1/homes/yourname/Media` or `/volume1/video`).
+  - Set `PUID=1026` and `PGID=100` (or your DSM admin user's UID) so files aren't locked by root.
 
-`PUID`/`PGID` control which user ID owns the downloaded files — set these to
-match your own user (`id yourname` on Linux/Synology) so files aren't owned
-by root. The `6881` ports are optional but help BitTorrent peer discovery
-(port forward `6881/tcp` and `6881/udp` on your router if you want faster,
-more reliable transfers).
-
-`TORRENTTUBE_CATEGORIES` is a comma-separated list of subfolders (under the
-mounted volume) that show up as a destination picker in the UI. Each one is
-created automatically if it doesn't already exist. Leave it unset to use the
-default `Cartoon,Movies,TV Shows`, or set it to a single value to hide the
-picker and always save to one folder.
+`PUID`/`PGID` control file permissions. `6881` ports are optional for BitTorrent peer incoming connections. All private keys and passwords are typed only in the Web UI, never committed to Git.
 
 ## Search
 

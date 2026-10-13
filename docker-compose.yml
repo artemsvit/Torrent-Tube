@@ -1,8 +1,8 @@
+name: torrenttube
+
 services:
-  # Bundled so `docker-compose up` alone gives you a working Search/Discover
-  # tab - Jackett does the actual tracker login/scraping (configured with
-  # your own tracker credentials, entered into Jackett's own UI at
-  # :9117), this app only talks to its local Torznab API.
+  # Jackett scrapes torrent trackers and provides Torznab search.
+  # Open http://<host>:9117 to add trackers and copy the API key.
   jackett:
     image: lscr.io/linuxserver/jackett:latest
     container_name: jackett
@@ -10,26 +10,17 @@ services:
     ports:
       - "9117:9117"
     volumes:
-      - /volume1/docker/jackett/config:/config
-      - /volume1/homes/artsvit/Media:/downloads
+      - ./jackett-config:/config
+      - ./downloads:/downloads
     environment:
-      - PUID=1026
-      - PGID=100
-      - TZ=Etc/UTC
-    # Same DNS hairpin-NAT workaround as torrenttube below - without this,
-    # Jackett can't resolve real tracker hostnames (mazepa.to etc.) on this
-    # particular NAS. See the comment on torrenttube's own `dns:` for why.
-    dns:
-      - 1.1.1.1
-      - 8.8.8.8
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-Etc/UTC}
 
+  # Torrent Tube web client & streaming backend.
+  # Open http://<host>:5058 to browse, stream, and manage downloads.
   torrenttube:
     image: artsvit/torrenttube:latest
-    # To build from source instead of pulling the published image, comment
-    # out the `image:` line above and uncomment this:
-    # build:
-    #   context: .
-    #   network: host  # needed on some NAS/router setups; see README
     container_name: torrenttube
     restart: unless-stopped
     depends_on:
@@ -39,32 +30,12 @@ services:
       - "6881:6881"
       - "6881:6881/udp"
     volumes:
-      - /volume1/homes/artsvit/Media:/downloads
+      - ./downloads:/downloads
     environment:
-      - PUID=1026
-      - PGID=100
-      - TZ=Etc/UTC
-      # Must match real subfolder names under the mounted volume above.
-      - TORRENTTUBE_CATEGORIES=Cartoon,Movies,TV Shows
-      # Settings shows where downloads really are on the server. On a
-      # Synology it's worked out from the mount above; elsewhere set it:
-      # - TORRENTTUBE_HOST_DOWNLOAD_DIR=/volume1/homes/artsvit/Media
-      # Everything below is optional and only seeds the *initial* value -
-      # once you enter it from the app's own Settings screen (Search &
-      # Metadata section), that's saved to settings.json next to your
-      # downloads and wins from then on, surviving container recreation.
-      # Points at the bundled jackett service above by its compose service
-      # name; only change this if you're using an external Jackett instance.
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-Etc/UTC}
+      # Destination subfolders inside ./downloads for media library categorization
+      - TORRENTTUBE_CATEGORIES=Movies,TV Shows,Cartoon
+      # Connects to bundled Jackett container via Docker network
       - JACKETTAPI_URL=http://jackett:9117
-      # - JACKETTAPI_KEY=your-jackett-api-key
-      # - JACKETTAPI_INDEXER=all
-      # - TMDB_API_KEY=your-tmdb-api-key
-      # - TMDB_LANGUAGE=uk-UA
-    # Same hairpin-NAT issue as the build (see above), but for the running
-    # container: Docker's embedded resolver (127.0.0.11) forwards to the
-    # host's DNS server, which is Pi-hole running in another container on
-    # this same host — that loopback doesn't route through this NAS's
-    # Open vSwitch setup. Point straight at public DNS instead.
-    dns:
-      - 1.1.1.1
-      - 8.8.8.8
