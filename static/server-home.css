@@ -220,6 +220,9 @@ body.has-title-page .browse-toolbar { display: none; }
   align-items: center;
   justify-content: center;
 }
+.top-bar .logo-mark[hidden], .top-bar .header-back[hidden] {
+  display: none !important;
+}
 .top-bar .logo-mark svg, .top-bar .header-back svg {
   width: 20px;
   height: 20px;
