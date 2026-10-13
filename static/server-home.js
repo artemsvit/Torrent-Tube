@@ -52,14 +52,86 @@ function catalogEntries(feed) {
   return [...groups.values()];
 }
 
+const CATALOG_CACHE_KEY = 'torrenttube-catalog-cache-v1';
+const CATALOG_METADATA_CACHE_KEY = 'torrenttube-catalog-meta-v1';
+const CATALOG_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+
+function loadCachedCatalog() {
+  try {
+    const rawMeta = localStorage.getItem(CATALOG_METADATA_CACHE_KEY);
+    if (rawMeta) {
+      const meta = JSON.parse(rawMeta);
+      for (const [title, data] of Object.entries(meta)) {
+        if (data && typeof data === 'object') {
+          catalogEnriched.add(title);
+        }
+      }
+    }
+    const rawFeeds = localStorage.getItem(CATALOG_CACHE_KEY);
+    if (!rawFeeds) return;
+    const { timestamp, feeds } = JSON.parse(rawFeeds);
+    if (!feeds || typeof feeds !== 'object') return;
+    for (const [feed, items] of Object.entries(feeds)) {
+      if (Array.isArray(items)) {
+        catalogFeeds.set(feed, items);
+      }
+    }
+    if (catalogFeeds.size > 0) {
+      catalogLoaded = true;
+      renderServerHome();
+      renderCatalogPage();
+    }
+  } catch (e) {}
+}
+
+function saveCachedCatalog() {
+  try {
+    const feedsObj = {};
+    for (const [feed, items] of catalogFeeds.entries()) {
+      feedsObj[feed] = items;
+    }
+    localStorage.setItem(CATALOG_CACHE_KEY, JSON.stringify({
+      timestamp: Date.now(),
+      feeds: feedsObj
+    }));
+  } catch (e) {}
+}
+
+function saveCachedMetadata(newMetadata) {
+  try {
+    const existing = JSON.parse(localStorage.getItem(CATALOG_METADATA_CACHE_KEY) || '{}');
+    Object.assign(existing, newMetadata);
+    // Limit cache size to 400 entries
+    const keys = Object.keys(existing);
+    if (keys.length > 400) {
+      for (let i = 0; i < keys.length - 400; i++) delete existing[keys[i]];
+    }
+    localStorage.setItem(CATALOG_METADATA_CACHE_KEY, JSON.stringify(existing));
+  } catch (e) {}
+}
+
+// Load cached snapshot immediately on script execution
+loadCachedCatalog();
+
 async function loadCatalogFeed(feed) {
   if (catalogRequests.has(feed)) return catalogRequests.get(feed);
   const request = (async()=>{
     const response = await fetch(`/api/discover?feed=${encodeURIComponent(feed)}`);
     const data = await response.json();
     if (!response.ok || data.error) throw new Error(data.error || 'Could not load the torrent catalog');
-    catalogFeeds.set(feed,data.results || []);
-    return data.results || [];
+    const existing = catalogFeeds.get(feed) || [];
+    const metaMap = new Map();
+    for (const item of existing) {
+      if (item.poster) metaMap.set(item.title, { poster: item.poster, rating: item.rating, overview: item.overview, clean_title: item.clean_title, tmdb_id: item.tmdb_id, media_type: item.media_type, suggested_category: item.suggested_category });
+    }
+    const freshResults = data.results || [];
+    for (const item of freshResults) {
+      const saved = metaMap.get(item.title);
+      if (saved) Object.assign(item, saved);
+    }
+    catalogFeeds.set(feed, freshResults);
+    saveCachedCatalog();
+    return freshResults;
   })();
   catalogRequests.set(feed,request);
   try { const rows = await request; catalogErrors.delete(feed); return rows; }
@@ -90,7 +162,9 @@ async function enrichCatalogItems(items) {
       const response = await fetch('/api/discover/enrich',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({titles:batch})});
       if (!response.ok) throw new Error('Metadata unavailable');
       const metadata = await response.json();
+      saveCachedMetadata(metadata);
       for (const rows of catalogFeeds.values()) for (const row of rows) if (metadata[row.title]) Object.assign(row,metadata[row.title]);
+      saveCachedCatalog();
       renderServerHome(); renderCatalogPage();
     } catch (e) { batch.forEach(t=>catalogEnriched.delete(t)); }
   }
