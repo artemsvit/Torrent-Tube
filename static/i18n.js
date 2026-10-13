@@ -195,6 +195,7 @@ function translateUI(text, language) {
       [/^Search torrents: (.+)$/, name => `Шукати торенти: ${name}`],
       [/^Play episode: (.+)$/, name => `Дивитися серію: ${name}`],
       [/^(\d+) min$/, n => `${n} хв`],
+      [/^(.+)\s*\((\d+)\)$/, (cat, n) => `${UI_UK[cat.trim()] || cat.trim()} (${n})`],
     ];
     for (const [pattern, render] of patterns) {
       const match = key.match(pattern);
