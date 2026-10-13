@@ -82,16 +82,15 @@ final class APITests: XCTestCase {
             }
             #if os(tvOS)
             let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 1920, height: 1080))
-            let host = UIHostingController(rootView: ZStack {
-                Color.appBase
-                TVPlaybackErrorPrompt(title: "Playback interrupted", message: TorrentTubeAPI.networkErrorMessage(.timedOut), retry: {}, close: {})
-            }.preferredColorScheme(.dark))
+            let host = UIHostingController(rootView: PlaybackLauncher(
+                request: PlaybackRequest(source: PlaybackSource(magnet: "magnet:test"), title: "Test movie"), api: api
+            ).environment(ResumeHistory()).preferredColorScheme(.dark))
             window.rootViewController = host; window.makeKeyAndVisible()
             host.view.frame = window.bounds; host.view.layoutIfNeeded()
             try await Task.sleep(for: .milliseconds(300))
             let picture = UIGraphicsImageRenderer(size: window.bounds.size).image { _ in host.view.drawHierarchy(in: window.bounds, afterScreenUpdates: true) }
             let attachment = XCTAttachment(image: picture)
-            attachment.name = "Timeout prompt \(language.rawValue)"; attachment.lifetime = .keepAlways
+            attachment.name = "Playback error \(language.rawValue)"; attachment.lifetime = .keepAlways
             add(attachment)
             window.isHidden = true
             #endif

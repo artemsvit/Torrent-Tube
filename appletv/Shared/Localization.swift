@@ -91,6 +91,7 @@ private let ukrainian: [String: String] = [
     "This episode is not in your library, and no release was found for it.": "Цієї серії немає у вашій бібліотеці, і реліз для неї не знайдено.",
     "The selected episode could not be found in this source.": "У цьому джерелі не знайдено вибрану серію.",
     "Unable to play": "Не вдалося почати перегляд",
+    "Please try again later.": "Спробуйте ще раз пізніше.",
     "Update Torrent Tube on your server to stream on this device.": "Оновіть Torrent Tube на сервері, щоб дивитися на цьому пристрої.",
     "Use the same Wi-Fi as your server. Allow Local Network access in Settings.": "Під’єднайтеся до тієї ж мережі Wi-Fi, що й сервер. Дозвольте доступ до локальної мережі в налаштуваннях.",
     "Welcome": "Вітаємо",

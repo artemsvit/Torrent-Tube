@@ -31,17 +31,18 @@ struct TrailerPlayer: View {
                         endPoint: .bottom
                     )
                     .ignoresSafeArea()
-                    VStack(spacing: 36) {
-                        Text(trailer.name)
-                            .font(.system(size: 48, weight: .bold))
-                            .foregroundStyle(.white)
-                            .multilineTextAlignment(.center)
-                            .lineLimit(2)
-                            .shadow(color: .black.opacity(0.6), radius: 12, y: 4)
-                        if let error {
-                            TVPlaybackErrorPrompt(message: error, retry: { Task { await prepare() } },
-                                                  closeTitle: "Back", close: close)
-                        } else {
+                    if error != nil {
+                        TVPlaybackErrorPrompt(retry: { Task { await prepare() } },
+                                              closeTitle: "Back", close: close)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    } else {
+                        VStack(spacing: 36) {
+                            Text(trailer.name)
+                                .font(.system(size: 48, weight: .bold))
+                                .foregroundStyle(.white)
+                                .multilineTextAlignment(.center)
+                                .lineLimit(2)
+                                .shadow(color: .black.opacity(0.6), radius: 12, y: 4)
                             ProgressView()
                                 .progressViewStyle(.circular)
                                 .tint(.white)
@@ -55,9 +56,9 @@ struct TrailerPlayer: View {
                             .tint(.white.opacity(0.25))
                             .foregroundStyle(.white)
                         }
+                        .padding(70)
+                        .frame(maxWidth: 1100)
                     }
-                    .padding(70)
-                    .frame(maxWidth: 1100)
                 }
                 .background(.black)
                 .ignoresSafeArea()

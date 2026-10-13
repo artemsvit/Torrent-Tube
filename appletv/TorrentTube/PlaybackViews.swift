@@ -59,6 +59,10 @@ struct PlaybackLauncher: View {
                         TVResumePrompt(title: request.title, position: resumeEntry.displayPosition,
                                        resume: { model.openPlayer(at: resumeEntry.seconds) },
                                        restart: { model.openPlayer(at: 0) }, back: close)
+                    } else if model.error != nil {
+                        TVPlaybackErrorPrompt(retry: { Task { await model.prepare() } },
+                                              closeTitle: "Back", close: close)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                     } else {
                         ScrollView {
                             VStack(alignment: .leading, spacing: 32) {
@@ -67,10 +71,7 @@ struct PlaybackLauncher: View {
                                     .lineLimit(2)
                                     .shadow(color: .black.opacity(0.6), radius: 14, y: 4)
 
-                                if let error = model.error {
-                                    TVPlaybackErrorPrompt(message: error, retry: { Task { await model.prepare() } },
-                                                          closeTitle: "Back", close: close)
-                                } else if let prepared = model.prepared, !model.loading {
+                                if let prepared = model.prepared, !model.loading {
                                     Text(request.episode.map { L("Choose a file for episode %ld", $0) } ?? L("Choose an episode"))
                                         .font(.system(size: 32, weight: .semibold))
                                     ScrollView(.horizontal) {
@@ -135,10 +136,9 @@ struct PlaybackLauncher: View {
 }
 
 
-/// The saved position is information; only the three playback choices take focus.
+/// Keep playback failures general; only the recovery actions take focus.
 struct TVPlaybackErrorPrompt: View {
     var title = "Unable to play"
-    let message: String
     var retry: (() -> Void)? = nil
     var closeTitle = "Close player"
     let close: () -> Void
@@ -147,7 +147,8 @@ struct TVPlaybackErrorPrompt: View {
     var body: some View {
         VStack(spacing: 24) {
             Text(L(title)).font(.system(size: 32, weight: .semibold))
-            Text(L(message)).font(.system(size: 26)).foregroundStyle(.white.opacity(0.75))
+                .multilineTextAlignment(.center)
+            Text(L("Please try again later.")).font(.system(size: 26)).foregroundStyle(.white.opacity(0.75))
                 .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("playback-error-message")
             HStack(spacing: 24) {
@@ -309,8 +310,8 @@ struct PlayerView: View {
             if controller.buffering && !controller.playing && controller.failure == nil {
                 PlaybackBufferingIndicator()
             }
-            if let failure = controller.failure {
-                TVPlaybackErrorPrompt(title: "Playback interrupted", message: failure, retry: retry, close: close)
+            if controller.failure != nil {
+                TVPlaybackErrorPrompt(title: "Playback interrupted", retry: retry, close: close)
             } else if showControls {
                 VStack {
                     HStack {
