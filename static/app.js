@@ -1909,7 +1909,7 @@ function updatePageHeader(title = null, subtitle = null) {
   brand.querySelector('h1').textContent = title || 'Torrent Tube';
   brand.querySelector('h1').toggleAttribute('data-no-i18n', !!title);
   const secondary = brand.querySelector('p');
-  secondary.textContent = title ? (subtitle && subtitle !== title ? subtitle : '') : 'Your library and download server';
+  secondary.textContent = title ? (subtitle && subtitle !== title ? subtitle : '') : 'Online library';
   secondary.toggleAttribute('data-no-i18n', !!title && subtitle !== 'Cast & crew');
 }
 
