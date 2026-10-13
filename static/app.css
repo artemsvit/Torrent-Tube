@@ -2137,13 +2137,33 @@ body.has-title-page .top-bar {
 .title-episode-art::after { content: ''; position: absolute; inset: 40% 0 0; background: linear-gradient(transparent, rgba(0,0,0,.65)); pointer-events: none; }
 .title-episode-placeholder { display: grid; place-items: center; height: 100%; color: var(--text-secondary); }
 .title-episode-placeholder svg { width: 32px; height: 32px; }
+.title-episode-play-icon {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inset: 0;
+  z-index: 2;
+  color: #fff;
+  opacity: 0;
+  background: rgba(0,0,0,.35);
+  transition: opacity .18s ease;
+}
+.title-episode-play-icon svg {
+  width: 44px;
+  height: 44px;
+  filter: drop-shadow(0 2px 8px rgba(0,0,0,.6));
+  transition: transform .18s ease;
+}
+.title-episode-action:hover:not(:disabled) .title-episode-play-icon { opacity: 1; }
+.title-episode-action:hover:not(:disabled) .title-episode-play-icon svg { transform: scale(1.08); }
 .title-episode-badge, .title-episode-runtime { position: absolute; z-index: 1; bottom: 10px; font-size: 11px; font-weight: 600; color: white; background: rgba(0,0,0,.58); padding: 5px 8px; border-radius: 6px; }
 .title-episode-badge { left: 10px; }
 .title-episode-badge.is-available { background: rgba(6,104,225,.85); }
 .title-episode-runtime { right: 10px; font-variant-numeric: tabular-nums; }
-.title-episode-action h3 { font-size: 16px; font-weight: 600; margin: 12px 0 8px; line-height: 1.4; }
+.title-episode-action h3 { font-size: 16px; font-weight: 600; margin: 12px 0 8px; line-height: 1.4; padding: 0; }
 .title-episode-action:hover:not(:disabled) h3 { color: var(--accent); }
-.title-episode-overview { font-size: 13px; line-height: 1.5; color: var(--text-secondary); margin: 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.title-episode-overview { font-size: 13px; line-height: 1.5; color: var(--text-secondary); margin: 0; padding: 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .title-episode-file-note { font-size: 12px; color: var(--text-secondary); }
 .title-page .dt-row { gap: 20px; padding: 3px 0 12px; }
 .title-page .dt-person { width: 112px; }

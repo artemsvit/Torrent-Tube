@@ -89,8 +89,25 @@ body:not([data-server-view="downloads"]) #libraryPanel .library-grid { max-heigh
 .home-continue-art progress::-webkit-progress-bar { background: rgba(255,255,255,.3); }
 .home-continue-art progress::-webkit-progress-value { background: #fff; }
 .home-continue-art progress::-moz-progress-bar { background: #fff; }
-.home-resume-icon { position: absolute; display: flex; align-items: center; justify-content: center; inset: 0; color: #fff; opacity: 0; background: rgba(0,0,0,.2); transition: opacity .18s; }
+.home-resume-icon {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inset: 0;
+  color: #fff;
+  opacity: 0;
+  background: rgba(0,0,0,.35);
+  transition: opacity .18s ease;
+}
+.home-resume-icon svg {
+  width: 44px;
+  height: 44px;
+  filter: drop-shadow(0 2px 8px rgba(0,0,0,.6));
+  transition: transform .18s ease;
+}
 .home-continue-card:hover .home-resume-icon { opacity: 1; }
+.home-continue-card:hover .home-resume-icon svg { transform: scale(1.08); }
 .home-continue-card strong { display: block; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .home-continue-card > span { display: block; font-size: 11px; color: var(--text-secondary); margin-top: 5px; }
 .server-home button:focus-visible, .server-navigation button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
@@ -234,7 +251,7 @@ body[data-server-view="library"] #cataloguePanel, body[data-server-view="downloa
   margin: -16px -16px 14px -16px;
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
-  border-radius: var(--radius-lg, 20px) var(--radius-lg, 20px) 0 0;
+  border-radius: 0;
 }
 @media (max-width: 1250px) {
   .top-bar #navToggleBtn { display: inline-flex; }

@@ -2361,6 +2361,7 @@ function renderTitleEpisodes(s) {
     return `<article class="title-episode-card">
       <button type="button" class="title-episode-action" data-act="browse-episode" data-number="${number}"${!available && !searchEnabled ? " disabled" : ""} aria-label="${escapeHtml(`${action}: ${number}. ${info.name || `Episode ${number}`}`)}">
         <div class="title-episode-art">${info.still ? `<img src="${escapeHtml(info.still)}" alt="" loading="lazy">` : `<span class="title-episode-placeholder">${PLAY_ICON}</span>`}
+          <span class="title-episode-play-icon" aria-hidden="true">${PLAY_ICON}</span>
           <span class="title-episode-badge${available ? " is-available" : ""}">${available ? "In your library" : searchEnabled ? "Search torrents" : "Not in your library"}</span>
           ${info.runtime ? `<span class="title-episode-runtime">${info.runtime} min</span>` : ""}
         </div>
