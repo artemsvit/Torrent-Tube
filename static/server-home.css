@@ -126,10 +126,9 @@ body:not([data-server-view="downloads"]) #libraryPanel .library-grid { max-heigh
   .home-hero-copy { width: 100%; padding-top: 170px; padding-bottom: 58px; }
   .home-hero-copy h2 { font-size: 32px; }
   .home-hero-copy p { -webkit-line-clamp: 2; font-size: 13px; margin-top: 12px; }
-  .home-hero-pages { bottom: 17px; }
+  .home-hero-pages { left: var(--home-edge); right: auto; bottom: 17px; }
   .home-hero-actions button { height: 40px; padding: 0 18px; }
   .home-shelf-heading h2 { font-size: 19px; }
-  .home-sync-note { max-width: 100px; text-align: right; line-height: 1.4; }
   .title-storage-info { padding: 16px; }
   .title-file-browser .dt-file { grid-template-columns: 36px minmax(0,1fr) 32px; gap: 10px; }
   .title-file-browser .dt-file-name { grid-column: 2; grid-row: 1; }

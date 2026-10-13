@@ -90,7 +90,7 @@ function appendHomeShelf(root, title, view, items, buildCard) {
   if (!items.length) return;
   const shelf = document.createElement('section');
   shelf.className = 'home-shelf';
-  shelf.innerHTML = `<div class="home-shelf-heading"><h2>${title}</h2>${view ? `<button type="button" class="home-see-all" data-home-view="${view}">See all ${CHEVRON_DOWN}</button>` : '<span class="home-sync-note">Synced across devices</span>'}</div><div class="home-shelf-track"></div>`;
+  shelf.innerHTML = `<div class="home-shelf-heading"><h2>${title}</h2>${view ? `<button type="button" class="home-see-all" data-home-view="${view}">See all ${CHEVRON_DOWN}</button>` : ''}</div><div class="home-shelf-track"></div>`;
   const track = shelf.querySelector('.home-shelf-track');
   items.slice(0, 20).forEach(item => track.appendChild(buildCard(item)));
   root.appendChild(shelf);
