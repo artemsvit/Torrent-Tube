@@ -3073,8 +3073,8 @@ function renderLibrary() {
   counts.favorites = saved.length;
   // Favorites comes after Cartoons, as in the apps.
   const tabs = [...LIBRARY_KINDS, ["favorites", "Favorites"]];
-  if (!librarySection) librarySection = (tabs.find(([k]) => counts[k]) || ["movie"])[0];
-  const availableTabs = tabs.filter(([k]) => counts[k] || k === librarySection);
+  if (!librarySection) librarySection = "movie";
+  const availableTabs = tabs.filter(([k]) => counts[k] || k === librarySection || k === "movie");
   libraryKinds.innerHTML = availableTabs.map(([k, label]) =>
     `<button type="button" class="library-chip${k === librarySection ? " is-active" : ""}" data-kind="${k}">${label} · ${counts[k]}</button>`).join("");
   if (libraryKindsSelect) {

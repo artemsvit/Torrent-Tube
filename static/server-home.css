@@ -210,6 +210,20 @@ body.has-title-page .browse-toolbar { display: none; }
 
 /* Catalog browsing and library management share one compact header. */
 .top-bar header { position: relative; gap: 16px; padding: 12px 28px; min-height: 64px; }
+.top-bar .logo-mark, .top-bar .header-back {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.top-bar .logo-mark svg, .top-bar .header-back svg {
+  width: 20px;
+  height: 20px;
+}
 .top-bar header > .brand-text { flex: 0 1 auto; min-width: 0; }
 .top-bar .browse-toolbar { position: static; flex: 1; min-width: 0; height: 44px; margin: 0; gap: 12px; }
 .top-bar .browse-toolbar .server-navigation { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); margin: 0; z-index: 5; }
