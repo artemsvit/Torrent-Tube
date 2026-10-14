@@ -329,7 +329,6 @@ body[data-server-view="library"] #cataloguePanel, body[data-server-view="downloa
   }
 
   /* Full-width search bar takeover covering entire header on mobile (Apple 44px HIG) */
-  .top-bar.header-search-open { position: relative; }
   .top-bar.header-search-open header { position: relative; padding: 8px 14px; min-height: 60px; }
   .top-bar.header-search-open #homeLogo,
   .top-bar.header-search-open #detailsBack,
@@ -508,4 +507,48 @@ body[data-server-view="library"] #cataloguePanel, body[data-server-view="downloa
     flex: none;
   }
   .person-page .person-content { min-width: 0; }
+}
+
+/* Keep phone actions on a fixed grid, including the search takeover. */
+@media (max-width: 640px) {
+  .top-bar header,
+  .top-bar.header-search-open header {
+    height: 64px;
+    min-height: 64px;
+    padding: 10px 12px;
+    gap: 6px;
+    box-sizing: border-box;
+  }
+  .top-bar header > .brand-text { flex: 1 1 0; overflow: hidden; }
+  .top-bar .browse-toolbar { flex: 0 0 auto; width: auto; gap: 0; }
+  .top-bar .browse-toolbar .searchbar { flex: 0 0 auto; margin-left: 0; }
+  .top-bar.header-search-open .browse-toolbar { flex: 1 1 0; min-width: 0; }
+  .top-bar.header-search-open .browse-toolbar .searchbar { flex: 1 1 0; width: 100%; min-width: 0; gap: 6px; }
+  .title-page .dt-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(100px, 120px);
+    gap: 12px;
+    align-items: stretch;
+  }
+  .title-page .dt-actions > .play-split { grid-column: 1; grid-row: 1; min-width: 0; }
+  .title-page .dt-actions > .dt-favorite { grid-column: 2; grid-row: 1; padding: 0 12px; font-size: 13px; }
+  .title-page .dt-actions .play-main { min-width: 0; padding: 0 10px; font-size: 13px; gap: 6px; }
+  .title-page .dt-actions .player-action-label { min-width: 0; white-space: normal; line-height: 1.15; text-align: center; }
+  .title-page .dt-actions .play-more { flex: none; padding: 0 10px; }
+  .title-page .dt-actions > [data-act="download-best"] {
+    grid-column: 1; grid-row: 2; min-width: 0; justify-content: center;
+    padding: 0 10px; font-size: 13px; gap: 6px;
+  }
+  .title-page .dt-actions > .title-folder-picker { grid-column: 2; grid-row: 2; min-width: 0; }
+  .title-page .title-folder-trigger { width: 100%; height: var(--dt-action-h); padding: 0 12px; gap: 8px; font-size: 13px; }
+  .title-page .dt-actions > .dt-status-pill { grid-column: 1 / -1; }
+  .title-page .dt-actions .dt-download-meta { font-size: 11px; }
+}
+@media (max-width: 380px) {
+  .top-bar #pageBrand:not(.has-page-title) h1 { font-size: 12px; }
+  .top-bar #navToggleBtn, .top-bar #searchToggleBtn, .top-bar #uploadBtn, .top-bar #settingsBtn {
+    width: 40px; min-width: 40px; height: 40px; flex-basis: 40px;
+  }
+  .top-bar.header-search-open #searchToggleBtn { width: 44px; min-width: 44px; height: 44px; flex-basis: 44px; }
+  .title-page .dt-actions .dt-download-meta { display: none; }
 }

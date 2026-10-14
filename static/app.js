@@ -2560,15 +2560,26 @@ function renderTitleFolderPicker(s) {
 function positionTitleFolderPicker(trigger, menu) {
   if (!trigger || !menu) return;
   menu.classList.remove('open-up');
+  menu.style.left = '';
+  menu.style.right = '';
+  menu.style.maxHeight = '';
   const triggerRect = trigger.getBoundingClientRect();
-  const menuRect = menu.getBoundingClientRect();
+  const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
   const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-  const spaceBelow = viewportHeight - triggerRect.bottom;
-  const spaceAbove = triggerRect.top;
-  const menuHeight = menuRect.offsetHeight || 160;
-  if (spaceBelow < menuHeight + 12 && spaceAbove > spaceBelow) {
-    menu.classList.add('open-up');
-  }
+  const gutter = 12;
+  const menuRect = menu.getBoundingClientRect();
+  // Prefer the trigger's right edge, then flip and clamp to the viewport.
+  let left = triggerRect.right - menuRect.width;
+  if (left < gutter) left = triggerRect.left;
+  left = Math.max(gutter, Math.min(left, viewportWidth - menuRect.width - gutter));
+  const pickerRect = trigger.parentElement.getBoundingClientRect();
+  menu.style.left = `${left - pickerRect.left}px`;
+  menu.style.right = 'auto';
+  const spaceBelow = viewportHeight - triggerRect.bottom - gutter - 8;
+  const spaceAbove = triggerRect.top - gutter - 8;
+  const opensUp = spaceBelow < menuRect.height && spaceAbove > spaceBelow;
+  menu.classList.toggle('open-up', opensUp);
+  menu.style.maxHeight = `${Math.max(0, Math.min(280, opensUp ? spaceAbove : spaceBelow))}px`;
 }
 
 function closeTitleFolderPicker(restoreFocus = false) {
@@ -2607,7 +2618,7 @@ function renderDetailsBody() {
   const playable = s.library ? seasonFile : (s.torrent || primaryRelease() || (s.releases === "loading" || s.loading));
   const playerId = currentPlayer();
   actions.push(`<div class="play-split">
-    <button type="button" class="btn-primary btn-pill play-main" data-act="play"${!playable ? " disabled" : ""}>${playerLogo(playerId)}${PLAYERS[playerId].canOpen ? "Play in" : "Copy link for"} ${escapeHtml(PLAYERS[playerId].name)}</button>
+    <button type="button" class="btn-primary btn-pill play-main" data-act="play"${!playable ? " disabled" : ""}>${playerLogo(playerId)}<span class="player-action-label">${PLAYERS[playerId].canOpen ? "Play in" : "Copy link for"} ${escapeHtml(PLAYERS[playerId].name)}</span></button>
     <button type="button" class="btn-primary btn-pill play-more" data-act="pick-player" title="Choose the player" aria-label="Choose the player">${CHEVRON_DOWN}</button>
   </div>`);
   const saved = titleFavorites(s).length > 0;

@@ -57,6 +57,27 @@ vm.runInContext(section('async function downloadRelease(', 'detailsBody.addEvent
   assert.match(picker, /aria-checked="true"[^>]*data-category="TV Shows"/);
   assert.match(picker, /Kids &amp; &lt;Family>/);
   assert.doesNotMatch(picker, /<select/);
+  // Folder menus must remain inside the viewport at either screen edge.
+  context.window = {innerWidth: 390, innerHeight: 600};
+  const classes = new Set();
+  const menu = {style: {}, classList: {
+    remove: name => classes.delete(name),
+    toggle: (name, enabled) => enabled ? classes.add(name) : classes.delete(name)
+  }, getBoundingClientRect: () => ({width: 200, height: 180})};
+  let rect = {left: 20, right: 130, top: 400, bottom: 444};
+  const trigger = {getBoundingClientRect: () => rect,
+    parentElement: {getBoundingClientRect: () => ({left: rect.left})}};
+  context.positionTitleFolderPicker(trigger, menu);
+  assert.equal(menu.style.left, '0px', 'At the left edge, open toward the right');
+  assert.equal(classes.has('open-up'), true, 'Near the bottom, open above the button');
+  rect = {left: 280, right: 400, top: 20, bottom: 64};
+  context.positionTitleFolderPicker(trigger, menu);
+  assert.equal(menu.style.left, '-102px', 'Clamp the right edge to the screen gutter');
+  assert.equal(classes.has('open-up'), false, 'Repositioning must reset the vertical direction');
+  context.window.innerHeight = 180;
+  rect = {left: 20, right: 130, top: 70, bottom: 114};
+  context.positionTitleFolderPicker(trigger, menu);
+  assert.equal(menu.style.maxHeight, '50px', 'Short screens scroll the menu within available space');
   const html=context.renderTitleEpisodes(state);
   assert.match(html,/Play episode: 1\. First/);
   assert.match(html,/Search torrents: 2\. Second/);
