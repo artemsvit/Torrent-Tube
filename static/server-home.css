@@ -159,7 +159,7 @@ body:not([data-server-view="downloads"]) #libraryPanel .library-grid { max-heigh
 }
 
 /* Search fills the space after navigation; on phones navigation collapses into a hamburger menu. */
-.browse-toolbar { position: relative; display: flex; align-items: center; gap: 16px; height: 44px; margin: 0 28px 14px; container-type: inline-size; }
+.browse-toolbar { position: relative; display: flex; align-items: center; gap: 16px; height: 44px; margin: 0 28px 14px; }
 .nav-toggle-btn { display: none; flex-shrink: 0; }
 .browse-toolbar .server-navigation { flex: 0 0 auto; min-width: 0; width: max-content; max-width: none; margin: 0; padding: 3px; }
 .browse-toolbar .server-navigation button { padding: 9px 13px; }
@@ -513,16 +513,19 @@ body[data-server-view="library"] #cataloguePanel, body[data-server-view="downloa
 @media (max-width: 640px) {
   .top-bar header,
   .top-bar.header-search-open header {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) max-content;
     height: 64px;
     min-height: 64px;
     padding: 10px 12px;
     gap: 6px;
     box-sizing: border-box;
   }
-  .top-bar header > .brand-text { flex: 1 1 0; overflow: hidden; }
-  .top-bar .browse-toolbar { flex: 0 0 auto; width: auto; gap: 0; }
+  .top-bar header > .brand-text { overflow: hidden; }
+  .top-bar .browse-toolbar { width: max-content; gap: 0; }
+  .top-bar.header-search-open header { grid-template-columns: minmax(0, 1fr); }
   .top-bar .browse-toolbar .searchbar { flex: 0 0 auto; margin-left: 0; }
-  .top-bar.header-search-open .browse-toolbar { flex: 1 1 0; min-width: 0; }
+  .top-bar.header-search-open .browse-toolbar { grid-column: 1; width: 100%; min-width: 0; }
   .top-bar.header-search-open .browse-toolbar .searchbar { flex: 1 1 0; width: 100%; min-width: 0; gap: 6px; }
   .title-page .dt-actions {
     display: grid;
