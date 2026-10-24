@@ -1206,9 +1206,13 @@ struct MobileCollection: View {
             .padding(.top, sizeClass == .regular ? 140 : 110).padding(.bottom, 24)
         }
         .background(alignment: .top) {
+            // Edge to edge at a fixed height, cropped - sized by its own 16:9
+            // shape it stopped short of the right edge on iPad.
             if let backdrop = collection.info.backdrop {
-                MobileArtwork(url: backdrop, ratio: 16 / 9, seed: collection.name)
-                    .frame(maxWidth: .infinity)
+                Color.clear
+                    .frame(maxWidth: .infinity).frame(height: sizeClass == .regular ? 620 : 340)
+                    .overlay { PosterArtwork(url: URL(string: higherResolution(backdrop, backdrop: true)), fit: false, seed: collection.name) }
+                    .clipped()
                     .mask(LinearGradient(colors: [.white.opacity(0.7), .white.opacity(0.3), .clear], startPoint: .top, endPoint: .bottom))
                     .ignoresSafeArea()
             }
