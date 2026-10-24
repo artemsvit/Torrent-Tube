@@ -18,6 +18,9 @@ CASES = {
     "Ada Twist Scientist S01-04": ("Ada Twist Scientist", None),
     "Stuart Fails to Save the Universe S01 2026 WEB-DL 1080p": ("Stuart Fails to Save the Universe", "2026"),
     "1. The Lion King (1994) BDRip 1080p H.265 [UKR_ENG]": ("The Lion King", "1994"),
+    "[05] Fast Five (2011) BDRip 1080p H.265 [2xUKR_ENG] [Hurtom]": ("Fast Five", "2011"),
+    "[01.2] Harry Potter and the Sorcerer's Stone (2001) [Ultimate Extended Edition] BDRip 1080p":
+        ("Harry Potter and the Sorcerer's Stone", "2001"),
     # tracker listings keep working
     "Останні з нас / The Last of Us (2023) BDRip 1080p": ("The Last of Us", "2023"),
     "Fight Club (1999) [Open Matte] [Amazon] WEB-DL 1080p": ("Fight Club", "1999"),

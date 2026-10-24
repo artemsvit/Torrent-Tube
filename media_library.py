@@ -51,6 +51,37 @@ class MediaLibrary:
                     found.append(path)
         return found
 
+    def _films(self, videos: list):
+        """A collection folder's films ("[05] Fast Five (2011)", "[06] Furious 6
+        (2013)") as (video, name) pairs, or None when the folder is one title.
+        Every file must name a film and a year, and two titles at least - a film
+        in parts or two cuts of one film stay one title."""
+        films = []
+        for video in videos:
+            title, year = self.describe(video.stem)
+            if not title or not year:
+                return None
+            films.append((video, (title.lower(), year)))
+        return [(v, v.stem) for v, _ in films] if len({key for _, key in films}) > 1 else None
+
+    def _item(self, entry: Path, name: str, videos: list, category: str, kind: str, found: list) -> dict:
+        title, year = self.describe(name)
+        return {
+            "title": title or name,
+            "year": year,
+            "id": entry.relative_to(self.root).as_posix(),
+            "name": name,
+            "category": category,
+            "kind": kind,
+            "files": len(videos),
+            # How many seasons the episodes are in (0 for a film), and how
+            # many files are episodes - two or more make it a show.
+            "seasons": len({f["season"] for f in found if f}),
+            "episodes": sum(1 for f in found if f),
+            "size": sum(v.stat().st_size for v in videos),
+            "added": int(entry.stat().st_mtime),
+        }
+
     def _scan(self) -> list:
         items = []
         for category in self.categories:
@@ -70,24 +101,14 @@ class MediaLibrary:
                         continue
                     if not videos:
                         continue
-                    title, year = self.describe(name)
                     # Each video's season and episode (episodes.py), for a folder of several.
                     found = [episodes.identify(v.name, self._relative(v)) for v in videos] if len(videos) > 1 else []
-                    items.append({
-                        "title": title or name,
-                        "year": year,
-                        "id": entry.relative_to(self.root).as_posix(),
-                        "name": name,
-                        "category": category,
-                        "kind": kind,
-                        "files": len(videos),
-                        # How many seasons the episodes are in (0 for a film), and how
-                        # many files are episodes - two or more make it a show.
-                        "seasons": len({f["season"] for f in found if f}),
-                        "episodes": sum(1 for f in found if f),
-                        "size": sum(v.stat().st_size for v in videos),
-                        "added": int(entry.stat().st_mtime),
-                    })
+                    # A collection of films is a title per film, each with its own match.
+                    films = self._films(videos) if len(videos) > 1 and not any(found) else None
+                    if films:
+                        items.extend(self._item(v, film, [v], category, kind, []) for v, film in films)
+                    else:
+                        items.append(self._item(entry, name, videos, category, kind, found))
                 except OSError:
                     continue  # unreadable or vanished mid-scan
         items.sort(key=lambda item: item["added"], reverse=True)

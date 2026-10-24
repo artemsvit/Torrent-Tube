@@ -41,6 +41,7 @@ def extract_title_and_year(raw_title: str):
     parts = head.split("/")
     candidate = max(parts, key=lambda p: sum(c.isascii() and c.isalpha() for c in p)) if len(parts) > 1 else head
     candidate = candidate.split("|")[0]
+    candidate = re.sub(r"^\s*\[\d{1,3}(?:\.\d{1,2})?\]\s*", "", candidate)  # "[05] Fast Five" - a numbered collection
     candidate = re.split(r"\(\s*(19|20)\d{2}", candidate)[0]
     candidate = re.sub(r"[\[\(].*", "", candidate)
     candidate = re.sub(r"\s+", " ", candidate).strip(" :-|/")

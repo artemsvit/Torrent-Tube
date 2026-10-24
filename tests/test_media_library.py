@@ -28,20 +28,40 @@ class MediaLibraryTests(unittest.TestCase):
         (root / "Cartoon" / "Bluey (2018)").mkdir(parents=True)
         for name in ("1-1-2 Чарівний ксилофон & Лікарня.mp4", "1-3-4 Підкидайки.mp4", "2-1-2 Танці.mp4"):
             (root / "Cartoon" / "Bluey (2018)" / name).write_bytes(b"b" * 100)
+        saga = root / "Movies" / "The Fast and the Furious. Collection"
+        saga.mkdir()
+        for name in ("[01] The Fast and the Furious (2001) BDRip 1080p.mkv", "[05] Fast Five (2011) BDRip 1080p.mkv"):
+            (saga / name).write_bytes(b"f" * 100)
+        parts = root / "Movies" / "Dune (2021)"
+        parts.mkdir()
+        for name in ("Dune (2021) CD1.mkv", "Dune (2021) CD2.mkv"):
+            (parts / name).write_bytes(b"d" * 100)
         (root / ".stream-cache").mkdir()
         (root / ".stream-cache" / "partial.mkv").write_bytes(b"p")
-        self.library = MediaLibrary(root, ["Cartoon", "Movies", "TV Shows"], server.VIDEO_EXTS)
+        self.library = MediaLibrary(root, ["Cartoon", "Movies", "TV Shows"], server.VIDEO_EXTS,
+                                    describe=server.LIBRARY.describe)
 
     def tearDown(self):
         self.root.cleanup()
 
     def test_lists_one_title_per_file_or_folder_and_skips_the_rest(self):
         items = {item["id"]: item for item in self.library.items()}
-        self.assertEqual(set(items), {"Movies/Heat (1995).mkv", "TV Shows/Chernobyl", "Cartoon/Bluey (2018)"})
+        self.assertEqual(set(items), {"Movies/Heat (1995).mkv", "TV Shows/Chernobyl", "Cartoon/Bluey (2018)",
+                                      "Movies/Dune (2021)",
+                                      "Movies/The Fast and the Furious. Collection/[01] The Fast and the Furious (2001) BDRip 1080p.mkv",
+                                      "Movies/The Fast and the Furious. Collection/[05] Fast Five (2011) BDRip 1080p.mkv"})
         self.assertEqual(items["Movies/Heat (1995).mkv"]["name"], "Heat (1995)")
         self.assertEqual(items["Movies/Heat (1995).mkv"]["kind"], "movie")
         self.assertEqual(items["TV Shows/Chernobyl"]["kind"], "tv")
         self.assertEqual(items["TV Shows/Chernobyl"]["files"], 3)
+
+    def test_a_collection_folder_is_a_title_per_film(self):
+        items = {item["id"]: item for item in self.library.items()}
+        five = items["Movies/The Fast and the Furious. Collection/[05] Fast Five (2011) BDRip 1080p.mkv"]
+        self.assertEqual((five["title"], five["year"], five["files"], five["kind"]), ("Fast Five", "2011", 1, "movie"))
+        self.assertEqual([f["name"] for f in self.library.files(five["id"])], ["[05] Fast Five (2011) BDRip 1080p.mkv"])
+        # One film in two parts stays one title.
+        self.assertEqual(items["Movies/Dune (2021)"]["files"], 2)
 
     def test_series_count_their_seasons_films_none(self):
         items = {item["id"]: item for item in self.library.items()}
