@@ -165,48 +165,83 @@ struct CollectionCard: View {
     }
 }
 
-/// A collection's page: its backdrop, poster, name and overview, then its
-/// films in release order, each with its part and year.
+/// A collection's page: name, count and overview on the left over a dim
+/// backdrop, then its films in release order in six fixed columns, each
+/// with its part and year above its title. Focus in the first row keeps the
+/// page at its top, so the heading never slides under the bar.
 struct CollectionView: View {
     let collection: LibraryCollection
     let api: TorrentTubeAPI
     let config: ServerConfig
+    private static let top = "collection-top"
+    private static let columns = 6
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 44) {
-                HStack(alignment: .bottom, spacing: 48) {
-                    ArtworkView(url: collection.poster, seed: collection.name).aspectRatio(2.0 / 3.0, contentMode: .fit).frame(width: 260)
-                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                        .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.white.opacity(0.1)) }
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text(collection.name).font(.system(size: 56, weight: .bold)).lineLimit(2)
-                        Text(collection.count).font(.system(size: 28, weight: .semibold)).foregroundStyle(.white.opacity(0.75))
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    Color.clear.frame(height: 0).id(Self.top)
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text(collection.name).font(.system(size: 50, weight: .bold)).lineLimit(1)
+                        Text(collection.count).font(.system(size: 26, weight: .semibold)).foregroundStyle(.white.opacity(0.7))
                         if let overview = collection.info.overview, !overview.isEmpty {
-                            Text(overview).font(.system(size: 26)).foregroundStyle(.white.opacity(0.8)).lineSpacing(5).lineLimit(5)
-                                .frame(maxWidth: 1100, alignment: .leading)
-                        }
-                    }.padding(.bottom, 8)
-                }
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 230, maximum: 280), spacing: 36)], alignment: .leading, spacing: 36) {
-                    ForEach(collection.titles) { title in
-                        VStack(alignment: .leading, spacing: 4) {
-                            FilmCard(item: libraryItem(title), api: api, config: config)
-                            Text(LibraryCollection.line(title)).font(.system(size: 18, weight: .medium)).foregroundStyle(.white.opacity(0.55))
-                                .padding(.horizontal, 4)
+                            Text(overview).font(.system(size: 24)).foregroundStyle(.white.opacity(0.8)).lineSpacing(4).lineLimit(3)
+                                .frame(maxWidth: 1180, alignment: .leading).padding(.top, 4)
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 36, alignment: .top), count: Self.columns),
+                              alignment: .leading, spacing: 44) {
+                        ForEach(Array(collection.titles.enumerated()), id: \.element.id) { index, title in
+                            CollectionFilmCard(title: title) {
+                                // The first row: back to the very top, heading in view.
+                                guard index < Self.columns else { return }
+                                withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(Self.top, anchor: .top) }
+                            }
+                        }
+                    }
+                    .padding(.top, 40).focusSection()
                 }
-                .padding(.vertical, 16).frame(maxWidth: .infinity, alignment: .leading).focusSection()
+                .padding(.horizontal, TVLayout.edge).padding(.top, 158).padding(.bottom, 70)
             }
-            .padding(.horizontal, TVLayout.edge).padding(.top, 158 + ScreenLayout.top).padding(.bottom, 70)
+            .tvScrollEdge(150)
+            .ignoresSafeArea(edges: .horizontal)
         }
         .background(alignment: .top) {
             if let backdrop = collection.info.backdrop {
-                ArtworkView(url: backdrop, background: true, fill: true).frame(height: 760)
-                    .mask(LinearGradient(colors: [.white.opacity(0.55), .white.opacity(0.25), .clear], startPoint: .top, endPoint: .bottom))
+                ArtworkView(url: backdrop, background: true, fill: true).frame(height: 700)
+                    .opacity(0.35)
+                    .mask(LinearGradient(colors: [.white, .white.opacity(0.6), .clear], startPoint: .top, endPoint: .bottom))
                     .ignoresSafeArea()
             }
         }
-        .ignoresSafeArea(edges: .horizontal)
+    }
+}
+
+/// A film in a collection: its poster, its part and year, then its title -
+/// the same height in every column.
+private struct CollectionFilmCard: View {
+    let title: LibraryTitle
+    let onFocus: () -> Void
+    @Environment(CatalogStore.self) private var catalog
+    @FocusState private var focused: Bool
+    var body: some View {
+        let item = libraryItem(title)
+        let value = catalog.resolved(item)
+        NavigationLink(value: item) {
+            VStack(alignment: .leading, spacing: 12) {
+                ArtworkView(url: value.poster, seed: value.displayTitle).aspectRatio(2.0 / 3.0, contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.white.opacity(focused ? 0.9 : 0.08), lineWidth: focused ? 3 : 1) }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(LibraryCollection.line(title)).font(.system(size: 18, weight: .semibold)).foregroundStyle(.white.opacity(0.5))
+                    Text(value.displayTitle).font(.system(size: 21, weight: .semibold))
+                        .foregroundStyle(focused ? .white : .white.opacity(0.7)).lineLimit(2)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 4)
+            }
+        }
+        .buttonStyle(CinemaCardStyle()).focused($focused)
+        .onChange(of: focused) { _, now in if now { onFocus() } }
+        .accessibilityLabel("\(value.displayTitle), \(LibraryCollection.line(title))")
     }
 }

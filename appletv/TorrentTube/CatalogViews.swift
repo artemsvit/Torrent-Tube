@@ -955,10 +955,10 @@ struct CategoryView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 35) {
-                Text(L(["docs": "Documentaries", "cartoons": "Cartoons", "ukrainian": "Ukrainian"][activeFeed] ?? title)).font(.system(size: 50, weight: .bold))
+                Text(L(MovieFilters.heading(activeFeed) ?? (activeFeed == "cartoons" ? "Cartoons" : title))).font(.system(size: 50, weight: .bold))
                 // Movies has sub-categories; the catalog refreshes itself when the app opens.
                 if feed == "movies" {
-                    ChipRow(options: [("movies", "All"), ("docs", "Documentaries"), ("ukrainian", "Ukrainian")], selected: activeFeed) { selected = $0 }
+                    ChipRow(options: MovieFilters.options, selected: activeFeed) { selected = $0 }
                 }
                 if catalog.loading.contains(activeFeed) && catalog.rows[activeFeed] == nil { LoadingState(text: L("Loading titles…"), minHeight: 700) }
                 if let error = catalog.errors[activeFeed] { ErrorPanel(message: error) { Task { await catalog.loadFeed(activeFeed, api: api, config: config, refresh: true) } } }
@@ -988,16 +988,20 @@ struct ChipRow: View {
     var externalFocus: FocusState<String?>.Binding? = nil
     @FocusState private var focusedChip: String?
     var body: some View {
-        HStack(spacing: 20) {
-            ForEach(options, id: \.0) { key, label in
-                let current = selected == key
-                Button { select(key) } label: { Text(L(label)) }
-                    .buttonStyle(ChipStyle(selected: current))
-                    .accessibilityAddTraits(current ? .isSelected : [])
-                    .accessibilityIdentifier("library-chip-\(key)")
-                    .focused(externalFocus ?? $focusedChip, equals: key)
+        // Scrolls sideways when the chips are wider than the screen (Films' genres).
+        ScrollView(.horizontal) {
+            HStack(spacing: 20) {
+                ForEach(options, id: \.0) { key, label in
+                    let current = selected == key
+                    Button { select(key) } label: { Text(L(label)) }
+                        .buttonStyle(ChipStyle(selected: current))
+                        .accessibilityAddTraits(current ? .isSelected : [])
+                        .accessibilityIdentifier("library-chip-\(key)")
+                        .focused(externalFocus ?? $focusedChip, equals: key)
+                }
             }
         }
+        .scrollIndicators(.hidden).scrollClipDisabled()
         .frame(maxWidth: .infinity, alignment: .leading)  // Up from any poster reaches the chips
         .focusSection()
     }

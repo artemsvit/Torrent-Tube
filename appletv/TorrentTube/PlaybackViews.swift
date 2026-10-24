@@ -1,4 +1,5 @@
 import SwiftUI
+import GameController
 import UIKit
 
 struct PlaybackLauncher: View {
@@ -286,6 +287,8 @@ struct PlayerView: View {
     @State private var panStart: Double?
     @State private var panEnded = Date.distantPast
     @State private var preferredControl: Control = .play
+    /// A finger circling the clickpad's edge scrubs (Siri Remote, 2nd generation on).
+    @State private var circle = RemoteCircleScrub()
     @FocusState private var focusedTrack: Int?
     @FocusState private var focusedControl: Control?
     private enum Control { case close, timeline, backward, play, forward, audio, subtitles, surface, skipIntro }
@@ -367,6 +370,23 @@ struct PlayerView: View {
                     Label(L("Skip Intro"), systemImage: "forward.end.fill").font(.system(size: 28, weight: .semibold))
                 }
                 .buttonStyle(SkipIntroStyle()).focused($focusedControl, equals: .skipIntro)
+                // With the controls shown it sits above the timeline: down goes
+                // there, up to Close. Hidden, left and right still seek.
+                .onMoveCommand { direction in
+                    if showControls {
+                        switch direction {
+                        case .down: focusedControl = .timeline
+                        case .up, .left: focusedControl = .close
+                        default: break
+                        }
+                        activity = Date()
+                    } else if direction == .left || direction == .right {
+                        seek(by: direction == .left ? -Self.clickStep : Self.clickStep)
+                        revealControls(focusing: .timeline)
+                    } else {
+                        revealControls()
+                    }
+                }
                 .accessibilityIdentifier("skip-intro")
                 .padding(.trailing, 90).padding(.bottom, showControls ? 250 : 90)
                 .transition(.opacity)
@@ -393,6 +413,17 @@ struct PlayerView: View {
             revealControls()
         }
         .onChange(of: focusedControl) { _, _ in activity = Date() }
+        .onAppear {
+            circle.onTurn = { seconds in
+                guard trackMenu == nil, controller.failure == nil, controller.duration > 0 else { return }
+                if !showControls { revealControls(focusing: .timeline) }
+                else if focusedControl != .timeline { focusedControl = .timeline }
+                // Scrub from where a swipe would have started, so both add up.
+                if let start = panStart { panStart = nil; move(to: start + seconds) } else { seek(by: seconds) }
+            }
+            circle.start()
+        }
+        .onDisappear { circle.stop() }
         .task(id: [scrubTarget, panStart]) {
             guard let target = scrubTarget, panStart == nil else { return }
             do { try await Task.sleep(for: .milliseconds(450)) } catch { return }
@@ -509,7 +540,8 @@ struct PlayerView: View {
                              changed: { fraction in
                                  // A resting or clicking thumb moves a little: that must
                                  // not seek (each seek makes VLC read the file again).
-                                 guard let start = panStart, abs(fraction) >= Self.panDeadZone else { return }
+                                 // Circling the edge is the ring's, not a swipe.
+                                 guard let start = panStart, !circle.circling, abs(fraction) >= Self.panDeadZone else { return }
                                  let travel = fraction - (fraction > 0 ? Self.panDeadZone : -Self.panDeadZone)
                                  move(to: start + Double(travel) * scrubSpan)
                              },
@@ -522,7 +554,8 @@ struct PlayerView: View {
             case .left: if !swiping { seek(by: -Self.clickStep) }
             case .right: if !swiping { seek(by: Self.clickStep) }
             case .down: focusedControl = .play
-            case .up: focusedControl = .close
+            // Skip Intro, when it shows, is right above the timeline.
+            case .up: focusedControl = inIntro ? .skipIntro : .close
             default: break
             }
             activity = Date()
@@ -699,5 +732,73 @@ private struct RemotePanCatcher: UIViewRepresentable {
         }
         func gestureRecognizer(_ recognizer: UIGestureRecognizer,
                                shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
+    }
+}
+
+/// The Siri Remote clickpad's ring (2nd generation and later): a finger
+/// circling its edge scrubs, clockwise forward, as in the Apple TV app. The
+/// touch position comes from the Game Controller framework, so swipes and
+/// clicks still reach the focus engine as before.
+@MainActor
+final class RemoteCircleScrub {
+    /// Seconds to move by: called while the finger circles.
+    var onTurn: (Double) -> Void = { _ in }
+    /// Circling, not swiping: the swipe scrub keeps out of it.
+    private(set) var circling = false
+    /// One full turn of the ring moves this far.
+    static let secondsPerTurn = 60.0
+    /// Near the edge only: a swipe across the middle is not a turn.
+    private static let ringRadius = 0.55
+    /// How far round the finger goes before it counts as circling.
+    private static let startAngle = Double.pi / 3
+    private var lastAngle: Double?
+    private var turned = 0.0
+    private var observer: NSObjectProtocol?
+
+    func start() {
+        guard observer == nil else { return }
+        GCController.controllers().forEach(attach)
+        observer = NotificationCenter.default.addObserver(forName: .GCControllerDidConnect, object: nil, queue: .main) { [weak self] note in
+            guard let controller = note.object as? GCController else { return }
+            MainActor.assumeIsolated { self?.attach(controller) }
+        }
+    }
+
+    func stop() {
+        if let observer { NotificationCenter.default.removeObserver(observer) }
+        observer = nil
+        for controller in GCController.controllers() { controller.microGamepad?.dpad.valueChangedHandler = nil }
+        reset()
+    }
+
+    private func attach(_ controller: GCController) {
+        guard let pad = controller.microGamepad else { return }
+        pad.reportsAbsoluteDpadValues = true
+        pad.dpad.valueChangedHandler = { [weak self] _, x, y in
+            MainActor.assumeIsolated { self?.update(x: Double(x), y: Double(y)) }
+        }
+    }
+
+    private func update(x: Double, y: Double) {
+        if x == 0 && y == 0 { reset(); return }  // the finger lifted
+        guard (x * x + y * y).squareRoot() >= Self.ringRadius else { lastAngle = nil; return }
+        let angle = atan2(y, x)
+        defer { lastAngle = angle }
+        guard let last = lastAngle else { return }
+        var delta = last - angle  // clockwise is positive: forward
+        if delta > .pi { delta -= 2 * .pi } else if delta < -.pi { delta += 2 * .pi }
+        turned += delta
+        if circling {
+            onTurn(delta / (2 * .pi) * Self.secondsPerTurn)
+        } else if abs(turned) >= Self.startAngle {
+            circling = true
+            onTurn(turned / (2 * .pi) * Self.secondsPerTurn)
+        }
+    }
+
+    private func reset() {
+        circling = false
+        turned = 0
+        lastAngle = nil
     }
 }

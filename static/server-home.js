@@ -34,7 +34,13 @@ function setServerView(view) {
   window.scrollTo({top:0});
 }
 
-function catalogFeedForView(view) { return {movie:'movies',tv:'tv',cartoon:'cartoons'}[view]; }
+// Films' chips, as in the apps: all, the most watched genres (the server
+// sorts the Movies feed by TMDB genre), then Documentaries and Ukrainian.
+const MOVIE_FILTERS = [['movies','All'],['action','Action'],['comedy','Comedy'],['thriller','Thriller'],['drama','Drama'],
+  ['horror','Horror'],['scifi','Sci-Fi'],['adventure','Adventure'],['crime','Crime'],['fantasy','Fantasy'],
+  ['family','Family'],['romance','Romance'],['docs','Documentaries'],['ukrainian','Ukrainian']];
+let catalogMovieFilter = 'movies';
+function catalogFeedForView(view) { return view === 'movie' ? catalogMovieFilter : {tv:'tv',cartoon:'cartoons'}[view]; }
 
 function catalogEntries(feed) {
   const groups = new Map();
@@ -184,7 +190,13 @@ function renderCatalogPage() {
   if (!feed) return;
   const items = catalogEntries(feed), size = 36;
   catalogPage = Math.min(catalogPage,Math.max(0,Math.ceil(items.length/size)-1));
-  document.getElementById('catalogueTitle').textContent = CATALOG_SECTIONS.find(([id])=>id === feed)[1];
+  const filter = MOVIE_FILTERS.find(([id])=>id === feed && id !== 'movies');
+  document.getElementById('catalogueTitle').textContent = filter ? filter[1] : (CATALOG_SECTIONS.find(([id])=>id === feed) || [feed,'Movies'])[1];
+  const filters = document.getElementById('catalogueFilters');
+  filters.hidden = document.body.dataset.serverView !== 'movie';
+  if (!filters.hidden) filters.innerHTML = MOVIE_FILTERS.map(([id,label])=>`<button type="button" class="library-chip${id === feed ? ' is-active' : ''}" data-movie-filter="${id}" aria-pressed="${id === feed}">${label}</button>`).join('');
+  // A genre is loaded when it is first chosen.
+  if (!catalogFeeds.has(feed) && !catalogErrors.has(feed)) loadCatalogFeed(feed).then(renderCatalogPage, renderCatalogPage);
   document.getElementById('catalogueCount').textContent = `${items.length} titles`;
   const grid = document.getElementById('catalogueGrid'); grid.replaceChildren();
   const visible = items.slice(catalogPage*size,(catalogPage+1)*size);
@@ -408,4 +420,12 @@ document.addEventListener('visibilitychange',()=>{ if (!document.hidden) loadSer
 document.getElementById('cataloguePagination').addEventListener('click',e=>{
   const button = e.target.closest('[data-catalog-page]');
   if (button) { catalogPage += Number(button.dataset.catalogPage); renderCatalogPage(); window.scrollTo({top:0}); }
+});
+
+document.getElementById('catalogueFilters').addEventListener('click', e => {
+  const chip = e.target.closest('[data-movie-filter]');
+  if (!chip) return;
+  catalogMovieFilter = chip.dataset.movieFilter;
+  catalogPage = 0;
+  renderCatalogPage();
 });

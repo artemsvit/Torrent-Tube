@@ -397,7 +397,7 @@ struct MobileRoot: View {
         switch key {
         case "movies":
             destination("movies", title: "Movies") {
-                MobileCategory(options: [("movies", "All"), ("docs", "Documentaries"), ("ukrainian", "Ukrainian")], api: api, config: config)
+                MobileCategory(options: MovieFilters.options, api: api, config: config)
             }
         case "tv": destination("tv", title: "TV Shows") { MobileCategory(options: [("tv", "TV Shows")], api: api, config: config) }
         case "cartoons": destination("cartoons", title: "Cartoons") { MobileCategory(options: [("cartoons", "Cartoons")], api: api, config: config) }
@@ -435,7 +435,7 @@ struct MobileRoot: View {
         switch key {
         case "movies":
             destination("movies", title: "Movies") {
-                MobileCategory(options: [("movies", "All"), ("docs", "Documentaries"), ("ukrainian", "Ukrainian")], api: api, config: config)
+                MobileCategory(options: MovieFilters.options, api: api, config: config)
             }
         case "tv": destination("tv", title: "TV Shows") { MobileCategory(options: [("tv", "TV Shows")], api: api, config: config) }
         case "cartoons": destination("cartoons", title: "Cartoons") { MobileCategory(options: [("cartoons", "Cartoons")], api: api, config: config) }
@@ -453,7 +453,7 @@ struct MobileRoot: View {
             if config.searchEnabled {
                 Tab(value: "movies") {
                     destination("movies", title: "Movies") {
-                        MobileCategory(options: [("movies", "All"), ("docs", "Documentaries"), ("ukrainian", "Ukrainian")], api: api, config: config)
+                        MobileCategory(options: MovieFilters.options, api: api, config: config)
                     }
                 } label: { TabIcon(title: "Movies", symbol: "film") }
                 Tab(value: "tv") {

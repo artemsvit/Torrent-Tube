@@ -19,6 +19,21 @@ struct LibraryCollection: Identifiable, Hashable {
     }
 }
 
+/// The Films page's chips, the same on every device: all films, the most
+/// watched genres (the server sorts the Movies feed by TMDB genre), then
+/// Documentaries and Ukrainian.
+enum MovieFilters {
+    static let options: [(String, String)] = [
+        ("movies", "All"), ("action", "Action"), ("comedy", "Comedy"), ("thriller", "Thriller"), ("drama", "Drama"),
+        ("horror", "Horror"), ("scifi", "Sci-Fi"), ("adventure", "Adventure"), ("crime", "Crime"), ("fantasy", "Fantasy"),
+        ("family", "Family"), ("romance", "Romance"), ("docs", "Documentaries"), ("ukrainian", "Ukrainian"),
+    ]
+    /// The page heading for a chip: "Thriller" for thrillers, "Movies" for all.
+    static func heading(_ feed: String) -> String? {
+        feed == "movies" ? nil : options.first { $0.0 == feed }?.1
+    }
+}
+
 /// The Library screen's chips, the same on every device: one per type of
 /// title on the server (with its count), then Collections and Favorites.
 enum LibrarySections {

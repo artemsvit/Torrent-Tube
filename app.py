@@ -1034,6 +1034,14 @@ DISCOVER_FEEDS = [
     {"id": "docs", "label": "Documentaries", "groups": ["docs"]},
     {"id": "ukrainian", "label": "Ukrainian", "groups": ["ukrainian"]},
 ]
+# Films by genre: trackers have no genre sections, so these are the Movies
+# feed's films that TMDB files under the genre (the TMDB lookups are cached).
+# In the order the apps show them, after "All" and before Documentaries.
+GENRE_FEEDS = [("action", "Action", 28), ("comedy", "Comedy", 35), ("thriller", "Thriller", 53),
+               ("drama", "Drama", 18), ("horror", "Horror", 27), ("scifi", "Sci-Fi", 878),
+               ("adventure", "Adventure", 12), ("crime", "Crime", 80), ("fantasy", "Fantasy", 14),
+               ("family", "Family", 10751), ("romance", "Romance", 10749)]
+DISCOVER_FEEDS += [{"id": id_, "label": label, "groups": ["movies"], "genre": genre} for id_, label, genre in GENRE_FEEDS]
 DISCOVER_FEEDS_BY_ID = {f["id"]: f for f in DISCOVER_FEEDS}
 
 # Matched as lowercase substrings of a section name. Ukrainian/Russian/
@@ -1150,7 +1158,10 @@ def cached_section_query(indexer: str, cat: str):
 @app.route("/api/discover/feeds")
 def discover_feeds():
     enabled = bool(JACKETT_URL and JACKETT_API_KEY)
-    return jsonify({"enabled": enabled, "feeds": [{"id": f["id"], "label": f["label"]} for f in DISCOVER_FEEDS] if enabled else []})
+    # Genre feeds are filters of Movies - shown as chips there, not as tabs.
+    return jsonify({"enabled": enabled, "feeds": [{"id": f["id"], "label": f["label"]} for f in DISCOVER_FEEDS
+                                                  if not f.get("genre")] if enabled else [],
+                    "movie_filters": [{"id": f["id"], "label": f["label"]} for f in DISCOVER_FEEDS if f.get("genre")]})
 
 
 @app.route("/api/discover")
@@ -1232,11 +1243,33 @@ def discover_torrents():
     for r in results:
         del r["_dedupe_key"]
 
+    if feed.get("genre"):
+        results = films_of_genre(results, feed["genre"])
     if feed.get("sort") == "seeders":
         results.sort(key=lambda r: r["seeders"], reverse=True)
     else:
         results.sort(key=lambda r: pub_timestamp(r["pub_date"]), reverse=True)
     return make_etag_response({"results": results}, max_age=180, stale_revalidate=900)
+
+
+def films_of_genre(results: list, genre: int) -> list:
+    """The rows TMDB files as films of `genre`, with their poster and rating
+    filled in. Every row is looked up (cached for a month), so only the
+    first opening of a genre waits on TMDB."""
+    if not TMDB_API_KEY:
+        return []
+
+    def lookup(r):
+        title, base, year = extract_title_and_year(r["title"])
+        return r, tmdb_lookup(title, base, year, "movie")
+
+    films = []
+    for r, meta in TMDB_EXECUTOR.map(lookup, results):
+        if meta and meta.get("media_type") == "movie" and genre in (meta.get("genre_ids") or []):
+            r.update(poster=meta["poster"], rating=meta["rating"], overview=meta["overview"],
+                     clean_title=meta["title"], tmdb_id=meta["id"], media_type="movie")
+            films.append(r)
+    return films
 
 
 def pub_timestamp(pub_date: str) -> float:
