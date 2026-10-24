@@ -1263,13 +1263,28 @@ def films_of_genre(results: list, genre: int) -> list:
         title, base, year = extract_title_and_year(r["title"])
         return r, tmdb_lookup(title, base, year, "movie")
 
-    films = []
+    films = {}
     for r, meta in TMDB_EXECUTOR.map(lookup, results):
         if meta and meta.get("media_type") == "movie" and genre in (meta.get("genre_ids") or []):
             r.update(poster=meta["poster"], rating=meta["rating"], overview=meta["overview"],
                      clean_title=meta["title"], tmdb_id=meta["id"], media_type="movie")
-            films.append(r)
-    return films
+            # One row per film: two rips named differently are the same film.
+            if meta["id"] not in films or r["seeders"] > films[meta["id"]]["seeders"]:
+                films[meta["id"]] = r
+    return list(films.values())
+
+
+def genre_warmup_loop():
+    """Looks the Movies feed's films up on TMDB in the background, every 30
+    minutes, so opening a genre does not wait on hundreds of lookups."""
+    time.sleep(90)
+    while True:
+        try:
+            if JACKETT_URL and JACKETT_API_KEY and TMDB_API_KEY:
+                app.test_client().get(f"/api/discover?feed={GENRE_FEEDS[0][0]}").close()
+        except Exception:
+            pass
+        time.sleep(1800)
 
 
 def pub_timestamp(pub_date: str) -> float:
@@ -3251,6 +3266,7 @@ def trailer_preview_loop():
 
 threading.Thread(target=trailer_preview_loop, daemon=True).start()
 threading.Thread(target=NEW_EPISODES.loop, daemon=True).start()
+threading.Thread(target=genre_warmup_loop, daemon=True).start()
 
 
 if __name__ == "__main__":
