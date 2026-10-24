@@ -40,6 +40,44 @@ enum SubtitleSettings {
     static var size: SubtitleSize { SubtitleSize(rawValue: UserDefaults.standard.string(forKey: sizeKey) ?? "") ?? .medium }
 }
 
+/// The Default audio track from the server's settings (the same on every
+/// device), kept here so a player can start without asking. English is the
+/// fallback when a file does not have the chosen language.
+enum AudioSettings {
+    static let key = "audioLanguage"
+    static var language: String {
+        get { UserDefaults.standard.string(forKey: key) ?? "uk" }
+        set { UserDefaults.standard.set(newValue, forKey: key) }
+    }
+    static var preference: [String] { language == "en" ? ["en"] : [language, "en"] }
+    /// How VLC names each language (ISO 639-2), and how track titles write it.
+    private static let codes: [String: String] = [
+        "uk": "ukr", "en": "eng", "pl": "pol", "de": "ger", "fr": "fre", "es": "spa", "it": "ita",
+        "pt": "por", "cs": "cze", "tr": "tur", "ja": "jpn", "ko": "kor", "zh": "chi", "ru": "rus",
+    ]
+    private static let words: [String: String] = [
+        "uk": "ukr|ua|укр|україн\\w*|ukrainian", "en": "eng|english|англ\\w*", "pl": "pol|polish|polski",
+        "de": "ger|deu|german|deutsch", "fr": "fre|fra|french|français", "es": "spa|spanish|español",
+        "it": "ita|italian|italiano", "pt": "por|portuguese|português", "cs": "cze|ces|czech|čeština",
+        "tr": "tur|turkish|türkçe", "ja": "jap|jpn|japanese", "ko": "kor|korean", "zh": "chi|zho|chinese",
+        "ru": "rus|russian",
+    ]
+    /// VLC's own choice by the tracks' language tags: "ukr,eng".
+    static var vlcOption: String { preference.compactMap { codes[$0] }.joined(separator: ",") }
+    /// The track to switch to when the one VLC started with is not in the
+    /// chosen language but another track's name says it is - nil to keep it.
+    static func track(in tracks: [EmbeddedPlayer.Track], current: Int32) -> Int32? {
+        for code in preference {
+            guard let pattern = words[code] else { continue }
+            let regex = "(?i)(?<![a-zа-яіїєґё])(?:\(pattern))(?![a-zа-яіїєґё])"
+            let matching = tracks.filter { $0.name.range(of: regex, options: .regularExpression) != nil }
+            if matching.contains(where: { $0.id == current }) { return nil }
+            if let first = matching.first { return first.id }
+        }
+        return nil
+    }
+}
+
 enum SubtitleSize: String, CaseIterable, Identifiable {
     case small, medium, large
     var id: String { rawValue }
@@ -76,6 +114,8 @@ final class EmbeddedPlayer {
     /// Off: the player starts with no subtitles; the viewer can still pick a track.
     @ObservationIgnored private let subtitlesOn: Bool
     @ObservationIgnored private var subtitlesTurnedOff = false
+    /// The Default audio track is checked once VLC lists the tracks.
+    @ObservationIgnored private var audioChosen: Bool
 
     init(url: URL, resumePosition: Double, audioURL: URL? = nil, subtitleURL: URL? = nil, subtitleName: String? = nil,
          subtitlesOn: Bool = SubtitleSettings.films) {
@@ -83,12 +123,15 @@ final class EmbeddedPlayer {
         self.subtitleURL = subtitleURL
         self.subtitleName = subtitleName ?? "Subtitles"
         self.subtitlesOn = subtitlesOn
+        // A separate audio file (trailers) is the only audio: nothing to choose.
+        self.audioChosen = audioURL != nil
         // Not in VLCKit's headers; the VLC app sets the size the same way.
         let fontSize = NSSelectorFromString("setTextRendererFontSize:")
         if player.responds(to: fontSize) { player.perform(fontSize, with: NSNumber(value: SubtitleSettings.size.relativeSize)) }
         let media = VLCMedia(url: url)
         media.addOption(":network-caching=2500")
         if let audioURL { media.addOption(":input-slave=\(audioURL.absoluteString)") }
+        else { media.addOption(":audio-language=\(AudioSettings.vlcOption)") }
         player.media = media
     }
     func attach(to view: PlatformView) {
@@ -130,6 +173,17 @@ final class EmbeddedPlayer {
         if !subtitlesOn && !subtitlesTurnedOff && player.isPlaying && subtitleTracks.contains(where: { $0.id >= 0 }) {
             subtitlesTurnedOff = true
             player.currentVideoSubTitleIndex = -1
+        }
+        // Tracks with no language tag but a name ("Ukr DUB Hurtom"): VLC's
+        // own choice misses them.
+        if !audioChosen && player.isPlaying {
+            let tracks = audioTracks.filter { $0.id >= 0 }
+            if !tracks.isEmpty {
+                audioChosen = true
+                if let id = AudioSettings.track(in: tracks, current: player.currentAudioTrackIndex) {
+                    player.currentAudioTrackIndex = id
+                }
+            }
         }
         seconds = max(0, Double(player.time.intValue) / 1000)
         duration = max(0, Double(player.media?.length.intValue ?? 0) / 1000)

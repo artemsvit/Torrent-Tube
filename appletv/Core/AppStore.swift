@@ -41,6 +41,7 @@ final class AppStore {
             TopShelfStore.defaults.set(client.baseURL.absoluteString, forKey: "activeServer")
             #endif
             config = result
+            if let language = result.audioLanguage { AudioSettings.language = language }
             api = client
             address = client.baseURL.absoluteString
             UserDefaults.standard.set(address, forKey: "serverAddress")
@@ -94,3 +95,37 @@ final class AppStore {
     }
 }
 
+
+/// The server's Library settings (Download new episodes, Default audio
+/// track) for a Settings screen: loaded when it opens, saved on each change.
+@MainActor @Observable
+final class LibrarySettingsStore {
+    var settings: LibrarySettings?
+    var saving = false
+    var error: String?
+
+    func load(api: TorrentTubeAPI) async {
+        do {
+            let loaded: LibrarySettings = try await api.request("api/library/settings")
+            settings = loaded
+            AudioSettings.language = loaded.audioLanguage
+            error = nil
+        } catch is CancellationError {} catch { self.error = AppStore.describe(error).0 }
+    }
+
+    func save(_ change: LibrarySettingsChange, api: TorrentTubeAPI) async {
+        saving = true
+        defer { saving = false }
+        do {
+            let saved: LibrarySettings = try await api.post("api/library/settings", body: change)
+            settings = saved
+            AudioSettings.language = saved.audioLanguage
+            error = nil
+        } catch is CancellationError {} catch { self.error = AppStore.describe(error).0 }
+    }
+
+    var audioName: String {
+        guard let settings else { return "" }
+        return settings.audioLanguages.first { $0.code == settings.audioLanguage }?.name ?? settings.audioLanguage
+    }
+}

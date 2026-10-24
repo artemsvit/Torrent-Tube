@@ -519,6 +519,7 @@ struct MobileSettings: View {
     @AppStorage(SubtitleSettings.sizeKey) private var subtitleSize = SubtitleSize.medium.rawValue
     @AppStorage("libraryMetadata") private var libraryMetadata = true
     @State private var refreshingMetadata = false
+    @State private var librarySettings = LibrarySettingsStore()
     @State private var clearHistory = false
     @State private var refreshing = false
     @State private var refreshMessage: String?
@@ -532,7 +533,9 @@ struct MobileSettings: View {
     private var libraryFooterText: String {
         let intro = L("Look up library titles on TMDB. Matches are saved on this device, so the Library opens without waiting.")
         let summary = catalog.syncSummary(api.baseURL)
-        return "\(intro)\n\(summary)"
+        guard config.capabilities?.librarySettings == true else { return "\(intro)\n\(summary)" }
+        let episodes = L("Every 30 minutes the server downloads new episodes of your shows, from the release most like your files.")
+        return [intro, episodes, librarySettings.error, summary].compactMap { $0 }.joined(separator: "\n")
     }
     private var settingsFooterFont: Font {
         #if os(macOS)
@@ -577,6 +580,13 @@ struct MobileSettings: View {
             Picker(L("Subtitle size"), selection: $subtitleSize) {
                 ForEach(SubtitleSize.allCases) { Text($0.name).tag($0.rawValue) }
             }.pickerStyle(.menu)
+            if config.capabilities?.librarySettings == true, let shared = librarySettings.settings {
+                Picker(L("Default audio track"), selection: Binding(
+                    get: { shared.audioLanguage },
+                    set: { code in Task { await librarySettings.save(LibrarySettingsChange(audioLanguage: code), api: api) } })) {
+                    ForEach(shared.audioLanguages) { Text($0.name).tag($0.code) }
+                }.pickerStyle(.menu).disabled(librarySettings.saving)
+            }
             NavigationLink(L("Player licenses")) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
@@ -586,7 +596,8 @@ struct MobileSettings: View {
                 }.navigationTitle(L("Player licenses"))
             }
         } header: { header("Playback", "play.circle") } footer: {
-            Text(L("Choose how far the player moves with each skip.") + " " + L("Choose whether subtitles start on, and their size. You can still pick a subtitle track while a title is playing."))
+            Text(L("Choose how far the player moves with each skip.") + " " + L("Choose whether subtitles start on, and their size. You can still pick a subtitle track while a title is playing.")
+                 + (config.capabilities?.librarySettings == true ? " " + L("The default audio track is the same on every device. English is used when a file does not have it.") : ""))
                 .font(settingsFooterFont).foregroundStyle(.white.opacity(0.6))
         }
         .listRowBackground(Color.white.opacity(0.06))
@@ -609,6 +620,12 @@ struct MobileSettings: View {
     @ViewBuilder private var librarySection: some View {
         Section {
             Toggle(L("Posters and details"), isOn: $libraryMetadata).tint(Color.torrentAccent)
+            if config.capabilities?.librarySettings == true, let shared = librarySettings.settings {
+                Toggle(L("Download new episodes"), isOn: Binding(
+                    get: { shared.downloadNewEpisodes },
+                    set: { on in Task { await librarySettings.save(LibrarySettingsChange(downloadNewEpisodes: on), api: api) } }))
+                    .tint(Color.torrentAccent).disabled(librarySettings.saving)
+            }
             Button {
                 Task { await catalog.syncNow(api: api, config: config, rescan: false) }
             } label: { HStack { Text(L("Sync now")).foregroundStyle(.white); Spacer(); if catalog.syncing && !refreshingMetadata { ProgressView() } } }
@@ -735,6 +752,7 @@ struct MobileSettings: View {
             // White controls like the rest of the app; the accent stays on the switch.
             .tint(.white)
             .scrollContentBackground(.hidden).background(AppBackground())
+            .task { if config.capabilities?.librarySettings == true { await librarySettings.load(api: api) } }
             .navigationTitle(L("Settings"))
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L("Done")) { dismiss() }.tint(.white).accessibilityIdentifier("done-settings") } }
             .confirmationDialog(L("Clear viewing history?"), isPresented: $clearHistory, titleVisibility: .visible) {

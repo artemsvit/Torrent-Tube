@@ -14,8 +14,26 @@ struct ServerConfig: Decodable {
         /// The server keeps one favorites list for every app (/api/favorites).
         var favorites: Bool? = nil
         var continueWatching: Bool? = nil
+        /// Download new episodes and the Default audio track (/api/library/settings).
+        var librarySettings: Bool? = nil
     }
+    /// The Default audio track, the same on every device ("uk", "en", ...).
+    var audioLanguage: String? = nil
     var supportsPlayback: Bool { capabilities?.playbackSessions == true && capabilities?.fileSelection == true }
+}
+
+/// The server's Library settings, shared by every app and the web page.
+struct LibrarySettings: Codable, Equatable {
+    var downloadNewEpisodes: Bool
+    var audioLanguage: String
+    var audioLanguages: [AudioLanguage]
+    var newEpisodes: NewEpisodesStatus? = nil
+    struct AudioLanguage: Codable, Hashable, Identifiable { let code: String; let name: String; var id: String { code } }
+    struct NewEpisodesStatus: Codable, Equatable { var lastCheck: Double? = nil }
+}
+struct LibrarySettingsChange: Encodable {
+    var downloadNewEpisodes: Bool? = nil
+    var audioLanguage: String? = nil
 }
 
 struct Feed: Decodable, Identifiable { let id: String; let label: String }

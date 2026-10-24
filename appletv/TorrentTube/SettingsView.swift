@@ -16,6 +16,7 @@ struct SettingsView: View {
     @AppStorage(SubtitleSettings.sizeKey) private var subtitleSize = SubtitleSize.medium.rawValue
     @AppStorage("libraryMetadata") private var libraryMetadata = true
     @State private var refreshingMetadata = false
+    @State private var librarySettings = LibrarySettingsStore()
     @State private var section: Section = .home
     @State private var localizer = Localizer.shared
     @FocusState private var focusedSection: Section?
@@ -92,6 +93,14 @@ struct SettingsView: View {
                             let current = sizes.firstIndex { $0.rawValue == subtitleSize } ?? 1
                             subtitleSize = sizes[(current + 1) % sizes.count].rawValue
                         }
+                        if config.capabilities?.librarySettings == true, let shared = librarySettings.settings {
+                            setting("Default audio track", value: librarySettings.audioName,
+                                    subtitle: "The same on every device. English is used when a file does not have it.") {
+                                let codes = shared.audioLanguages.map(\.code)
+                                let next = codes[((codes.firstIndex(of: shared.audioLanguage) ?? -1) + 1) % max(codes.count, 1)]
+                                Task { await librarySettings.save(LibrarySettingsChange(audioLanguage: next), api: api) }
+                            }.disabled(librarySettings.saving)
+                        }
                         Text(L("Audio and subtitles can be changed while a title is playing. Available tracks depend on the video file."))
                             .font(.system(size: 25)).foregroundStyle(.white.opacity(0.7)).lineSpacing(4).padding(.horizontal, 34).padding(.top, 8)
                         NavigationLink { LicenseView() } label: {
@@ -118,6 +127,15 @@ struct SettingsView: View {
                                 refreshingMetadata = false
                             }
                         }.disabled(refreshingMetadata || catalog.syncing)
+                        if config.capabilities?.librarySettings == true, let shared = librarySettings.settings {
+                            setting("Download new episodes", value: shared.downloadNewEpisodes ? L("On") : L("Off"),
+                                    subtitle: "Every 30 minutes the server downloads new episodes of your shows, from the release most like your files.") {
+                                Task { await librarySettings.save(LibrarySettingsChange(downloadNewEpisodes: !shared.downloadNewEpisodes), api: api) }
+                            }.disabled(librarySettings.saving)
+                        }
+                        if let error = librarySettings.error {
+                            Text(error).font(.system(size: 25, weight: .medium)).foregroundStyle(.white.opacity(0.85)).padding(.horizontal, 34)
+                        }
                         Text(catalog.syncSummary(api.baseURL)).font(.system(size: 25)).foregroundStyle(.white.opacity(0.7)).lineSpacing(4)
                             .padding(.horizontal, 34).padding(.top, 10)
                     case .server:
@@ -148,6 +166,7 @@ struct SettingsView: View {
         }
         .padding(.horizontal, 58).padding(.top, ScreenLayout.top).padding(.bottom, 40)
         .defaultFocus($focusedSection, .home, priority: .userInitiated)
+        .task { if config.capabilities?.librarySettings == true { await librarySettings.load(api: api) } }
         .alert(L("Clear viewing history?"), isPresented: $clearingHistory) {
             Button(L("Cancel"), role: .cancel) {}
             Button(L("Clear history"), role: .destructive) { history.clear(server: api.baseURL) }

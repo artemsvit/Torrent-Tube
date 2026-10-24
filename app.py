@@ -17,7 +17,9 @@ from pathlib import Path
 
 import libtorrent as lt
 import episodes
+import languages
 from media_library import MediaLibrary
+from new_episodes import NewEpisodes
 from persistent_cache import PersistentCache
 from release_titles import SERIES_NAME_RE, extract_title_and_year
 from intro_detection import IntroDetector
@@ -164,6 +166,7 @@ DEFAULT_LIMITS = {
     "max_upload_slots": 0,          # unchoke slots, 0 = libtorrent default
     "seed_after_download": 1,       # 0/1 - pause a torrent as soon as it finishes instead of seeding
     "remove_after_download": 0,     # 0/1 - drop a finished torrent from the list (files are kept)
+    "download_new_episodes": 0,     # 0/1 - fetch new episodes of the library's shows (new_episodes.py)
 }
 
 # Jackett does the actual tracker login/scraping (configured with the user's
@@ -182,6 +185,9 @@ DEFAULT_SERVICE = {
     "tmdb_api_key": os.environ.get("TMDB_API_KEY", ""),
     "tmdb_language": os.environ.get("TMDB_LANGUAGE", "uk-UA"),
     "default_player": "infuse",  # what Play opens: "infuse" or "vlc"
+    # The audio track players start with, and the one new episodes must
+    # have - English is the fallback (languages.py).
+    "audio_language": languages.DEFAULT,
 }
 PLAYERS = ("infuse", "vlc")
 
@@ -236,6 +242,9 @@ HANDLES = {}
 # track intent ourselves rather than trusting that snapshot for the UI.
 PAUSED_IDS = set()
 LOCK = threading.Lock()
+# torrent id -> {file index: path under its save path} for files saved
+# somewhere else than the torrent says (new episodes, into the show's folder)
+RENAMED_FILES = {}
 
 
 def torrent_id(handle) -> str:
@@ -260,6 +269,10 @@ def save_registry():
                 priorities = list(h.get_file_priorities())
                 if 0 in priorities:
                     entry["file_priorities"] = priorities
+                # New episodes are saved under the show's own folder, not the torrent's.
+                renamed = RENAMED_FILES.get(torrent_id(h))
+                if renamed:
+                    entry["renamed_files"] = {str(i): path for i, path in renamed.items()}
             else:
                 entry["magnet_uri"] = lt.make_magnet_uri(h)
             if torrent_id(h) in STREAM_CACHE_IDS:
@@ -280,7 +293,8 @@ def load_registry():
         try:
             if "torrent_file_hex" in entry:
                 info = lt.torrent_info(bytes.fromhex(entry["torrent_file_hex"]))
-                tid = add_torrent_file(info, entry["save_path"])
+                renamed = {int(i): path for i, path in (entry.get("renamed_files") or {}).items()}
+                tid = add_torrent_file(info, entry["save_path"], renamed=renamed)
                 if entry.get("file_priorities"):
                     HANDLES[tid].prioritize_files(entry["file_priorities"])
             elif "magnet_uri" in entry:
@@ -314,10 +328,12 @@ def add_magnet(uri: str, save_path: str = None) -> str:
     return tid
 
 
-def add_torrent_file(info: "lt.torrent_info", save_path: str = None, nothing_wanted: bool = False) -> str:
+def add_torrent_file(info: "lt.torrent_info", save_path: str = None, nothing_wanted: bool = False, renamed: dict = None) -> str:
     params = lt.add_torrent_params()
     params.ti = info
     params.save_path = save_path or resolve_save_path()
+    if renamed:
+        params.renamed_files = renamed
     if nothing_wanted:
         # A stream starts with no file wanted, so a whole season pack never
         # begins downloading - begin_stream turns on just the episode played.
@@ -328,6 +344,8 @@ def add_torrent_file(info: "lt.torrent_info", save_path: str = None, nothing_wan
     tid = torrent_id(handle)
     with LOCK:
         HANDLES[tid] = handle
+        if renamed:
+            RENAMED_FILES[tid] = dict(renamed)
     return tid
 
 
@@ -430,7 +448,7 @@ def config():
         "server": "torrenttube",
         "api_version": 1,
         "capabilities": {"file_selection": True, "playback_sessions": True, "library": True, "top_shelf_previews": True,
-                         "favorites": True, "continue_watching": True},
+                         "favorites": True, "continue_watching": True, "library_settings": True},
         "download_dir": str(DOWNLOAD_DIR),
         # The same folder as the server's own path (None when it isn't
         # known) - what Settings shows, as /downloads means little.
@@ -442,6 +460,7 @@ def config():
         "tmdb_enabled": bool(TMDB_API_KEY),
         "tmdb_language": TMDB_LANGUAGE if TMDB_API_KEY else None,
         "default_player": SETTINGS["default_player"] if SETTINGS["default_player"] in PLAYERS else "infuse",
+        "audio_language": SETTINGS["audio_language"],
     })
 
 
@@ -469,6 +488,8 @@ def update_settings():
         SETTINGS[key] = payload[key].strip()
     if SETTINGS["default_player"] not in PLAYERS:
         SETTINGS["default_player"] = DEFAULT_SERVICE["default_player"]
+    if SETTINGS["audio_language"] not in languages.NAMES:
+        SETTINGS["audio_language"] = languages.DEFAULT
 
     JACKETT_URL = SETTINGS["jackett_url"].rstrip("/")
     JACKETT_API_KEY = SETTINGS["jackett_api_key"]
@@ -486,6 +507,8 @@ def update_settings():
         if h.is_valid():
             apply_torrent_limits(h)
     SETTINGS_FILE.write_text(json.dumps(SETTINGS))
+    if SETTINGS["download_new_episodes"]:
+        NEW_EPISODES.wake()
     return jsonify(SETTINGS)
 
 
@@ -499,14 +522,15 @@ TMDB_LANGUAGES_CACHE = {}
 
 
 def _jackett_indexers():
-    """Configured indexers from Jackett's own Torznab list, as [{id, title}]."""
+    """Configured indexers from Jackett's own Torznab list, as [{id, title, language}]."""
     params = {"apikey": JACKETT_API_KEY, "t": "indexers", "configured": "true"}
     url = f"{JACKETT_URL}/api/v2.0/indexers/all/results/torznab/api?{urllib.parse.urlencode(params)}"
     req = urllib.request.Request(url, headers={"User-Agent": "TorrentTube"})
     with urllib.request.urlopen(req, timeout=8) as resp:
         root = ET.fromstring(resp.read())
     return [
-        {"id": el.get("id"), "title": (el.findtext("title") or el.get("id")).strip()}
+        {"id": el.get("id"), "title": (el.findtext("title") or el.get("id")).strip(),
+         "language": (el.findtext("language") or "").strip() or None}
         for el in root.findall("indexer") if el.get("id")
     ]
 
@@ -905,6 +929,7 @@ def jackett_query(q: str = None, cat: str = None, indexer: str = None):
                 peers = int(value or 0)
             elif name == "magneturl" and value:
                 magnet = value
+        indexer_el = item.find("jackettindexer")
         results.append({
             "title": title,
             "size": size,
@@ -915,6 +940,8 @@ def jackett_query(q: str = None, cat: str = None, indexer: str = None):
             "download_link": item.findtext("link") or "",
             "details_link": item.findtext("comments") or "",
             "pub_date": item.findtext("pubDate") or "",
+            # Which tracker it came from (Jackett's "all" search mixes them).
+            "indexer": indexer_el.get("id") if indexer_el is not None else None,
             "poster": None,
             "rating": None,
             "overview": None,
@@ -1630,6 +1657,7 @@ def remove_torrent(tid):
         handle = HANDLES.pop(tid, None)
         PAUSED_IDS.discard(tid)
         STREAM_CACHE_IDS.discard(tid)
+        RENAMED_FILES.pop(tid, None)
     if not handle or not handle.is_valid():
         return jsonify({"error": "Unknown torrent"}), 404
     delete_files = request.args.get("delete_files") == "1"
@@ -2439,6 +2467,172 @@ def list_library():
 
 
 # Favorites: the heart in the apps and the web page, one list per server.
+# ---------- New episodes ----------
+# With "Download new episodes" on, every 30 minutes each show in the library
+# is looked up on the trackers and only its missing newer episodes are
+# downloaded, into its own folder - new_episodes.py picks the release.
+INDEXER_LANGUAGES = {"at": 0, "key": None, "value": {}}
+
+
+def indexer_languages() -> dict:
+    """Jackett indexer id -> its language ("uk"), cached for an hour."""
+    key = (JACKETT_URL, JACKETT_API_KEY)
+    if INDEXER_LANGUAGES["key"] != key or time.time() - INDEXER_LANGUAGES["at"] > 3600:
+        value = {}
+        try:
+            value = {i["id"]: languages.from_locale(i["language"]) for i in _jackett_indexers() if i.get("language")}
+        except Exception:
+            pass
+        INDEXER_LANGUAGES.update(at=time.time(), key=key, value=value)
+    return INDEXER_LANGUAGES["value"]
+
+
+def _new_episode_shows() -> list:
+    """Every show in the library, all its folders together, for new_episodes.py."""
+    items, _ = _library_with_metadata(LIBRARY.items(refresh=True))
+    shows = []
+    for item in items:
+        if library_structure(item) != "tv":
+            continue
+        folders = [v["id"] for v in item.get("versions") or [item]]
+        names = [v["name"] for v in item.get("versions") or [item]]
+        files = [f for folder in folders for f in (LIBRARY.files(folder) or []) if f.get("season")]
+        if not files:
+            continue
+        title = extract_title_and_year(item["name"])[0] or item["name"]
+        queries = list(dict.fromkeys(q for q in (title, item.get("display_title")) if q))
+        key = f"tmdb:{item['media_type']}:{item['tmdb_id']}" if item.get("tmdb_id") else item["id"]
+        shows.append({"key": key, "title": item.get("display_title") or title, "names": names,
+                      "queries": queries, "folders": folders, "files": files})
+    return shows
+
+
+def _new_episode_search(query: str) -> list:
+    if not (JACKETT_URL and JACKETT_API_KEY):
+        return []
+    known = indexer_languages()
+    results = jackett_query(q=query)
+    for r in results:
+        r["language"] = known.get(r.get("indexer"))
+    return results
+
+
+def _magnet_metadata(magnet: str, timeout: int = 60):
+    """A magnet's file list without downloading anything: added in upload
+    mode to the stream cache, removed once the metadata is in."""
+    params = lt.parse_magnet_uri(magnet)
+    params.save_path = str(STREAM_CACHE_DIR)
+    params.flags |= lt.torrent_flags.upload_mode
+    params.flags &= ~lt.torrent_flags.auto_managed
+    handle = ses.add_torrent(params)
+    try:
+        deadline = time.time() + timeout
+        while not handle.status().has_metadata:
+            if time.time() > deadline:
+                return None
+            time.sleep(0.5)
+        return lt.torrent_info(handle.torrent_file())
+    finally:
+        ses.remove_torrent(handle)
+
+
+def _new_episode_torrent(result: dict):
+    """A tracker result's .torrent (or magnet metadata) and its file list."""
+    info = None
+    if result.get("download_link"):
+        try:
+            req = urllib.request.Request(result["download_link"], headers={"User-Agent": "TorrentTube"})
+            with urllib.request.urlopen(req, timeout=25) as resp:
+                info = lt.torrent_info(resp.read())
+        except Exception:
+            info = None
+    if info is None and (result.get("magnet") or "").lower().startswith("magnet:?"):
+        tid = _info_hash_hex(magnet=result["magnet"])
+        with LOCK:
+            existing = HANDLES.get(tid)
+        if existing and existing.is_valid() and existing.status().has_metadata:
+            info = lt.torrent_info(existing.torrent_file())
+        else:
+            info = _magnet_metadata(result["magnet"])
+    if info is None:
+        return None
+    fs = info.files()
+    return {"hash": _info_hash_hex(info=info), "info": info,
+            "files": [fs.file_path(i) for i in range(fs.num_files())]}
+
+
+def _new_episode_download(torrent: dict, targets: list):
+    """Download only the picked files, each straight into the show's folder.
+    A torrent already in Downloads just wants those files too."""
+    with LOCK:
+        existing = HANDLES.get(torrent["hash"])
+    if existing and existing.is_valid():
+        for index, _ in targets:
+            existing.file_priority(index, 4)
+        tid = torrent["hash"]
+    else:
+        category = targets[0][1].split("/")[0]
+        save_path = DOWNLOAD_DIR / category
+        renamed = {index: path.split("/", 1)[1] for index, path in targets}
+        tid = add_torrent_file(torrent["info"], str(save_path), nothing_wanted=True, renamed=renamed)
+        with LOCK:
+            handle = HANDLES[tid]
+        priorities = [0] * torrent["info"].num_files()
+        for index, _ in targets:
+            priorities[index] = 4
+        handle.prioritize_files(priorities)
+    save_registry()
+    LIBRARY.items(refresh=True)
+    return tid
+
+
+NEW_EPISODES = NewEpisodes(
+    STATE_DIR / "new-episodes.json", shows=_new_episode_shows, search=_new_episode_search,
+    inspect=_new_episode_torrent, download=_new_episode_download,
+    enabled=lambda: bool(SETTINGS["download_new_episodes"]), audio_language=lambda: SETTINGS["audio_language"],
+    log=lambda message: print(message, flush=True))
+LIBRARY_LANGUAGES = {"at": 0, "value": set()}
+
+
+def library_audio_languages() -> list:
+    """The Default audio track choices: Ukrainian, English, then the
+    languages the library's names and the Jackett indexers have."""
+    if time.time() - LIBRARY_LANGUAGES["at"] > 600:
+        found = set()
+        for item in LIBRARY.items():
+            found |= languages.found_in(item["name"])
+        found |= {code for code in indexer_languages().values() if code}
+        LIBRARY_LANGUAGES.update(at=time.time(), value=found)
+    return languages.choices(LIBRARY_LANGUAGES["value"], SETTINGS["audio_language"])
+
+
+def _library_settings() -> dict:
+    return {"download_new_episodes": bool(SETTINGS["download_new_episodes"]),
+            "audio_language": SETTINGS["audio_language"],
+            "audio_languages": library_audio_languages(),
+            "new_episodes": NEW_EPISODES.status()}
+
+
+@app.route("/api/library/settings", methods=["GET", "POST"])
+def library_settings():
+    """The Library settings every app shows and changes - without the
+    Jackett and TMDB keys /api/settings has."""
+    if request.method == "POST":
+        payload = request.get_json(silent=True) or {}
+        if "download_new_episodes" in payload:
+            if not isinstance(payload["download_new_episodes"], (bool, int)):
+                return jsonify({"error": "'download_new_episodes' must be true or false"}), 400
+            SETTINGS["download_new_episodes"] = int(bool(payload["download_new_episodes"]))
+        if "audio_language" in payload:
+            if payload["audio_language"] not in languages.NAMES:
+                return jsonify({"error": "Unknown audio language"}), 400
+            SETTINGS["audio_language"] = payload["audio_language"]
+        SETTINGS_FILE.write_text(json.dumps(SETTINGS))
+        if SETTINGS["download_new_episodes"]:
+            NEW_EPISODES.wake()
+    return jsonify(_library_settings())
+
+
 FAVORITES = Favorites(STATE_DIR / "favorites.json")
 
 
@@ -2558,6 +2752,8 @@ def library_playlist(token):
     lines = ["#EXTM3U"]
     for path in paths:
         lines.append(f"#EXTINF:-1,{Path(path).stem}")
+        # VLC starts with the Default audio track from Settings.
+        lines.append(f"#EXTVLCOPT:audio-language={languages.vlc_option(SETTINGS['audio_language'])}")
         lines.append(f"{base}/media/{urllib.parse.quote(path)}")
     return Response("\n".join(lines) + "\n", mimetype="audio/x-mpegurl",
                     headers={"Content-Disposition": f'inline; filename="{token}.m3u"', "Cache-Control": "no-store"})
@@ -2805,6 +3001,7 @@ def trailer_preview_loop():
 
 
 threading.Thread(target=trailer_preview_loop, daemon=True).start()
+threading.Thread(target=NEW_EPISODES.loop, daemon=True).start()
 
 
 if __name__ == "__main__":

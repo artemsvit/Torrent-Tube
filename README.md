@@ -184,6 +184,18 @@ on a narrow screen they stack, Downloads first.
   matched, hides or shows the library on the Downloads page, **Refresh list**
   (look through the folders again) and **Rescan metadata** (forget every
   match and look all titles up again).
+- **Download new episodes** (Settings → Library, in every app): every 30
+  minutes the server finds the newest episode of each show in the library,
+  searches the trackers, and downloads only the missing newer episodes into
+  that show's folder. It prefers the release most like the files on disk
+  (release group such as `[Hurtom]`, resolution, codec, source, audio
+  languages) and, from a season pack, fetches only the needed files. What it
+  fetched or tried is kept in `.torrenttube/new-episodes.json`.
+- **Default audio track** (Settings → Players on the web, Playback in the
+  apps): Ukrainian by default, English when a file does not have it. Other
+  choices come from the languages in your library's names and your Jackett
+  indexers. The apps' player and VLC playlists start with it, and new
+  episodes must have it (or English).
 
 ## Play in Infuse / VLC
 
@@ -297,6 +309,7 @@ away and seek.
 | `GET /play/<token>/<name>` | The video for a play token, with Range support. Waits for the token, the torrent and its file list on the first request; starts the torrent again if its stream was deleted. |
 | `POST /api/stream/<id>/keep` | Body `{"category": ...}`. Moves a cached stream to that folder and makes it a normal download. |
 | `GET /api/library` | The library: `{items, metadata_pending}`. Each item has `id` (its path), `title`, `display_title`, `year`, `kind` (`movie`, `tv`, `cartoon`), `poster`, `rating`, `overview`, `tmdb_id`, `media_type`, `files`, `size` and `versions`. `?refresh=1` looks through the folders again. |
+| `GET/POST /api/library/settings` | The shared Library settings: `{download_new_episodes, audio_language, audio_languages, new_episodes}`. POST changes either of the first two. |
 | `DELETE /api/library/metadata` | Forgets every TMDB match; the next `GET /api/library` looks them up again. |
 | `POST /api/playback/prepare` | Body `{"path": <library path>}` (or a torrent source). Returns the title's video files in play order, each with its `path`. |
 | `GET /media/<path>` | A library file, straight from disk, with Range support. |

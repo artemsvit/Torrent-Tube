@@ -314,6 +314,15 @@
             <span class="switch-thumb"></span>
           </label>
         </div>
+        <div class="settings-row">
+          <div class="settings-row-label">Download new episodes<button type="button" class="info-tip" data-tip="Every 30 minutes the server looks for new episodes of the shows in your library and downloads only the missing ones, from the release most like your files">i</button></div>
+          <label class="switch">
+            <input type="checkbox" id="settingsNewEpisodes">
+            <span class="switch-track"></span>
+            <span class="switch-thumb"></span>
+          </label>
+        </div>
+        <p class="streams-note" id="newEpisodesStatus" hidden></p>
         <div class="settings-actions">
           <button type="button" class="btn-secondary" id="libraryRefreshBtn" title="Look through the folders again for new or removed titles">Refresh list</button>
           <button type="button" class="btn-secondary" id="libraryRescanBtn" title="Forget every match and look all titles up on TMDB again">Rescan metadata</button>
@@ -327,6 +336,10 @@
         <div class="settings-row">
           <div class="settings-row-label">Default player<button type="button" class="info-tip" data-tip="The app the Play button opens. The ▾ beside Play changes it too">i</button></div>
           <select class="inline-category-select" id="settingsPlayer"></select>
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-label">Default audio track<button type="button" class="info-tip" data-tip="The audio track players start with, on every device. If a file does not have it, English is used. New episodes are downloaded in this language too">i</button></div>
+          <select class="inline-category-select settings-select" id="settingsAudioLanguage"></select>
         </div>
       </div>
       <div class="settings-section">

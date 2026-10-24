@@ -959,6 +959,7 @@ async function openSettings() {
   await loadLimits();
   renderLimits();
   loadServiceOptions();
+  loadLibrarySettings();
 }
 
 function closeSettings() {
@@ -3351,6 +3352,55 @@ settingsShowLibrary.addEventListener("change", () => {
   try { localStorage.setItem("showLibrary", settingsShowLibrary.checked ? "1" : "0"); } catch (e) {}
   renderLibrary();
 });
+// Download new episodes and the Default audio track live on the server, so
+// every app shows and changes the same values (/api/library/settings).
+const settingsNewEpisodes = document.getElementById("settingsNewEpisodes");
+const settingsAudioLanguage = document.getElementById("settingsAudioLanguage");
+const newEpisodesStatus = document.getElementById("newEpisodesStatus");
+let librarySettings = null;
+
+function renderLibrarySettings() {
+  if (!librarySettings) return;
+  settingsNewEpisodes.checked = !!librarySettings.download_new_episodes;
+  fillSelect(settingsAudioLanguage,
+    (librarySettings.audio_languages || []).map(l => ({ value: l.code, label: l.name })),
+    librarySettings.audio_language || "uk");
+  // Labels are their own text nodes, so i18n.js translates them.
+  const status = librarySettings.new_episodes || {};
+  const recent = (status.recent || [])[0];
+  const label = text => Object.assign(document.createElement("span"), { textContent: text });
+  newEpisodesStatus.replaceChildren(label(status.last_check ? "Last check:" : "The first check starts within a minute."));
+  if (status.last_check) newEpisodesStatus.append(` ${new Date(status.last_check * 1000).toLocaleString()}`);
+  if (recent) newEpisodesStatus.append(document.createElement("br"), label("Last downloaded:"), ` ${recent.show} ${recent.episodes.join(", ")}`);
+  newEpisodesStatus.hidden = !librarySettings.download_new_episodes;
+}
+
+async function loadLibrarySettings() {
+  try {
+    const res = await fetch("/api/library/settings");
+    librarySettings = await res.json();
+    renderLibrarySettings();
+  } catch (e) {}
+}
+
+async function saveLibrarySettings(body) {
+  try {
+    const res = await fetch("/api/library/settings", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (data.error) { showToast(data.error, true); return; }
+    librarySettings = data;
+    renderLibrarySettings();
+    showToast("Settings saved");
+  } catch (e) {
+    showToast("Couldn't save settings", true);
+  }
+}
+
+settingsNewEpisodes.addEventListener("change", () => saveLibrarySettings({ download_new_episodes: settingsNewEpisodes.checked }));
+settingsAudioLanguage.addEventListener("change", () => saveLibrarySettings({ audio_language: settingsAudioLanguage.value }));
+
 document.getElementById("libraryRefreshBtn").addEventListener("click", async () => {
   await loadLibrary(true);
   showToast(`Library: ${libraryItems.length} titles`);
