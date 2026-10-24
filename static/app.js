@@ -3125,8 +3125,8 @@ function renderCollection(c) {
   const head = document.createElement("div");
   head.className = "collection-head";
   head.innerHTML = `${c.backdrop ? `<img class="collection-backdrop" src="${escapeHtml(c.backdrop)}" alt="">` : ""}
+    <button type="button" class="btn-secondary collection-back"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg><span>Collections</span></button>
     <div class="collection-head-body">
-      <button type="button" class="btn-secondary collection-back">‹ <span>Collections</span></button>
       <h2 class="collection-name">${escapeHtml(c.name)}</h2>
       <div class="collection-count">${collectionCount(c)}</div>
       ${c.overview ? `<p class="collection-overview">${escapeHtml(c.overview)}</p>` : ""}
