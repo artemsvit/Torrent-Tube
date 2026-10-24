@@ -44,64 +44,69 @@ struct LibraryView: View {
     private static let top = "library-top"
     var body: some View {
         let active = section.isEmpty ? LibrarySections.defaultSection(catalog.library) : section
-        ScrollViewReader { proxy in
-        ScrollView {
-            // The very top of the page, above its padding: scrolling here shows
-            // the heading below the bar, where it starts.
-            VStack(alignment: .leading, spacing: 0) {
-            Color.clear.frame(height: 0).id(Self.top)
+        VStack(alignment: .leading, spacing: 0) {
+            // Heading and chips stay put; only the posters below scroll. In one
+            // scroll view with the posters, a chip switch could push the page down.
             VStack(alignment: .leading, spacing: 35) {
                 Text(L("Library")).font(.system(size: 50, weight: .bold)).accessibilityIdentifier("library-heading")
                 // The Library syncs itself (new titles only); Settings has "Sync now".
                 ChipRow(options: LibrarySections.chips(catalog.library, favorites: favorites.entries(server: api.baseURL).count),
                         selected: active, select: { section = $0 }, externalFocus: chipFocus)
-                if active == "favorites" {
-                    favoritesSection
-                } else if active == "collections" {
-                    collectionsSection
-                } else {
-                    let items = catalog.library.filter { $0.kind == active }
-                    if items.isEmpty && catalog.libraryLoading {
-                        LoadingState(text: L("Loading titles…"), minHeight: 600)
-                    } else if let error = catalog.libraryError, items.isEmpty {
-                        ErrorPanel(message: error) { Task { await catalog.loadLibrary(api: api) } }
-                    } else if items.isEmpty {
-                        ContentUnavailableView(L("Nothing here yet"), systemImage: "externaldrive",
-                                               description: Text(L("Titles you download to the server appear here.")))
-                            .frame(maxWidth: .infinity, minHeight: 500)
+            }
+            .padding(.horizontal, TVLayout.edge).padding(.top, 158 + ScreenLayout.top).padding(.bottom, 14)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Color.clear.frame(height: 0).id(Self.top)
+                        Group {
+                            if active == "favorites" {
+                                favoritesSection
+                            } else if active == "collections" {
+                                collectionsSection
+                            } else {
+                                let items = catalog.library.filter { $0.kind == active }
+                                if items.isEmpty && catalog.libraryLoading {
+                                    LoadingState(text: L("Loading titles…"), minHeight: 500)
+                                } else if let error = catalog.libraryError, items.isEmpty {
+                                    ErrorPanel(message: error) { Task { await catalog.loadLibrary(api: api) } }
+                                } else if items.isEmpty {
+                                    ContentUnavailableView(L("Nothing here yet"), systemImage: "externaldrive",
+                                                           description: Text(L("Titles you download to the server appear here.")))
+                                        .frame(maxWidth: .infinity, minHeight: 500)
+                                }
+                                FilmGrid(items: items.map(libraryItem), api: api, config: config)
+                            }
+                        }
+                        // Room above the first row for a focused poster to grow.
+                        .padding(.top, 16)
                     }
-                    FilmGrid(items: items.map(libraryItem), api: api, config: config)
+                    .padding(.horizontal, TVLayout.edge).padding(.bottom, 70)
                 }
-            }.padding(.horizontal, TVLayout.edge).padding(.top, 158 + ScreenLayout.top).padding(.bottom, 70)
-            }
-        }
-        // A shorter list (Movies, then Favorites) kept the old offset and the
-        // focused chip's place on screen, so each switch pushed the page
-        // further down, past its top. Keep the top fixed and go back to it.
-        .tvScrollEdge()
-        .defaultScrollAnchor(.top, for: .sizeChanges)
-        .onChange(of: section) { _, _ in
-            var transaction = Transaction(); transaction.disablesAnimations = true
-            withTransaction(transaction) { proxy.scrollTo(Self.top, anchor: .top) }
-        }
-        .onChange(of: scrollRequest) { _, _ in
-            var transaction = Transaction(); transaction.disablesAnimations = true
-            withTransaction(transaction) {
-                proxy.scrollTo(Self.top, anchor: .top)
-                chipFocus.wrappedValue = active
-            }
-        }
-        .onAppear {
-            // Returning from a title goes directly to its Library category.
-            // Do not restore the poster and then move focus again on Back.
-            var transaction = Transaction(); transaction.disablesAnimations = true
-            withTransaction(transaction) {
-                proxy.scrollTo(Self.top, anchor: .top)
-                chipFocus.wrappedValue = active
+                .tvScrollEdge(40)
+                .defaultScrollAnchor(.top, for: .sizeChanges)
+                .onChange(of: section) { _, _ in
+                    var transaction = Transaction(); transaction.disablesAnimations = true
+                    withTransaction(transaction) { proxy.scrollTo(Self.top, anchor: .top) }
+                }
+                .onChange(of: scrollRequest) { _, _ in
+                    var transaction = Transaction(); transaction.disablesAnimations = true
+                    withTransaction(transaction) {
+                        proxy.scrollTo(Self.top, anchor: .top)
+                        chipFocus.wrappedValue = active
+                    }
+                }
+                .onAppear {
+                    // Returning from a title goes directly to its Library category.
+                    // Do not restore the poster and then move focus again on Back.
+                    var transaction = Transaction(); transaction.disablesAnimations = true
+                    withTransaction(transaction) {
+                        proxy.scrollTo(Self.top, anchor: .top)
+                        chipFocus.wrappedValue = active
+                    }
+                }
             }
         }
         .defaultFocus(chipFocus, active, priority: .userInitiated)
-        }
         .ignoresSafeArea(edges: .horizontal)
         .task {
             favorites.sync()
@@ -166,46 +171,37 @@ struct CollectionCard: View {
 }
 
 /// A collection's page: name, count and overview on the left over a dim
-/// backdrop, then its films in release order in six fixed columns, each
-/// with its part and year above its title. Focus in the first row keeps the
-/// page at its top, so the heading never slides under the bar.
+/// backdrop stay in place; only the films below scroll, in release order in
+/// six fixed columns, each with its part and year above its title.
 struct CollectionView: View {
     let collection: LibraryCollection
     let api: TorrentTubeAPI
     let config: ServerConfig
-    private static let top = "collection-top"
     private static let columns = 6
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    Color.clear.frame(height: 0).id(Self.top)
-                    VStack(alignment: .leading, spacing: 14) {
-                        Text(collection.name).font(.system(size: 50, weight: .bold)).lineLimit(1)
-                        Text(collection.count).font(.system(size: 26, weight: .semibold)).foregroundStyle(.white.opacity(0.7))
-                        if let overview = collection.info.overview, !overview.isEmpty {
-                            Text(overview).font(.system(size: 24)).foregroundStyle(.white.opacity(0.8)).lineSpacing(4).lineLimit(3)
-                                .frame(maxWidth: 1180, alignment: .leading).padding(.top, 4)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 36, alignment: .top), count: Self.columns),
-                              alignment: .leading, spacing: 44) {
-                        ForEach(Array(collection.titles.enumerated()), id: \.element.id) { index, title in
-                            CollectionFilmCard(title: title) {
-                                // The first row: back to the very top, heading in view.
-                                guard index < Self.columns else { return }
-                                withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(Self.top, anchor: .top) }
-                            }
-                        }
-                    }
-                    .padding(.top, 40).focusSection()
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 14) {
+                Text(collection.name).font(.system(size: 50, weight: .bold)).lineLimit(1)
+                Text(collection.count).font(.system(size: 26, weight: .semibold)).foregroundStyle(.white.opacity(0.7))
+                if let overview = collection.info.overview, !overview.isEmpty {
+                    Text(overview).font(.system(size: 24)).foregroundStyle(.white.opacity(0.8)).lineSpacing(4).lineLimit(3)
+                        .frame(maxWidth: 1180, alignment: .leading).padding(.top, 4)
                 }
-                .padding(.horizontal, TVLayout.edge).padding(.top, 158).padding(.bottom, 70)
             }
-            .tvScrollEdge(150)
-            .ignoresSafeArea(edges: .horizontal)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, TVLayout.edge).padding(.top, 158).padding(.bottom, 14)
+            ScrollView {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 36, alignment: .top), count: Self.columns),
+                          alignment: .leading, spacing: 44) {
+                    ForEach(collection.titles) { CollectionFilmCard(title: $0) }
+                }
+                // Room above the first row for a focused poster to grow.
+                .padding(.horizontal, TVLayout.edge).padding(.top, 26).padding(.bottom, 70)
+                .focusSection()
+            }
+            .tvScrollEdge(40)
         }
+        .ignoresSafeArea(edges: .horizontal)
         .background(alignment: .top) {
             if let backdrop = collection.info.backdrop {
                 ArtworkView(url: backdrop, background: true, fill: true).frame(height: 700)
@@ -221,7 +217,6 @@ struct CollectionView: View {
 /// the same height in every column.
 private struct CollectionFilmCard: View {
     let title: LibraryTitle
-    let onFocus: () -> Void
     @Environment(CatalogStore.self) private var catalog
     @FocusState private var focused: Bool
     var body: some View {
@@ -241,7 +236,6 @@ private struct CollectionFilmCard: View {
             }
         }
         .buttonStyle(CinemaCardStyle()).focused($focused)
-        .onChange(of: focused) { _, now in if now { onFocus() } }
         .accessibilityLabel("\(value.displayTitle), \(LibraryCollection.line(title))")
     }
 }

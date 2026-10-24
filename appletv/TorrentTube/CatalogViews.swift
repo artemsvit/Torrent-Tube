@@ -952,24 +952,41 @@ struct CategoryView: View {
     @Environment(CatalogStore.self) private var catalog
     @State private var selected = ""
     private var activeFeed: String { selected.isEmpty ? feed : selected }
+    private static let top = "category-top"
     var body: some View {
-        ScrollView {
+        VStack(alignment: .leading, spacing: 0) {
+            // Heading and chips stay put; only the posters below scroll, so a
+            // chip switch never pushes the page down.
             VStack(alignment: .leading, spacing: 35) {
                 Text(L(MovieFilters.heading(activeFeed) ?? (activeFeed == "cartoons" ? "Cartoons" : title))).font(.system(size: 50, weight: .bold))
                 // Movies has sub-categories; the catalog refreshes itself when the app opens.
                 if feed == "movies" {
                     ChipRow(options: MovieFilters.options, selected: activeFeed) { selected = $0 }
                 }
-                if catalog.loading.contains(activeFeed) && catalog.rows[activeFeed] == nil { LoadingState(text: L("Loading titles…"), minHeight: 700) }
-                if let error = catalog.errors[activeFeed] { ErrorPanel(message: error) { Task { await catalog.loadFeed(activeFeed, api: api, config: config, refresh: true) } } }
-                if catalog.rows[activeFeed]?.isEmpty == true && !catalog.loading.contains(activeFeed) && catalog.errors[activeFeed] == nil {
-                    ContentUnavailableView(L("Nothing here yet"), systemImage: "film", description: Text(L("Try another category or refresh your server’s catalog.")))
-                        .frame(maxWidth: .infinity, minHeight: 500)
+            }
+            .padding(.horizontal, TVLayout.edge).padding(.top, 158 + ScreenLayout.top).padding(.bottom, 14)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 35) {
+                        Color.clear.frame(height: 0).id(Self.top)
+                        if catalog.loading.contains(activeFeed) && catalog.rows[activeFeed] == nil { LoadingState(text: L("Loading titles…"), minHeight: 500) }
+                        if let error = catalog.errors[activeFeed] { ErrorPanel(message: error) { Task { await catalog.loadFeed(activeFeed, api: api, config: config, refresh: true) } } }
+                        if catalog.rows[activeFeed]?.isEmpty == true && !catalog.loading.contains(activeFeed) && catalog.errors[activeFeed] == nil {
+                            ContentUnavailableView(L("Nothing here yet"), systemImage: "film", description: Text(L("Try another category or refresh your server’s catalog.")))
+                                .frame(maxWidth: .infinity, minHeight: 500)
+                        }
+                        FilmGrid(items: catalog.rows[activeFeed] ?? [], api: api, config: config)
+                    }
+                    .padding(.horizontal, TVLayout.edge).padding(.top, 10).padding(.bottom, 70)
                 }
-                FilmGrid(items: catalog.rows[activeFeed] ?? [], api: api, config: config)
-            }.padding(.horizontal, TVLayout.edge).padding(.top, 158 + ScreenLayout.top).padding(.bottom, 70)
+                .tvScrollEdge(40)
+                .defaultScrollAnchor(.top, for: .sizeChanges)
+                .onChange(of: activeFeed) { _, _ in
+                    var transaction = Transaction(); transaction.disablesAnimations = true
+                    withTransaction(transaction) { proxy.scrollTo(Self.top, anchor: .top) }
+                }
+            }
         }
-        .tvScrollEdge()
         .ignoresSafeArea(edges: .horizontal)
         .task(id: activeFeed) { await catalog.loadFeed(activeFeed, api: api, config: config) }
     }
