@@ -960,8 +960,8 @@ struct CategoryView: View {
             VStack(alignment: .leading, spacing: 35) {
                 Text(L(MovieFilters.heading(activeFeed) ?? (activeFeed == "cartoons" ? "Cartoons" : title))).font(.system(size: 50, weight: .bold))
                 // Movies has sub-categories; the catalog refreshes itself when the app opens.
-                if feed == "movies" {
-                    ChipRow(options: MovieFilters.options, selected: activeFeed) { selected = $0 }
+                if feed == "movies" || feed == "tv" {
+                    ChipRow(options: feed == "tv" ? TVFilters.options : MovieFilters.options, selected: activeFeed) { selected = $0 }
                 }
             }
             .padding(.horizontal, TVLayout.edge).padding(.top, 158 + ScreenLayout.top).padding(.bottom, 14)

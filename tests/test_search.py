@@ -36,6 +36,19 @@ class GenreFeedTests(unittest.TestCase):
         self.assertNotIn("thriller", [f["id"] for f in feeds["feeds"]])
         self.assertEqual(feeds["movie_filters"][0], {"id": "action", "label": "Action"})
         self.assertIn({"id": "thriller", "label": "Thriller"}, feeds["movie_filters"])
+        self.assertIn({"id": "tv-mystery", "label": "Mystery"}, feeds["tv_filters"])
+        self.assertNotIn("tv-mystery", [f["id"] for f in feeds["movie_filters"]])
+
+    def test_tv_genres_keep_only_shows(self):
+        rows = [{"title": "Sherlock S01", "seeders": 3}, {"title": "Knives Out (2019)", "seeders": 9}]
+        metas = {"Sherlock": {"id": 19885, "media_type": "tv", "genre_ids": [9648, 80], "poster": "s", "rating": 8.5,
+                              "overview": "", "title": "Шерлок"},
+                 "Knives Out": {"id": 546554, "media_type": "movie", "genre_ids": [9648], "poster": None, "rating": 7.8,
+                                "overview": "", "title": "Ножі наголо"}}
+        with patch.object(server, "TMDB_API_KEY", "k"), \
+                patch.object(server, "tmdb_lookup", side_effect=lambda title, base, year, kind: metas.get(title)):
+            shows = server.films_of_genre(rows, 9648, "tv")
+        self.assertEqual([(r["clean_title"], r["media_type"]) for r in shows], [("Шерлок", "tv")])
 
     def test_only_films_of_the_genre_are_kept_with_their_artwork(self):
         rows = [{"title": "Heat (1995) BDRip", "seeders": 5}, {"title": "Friends S01", "seeders": 9},

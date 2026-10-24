@@ -1041,7 +1041,13 @@ GENRE_FEEDS = [("action", "Action", 28), ("comedy", "Comedy", 35), ("thriller", 
                ("drama", "Drama", 18), ("horror", "Horror", 27), ("scifi", "Sci-Fi", 878),
                ("adventure", "Adventure", 12), ("crime", "Crime", 80), ("fantasy", "Fantasy", 14),
                ("family", "Family", 10751), ("romance", "Romance", 10749)]
-DISCOVER_FEEDS += [{"id": id_, "label": label, "groups": ["movies"], "genre": genre} for id_, label, genre in GENRE_FEEDS]
+# Shows by TMDB's TV genres (they differ from the film ones: no Thriller or
+# Horror, but Mystery, Reality, "Sci-Fi & Fantasy").
+TV_GENRE_FEEDS = [("tv-action", "Action & Adventure", 10759), ("tv-comedy", "Comedy", 35), ("tv-drama", "Drama", 18),
+                  ("tv-crime", "Crime", 80), ("tv-mystery", "Mystery", 9648), ("tv-scifi", "Sci-Fi & Fantasy", 10765),
+                  ("tv-family", "Family", 10751), ("tv-reality", "Reality", 10764), ("tv-war", "War & Politics", 10768)]
+DISCOVER_FEEDS += [{"id": id_, "label": label, "groups": ["movies"], "genre": genre, "kind": "movie"} for id_, label, genre in GENRE_FEEDS]
+DISCOVER_FEEDS += [{"id": id_, "label": label, "groups": ["tv"], "genre": genre, "kind": "tv"} for id_, label, genre in TV_GENRE_FEEDS]
 DISCOVER_FEEDS_BY_ID = {f["id"]: f for f in DISCOVER_FEEDS}
 
 # Matched as lowercase substrings of a section name. Ukrainian/Russian/
@@ -1161,7 +1167,8 @@ def discover_feeds():
     # Genre feeds are filters of Movies - shown as chips there, not as tabs.
     return jsonify({"enabled": enabled, "feeds": [{"id": f["id"], "label": f["label"]} for f in DISCOVER_FEEDS
                                                   if not f.get("genre")] if enabled else [],
-                    "movie_filters": [{"id": f["id"], "label": f["label"]} for f in DISCOVER_FEEDS if f.get("genre")]})
+                    "movie_filters": [{"id": f["id"], "label": f["label"]} for f in DISCOVER_FEEDS if f.get("kind") == "movie"],
+                    "tv_filters": [{"id": f["id"], "label": f["label"]} for f in DISCOVER_FEEDS if f.get("kind") == "tv"]})
 
 
 @app.route("/api/discover")
@@ -1244,7 +1251,7 @@ def discover_torrents():
         del r["_dedupe_key"]
 
     if feed.get("genre"):
-        results = films_of_genre(results, feed["genre"])
+        results = films_of_genre(results, feed["genre"], feed.get("kind", "movie"))
     if feed.get("sort") == "seeders":
         results.sort(key=lambda r: r["seeders"], reverse=True)
     else:
@@ -1252,22 +1259,22 @@ def discover_torrents():
     return make_etag_response({"results": results}, max_age=180, stale_revalidate=900)
 
 
-def films_of_genre(results: list, genre: int) -> list:
-    """The rows TMDB files as films of `genre`, with their poster and rating
-    filled in. Every row is looked up (cached for a month), so only the
-    first opening of a genre waits on TMDB."""
+def films_of_genre(results: list, genre: int, kind: str = "movie") -> list:
+    """The rows TMDB files as films (or shows: kind "tv") of `genre`, with
+    their poster and rating filled in. Every row is looked up (cached for a
+    month), so only the first opening of a genre waits on TMDB."""
     if not TMDB_API_KEY:
         return []
 
     def lookup(r):
         title, base, year = extract_title_and_year(r["title"])
-        return r, tmdb_lookup(title, base, year, "movie")
+        return r, tmdb_lookup(title, base, year, kind)
 
     films = {}
     for r, meta in TMDB_EXECUTOR.map(lookup, results):
-        if meta and meta.get("media_type") == "movie" and genre in (meta.get("genre_ids") or []):
+        if meta and meta.get("media_type") == kind and genre in (meta.get("genre_ids") or []):
             r.update(poster=meta["poster"], rating=meta["rating"], overview=meta["overview"],
-                     clean_title=meta["title"], tmdb_id=meta["id"], media_type="movie")
+                     clean_title=meta["title"], tmdb_id=meta["id"], media_type=kind)
             # One row per film: two rips named differently are the same film.
             if meta["id"] not in films or r["seeders"] > films[meta["id"]]["seeders"]:
                 films[meta["id"]] = r
@@ -1275,13 +1282,14 @@ def films_of_genre(results: list, genre: int) -> list:
 
 
 def genre_warmup_loop():
-    """Looks the Movies feed's films up on TMDB in the background, every 30
+    """Looks the Movies and TV Shows feeds up on TMDB in the background, every 30
     minutes, so opening a genre does not wait on hundreds of lookups."""
     time.sleep(90)
     while True:
         try:
             if JACKETT_URL and JACKETT_API_KEY and TMDB_API_KEY:
-                app.test_client().get(f"/api/discover?feed={GENRE_FEEDS[0][0]}").close()
+                for feed in (GENRE_FEEDS[0][0], TV_GENRE_FEEDS[0][0]):
+                    app.test_client().get(f"/api/discover?feed={feed}").close()
         except Exception:
             pass
         time.sleep(1800)

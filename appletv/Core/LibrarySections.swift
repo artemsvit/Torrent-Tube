@@ -30,8 +30,18 @@ enum MovieFilters {
     ]
     /// The page heading for a chip: "Thriller" for thrillers, "Movies" for all.
     static func heading(_ feed: String) -> String? {
-        feed == "movies" ? nil : options.first { $0.0 == feed }?.1
+        feed == "movies" || feed == "tv" ? nil : (options + TVFilters.options).first { $0.0 == feed }?.1
     }
+}
+
+/// The TV Shows page's chips: all shows, then TMDB's TV genres (they differ
+/// from the film ones - Mystery, Reality, "Sci-Fi & Fantasy").
+enum TVFilters {
+    static let options: [(String, String)] = [
+        ("tv", "All"), ("tv-action", "Action & Adventure"), ("tv-comedy", "Comedy"), ("tv-drama", "Drama"),
+        ("tv-crime", "Crime"), ("tv-mystery", "Mystery"), ("tv-scifi", "Sci-Fi & Fantasy"), ("tv-family", "Family"),
+        ("tv-reality", "Reality"), ("tv-war", "War & Politics"),
+    ]
 }
 
 /// The Library screen's chips, the same on every device: one per type of

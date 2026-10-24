@@ -399,7 +399,7 @@ struct MobileRoot: View {
             destination("movies", title: "Movies") {
                 MobileCategory(options: MovieFilters.options, api: api, config: config)
             }
-        case "tv": destination("tv", title: "TV Shows") { MobileCategory(options: [("tv", "TV Shows")], api: api, config: config) }
+        case "tv": destination("tv", title: "TV Shows") { MobileCategory(options: TVFilters.options, api: api, config: config) }
         case "cartoons": destination("cartoons", title: "Cartoons") { MobileCategory(options: [("cartoons", "Cartoons")], api: api, config: config) }
         case "library": destination("library", title: "Library") { MobileLibrary(api: api) }
         default: destination("home", title: nil) { MobileHome(api: api, config: config).sidesUnderInsets() }
@@ -437,7 +437,7 @@ struct MobileRoot: View {
             destination("movies", title: "Movies") {
                 MobileCategory(options: MovieFilters.options, api: api, config: config)
             }
-        case "tv": destination("tv", title: "TV Shows") { MobileCategory(options: [("tv", "TV Shows")], api: api, config: config) }
+        case "tv": destination("tv", title: "TV Shows") { MobileCategory(options: TVFilters.options, api: api, config: config) }
         case "cartoons": destination("cartoons", title: "Cartoons") { MobileCategory(options: [("cartoons", "Cartoons")], api: api, config: config) }
         case "library": destination("library", title: "Library") { MobileLibrary(api: api) }
         default: destination("home", title: nil) { MobileHome(api: api, config: config).sidesUnderInsets() }
@@ -457,7 +457,7 @@ struct MobileRoot: View {
                     }
                 } label: { TabIcon(title: "Movies", symbol: "film") }
                 Tab(value: "tv") {
-                    destination("tv", title: "TV Shows") { MobileCategory(options: [("tv", "TV Shows")], api: api, config: config) }
+                    destination("tv", title: "TV Shows") { MobileCategory(options: TVFilters.options, api: api, config: config) }
                 } label: { TabIcon(title: "TV Shows", symbol: "tv") }
                 Tab(value: "cartoons") {
                     destination("cartoons", title: "Cartoons") { MobileCategory(options: [("cartoons", "Cartoons")], api: api, config: config) }

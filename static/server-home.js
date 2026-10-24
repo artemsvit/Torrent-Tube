@@ -39,13 +39,17 @@ function setServerView(view) {
 const MOVIE_FILTERS = [['movies','All'],['action','Action'],['comedy','Comedy'],['thriller','Thriller'],['drama','Drama'],
   ['horror','Horror'],['scifi','Sci-Fi'],['adventure','Adventure'],['crime','Crime'],['fantasy','Fantasy'],
   ['family','Family'],['romance','Romance'],['docs','Documentaries'],['ukrainian','Ukrainian']];
-let catalogMovieFilter = 'movies';
-function catalogFeedForView(view) { return view === 'movie' ? catalogMovieFilter : {tv:'tv',cartoon:'cartoons'}[view]; }
+// TV Shows' chips: TMDB's TV genres differ from the film ones.
+const TV_FILTERS = [['tv','All'],['tv-action','Action & Adventure'],['tv-comedy','Comedy'],['tv-drama','Drama'],
+  ['tv-crime','Crime'],['tv-mystery','Mystery'],['tv-scifi','Sci-Fi & Fantasy'],['tv-family','Family'],
+  ['tv-reality','Reality'],['tv-war','War & Politics']];
+const catalogFilters = { movie: 'movies', tv: 'tv' };
+function catalogFeedForView(view) { return view in catalogFilters ? catalogFilters[view] : {cartoon:'cartoons'}[view]; }
 
 function catalogEntries(feed) {
   const groups = new Map();
   for (const row of catalogFeeds.get(feed) || []) {
-    const kind = feed === 'tv' ? 'tv' : feed === 'cartoons' ? 'cartoon'
+    const kind = feed === 'tv' || feed.startsWith('tv-') ? 'tv' : feed === 'cartoons' ? 'cartoon'
       : /cartoon|animation|мульт/i.test(row.suggested_category || '') ? 'cartoon'
       : /\bS\d+E?\d*|season|сезон/i.test(row.title || '') || /tv|series|серіал/i.test(row.suggested_category || '') ? 'tv' : 'movie';
     const title = row.clean_title || roughTitle(row.title);
@@ -190,11 +194,13 @@ function renderCatalogPage() {
   if (!feed) return;
   const items = catalogEntries(feed), size = 36;
   catalogPage = Math.min(catalogPage,Math.max(0,Math.ceil(items.length/size)-1));
-  const filter = MOVIE_FILTERS.find(([id])=>id === feed && id !== 'movies');
+  const view = document.body.dataset.serverView;
+  const options = view === 'tv' ? TV_FILTERS : view === 'movie' ? MOVIE_FILTERS : null;
+  const filter = options && options.find(([id])=>id === feed && id !== options[0][0]);
   document.getElementById('catalogueTitle').textContent = filter ? filter[1] : (CATALOG_SECTIONS.find(([id])=>id === feed) || [feed,'Movies'])[1];
   const filters = document.getElementById('catalogueFilters');
-  filters.hidden = document.body.dataset.serverView !== 'movie';
-  if (!filters.hidden) filters.innerHTML = MOVIE_FILTERS.map(([id,label])=>`<button type="button" class="library-chip${id === feed ? ' is-active' : ''}" data-movie-filter="${id}" aria-pressed="${id === feed}">${label}</button>`).join('');
+  filters.hidden = !options;
+  if (options) filters.innerHTML = options.map(([id,label])=>`<button type="button" class="library-chip${id === feed ? ' is-active' : ''}" data-catalog-filter="${id}" aria-pressed="${id === feed}">${label}</button>`).join('');
   // A genre is loaded when it is first chosen.
   if (!catalogFeeds.has(feed) && !catalogErrors.has(feed)) loadCatalogFeed(feed).then(renderCatalogPage, renderCatalogPage);
   document.getElementById('catalogueCount').textContent = `${items.length} titles`;
@@ -423,9 +429,9 @@ document.getElementById('cataloguePagination').addEventListener('click',e=>{
 });
 
 document.getElementById('catalogueFilters').addEventListener('click', e => {
-  const chip = e.target.closest('[data-movie-filter]');
+  const chip = e.target.closest('[data-catalog-filter]');
   if (!chip) return;
-  catalogMovieFilter = chip.dataset.movieFilter;
+  catalogFilters[document.body.dataset.serverView] = chip.dataset.catalogFilter;
   catalogPage = 0;
   renderCatalogPage();
 });
