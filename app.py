@@ -448,7 +448,8 @@ def config():
         "server": "torrenttube",
         "api_version": 1,
         "capabilities": {"file_selection": True, "playback_sessions": True, "library": True, "top_shelf_previews": True,
-                         "favorites": True, "continue_watching": True, "library_settings": True},
+                         "favorites": True, "continue_watching": True, "library_settings": True,
+                         "library_match": True},
         "download_dir": str(DOWNLOAD_DIR),
         # The same folder as the server's own path (None when it isn't
         # known) - what Settings shows, as /downloads means little.
@@ -691,18 +692,19 @@ def _person(p: dict, role: str) -> dict:
             "photo": _tmdb_image(p.get("profile_path"), "w185")}
 
 
-def tmdb_details(media_type: str, tmdb_id: int) -> dict:
+def tmdb_details(media_type: str, tmdb_id: int, language: str = None) -> dict:
     """Everything the details popup shows, in one TMDB round-trip (plus an
     English fallback when there's no overview/trailer in the configured
-    language)."""
-    cache_key = f"details:{media_type}:{tmdb_id}:{TMDB_LANGUAGE}"
+    language). `language`: a library title's own metadata language."""
+    language = language or TMDB_LANGUAGE
+    cache_key = f"details:{media_type}:{tmdb_id}:{language}"
     hit, val = TMDB_CACHE.get(cache_key)
     if hit:
         return val
 
-    lang, _, region = TMDB_LANGUAGE.partition("-")
+    lang, _, region = language.partition("-")
     extra = "credits,videos,external_ids,recommendations," + ("release_dates" if media_type == "movie" else "content_ratings")
-    d = _tmdb_get(f"/{media_type}/{tmdb_id}", language=TMDB_LANGUAGE, append_to_response=extra,
+    d = _tmdb_get(f"/{media_type}/{tmdb_id}", language=language, append_to_response=extra,
                   include_video_language=f"{lang},en,null")
 
     overview = d.get("overview") or ""
@@ -1292,7 +1294,9 @@ def item_details():
             return jsonify({"error": "Couldn't find this title on TMDB"}), 404
         media_type, tmdb_id = meta["media_type"], meta["id"]
     try:
-        return make_etag_response(tmdb_details(media_type, int(tmdb_id)), max_age=86400, stale_revalidate=604800)
+        language = request.args.get("language", "")
+        language = language if re.fullmatch(r"[a-z]{2}(?:-[A-Z]{2})?", language) else None
+        return make_etag_response(tmdb_details(media_type, int(tmdb_id), language), max_age=86400, stale_revalidate=604800)
     except Exception:
         return jsonify({"error": "Couldn't reach TMDB"}), 502
 
@@ -2470,8 +2474,10 @@ def _library_with_metadata(items: list) -> list:
             structure = library_structure(item)
             # Looked up again: never matched (after a week), or matched as a show
             # while it is films (or the other way) - a fixed rule, or new files.
-            stale = (entry is None or entry.get("structure") != structure
-                     or (not entry.get("tmdb_id") and now - entry.get("checked", 0) > LIBRARY_META_RETRY))
+            # A match fixed by hand (Library → Fix match) is never looked up again.
+            stale = not (entry and entry.get("manual")) and (
+                entry is None or entry.get("structure") != structure
+                or (not entry.get("tmdb_id") and now - entry.get("checked", 0) > LIBRARY_META_RETRY))
             if stale and TMDB_API_KEY and item["id"] not in LIBRARY_META_PENDING:
                 LIBRARY_META_PENDING.add(item["id"])
                 TMDB_EXECUTOR.submit(_lookup_library_item, item)
@@ -2487,6 +2493,9 @@ def _library_with_metadata(items: list) -> list:
                 for key in ("poster", "rating", "overview", "tmdb_id", "media_type", "display_title", "collection"):
                     if entry.get(key) is not None:
                         merged[key] = entry[key]
+                if entry.get("manual"):
+                    merged["metadata_manual"] = True
+                    merged["metadata_language"] = entry.get("language")
             result.append(merged)
         pending = len(LIBRARY_META_PENDING)
     return _merge_library_versions(result), pending
@@ -2693,6 +2702,109 @@ def library_settings():
     return jsonify(_library_settings())
 
 
+# ---------- Fix match ----------
+# A title matched to the wrong film ("Home Alone" -> "Коля дома один") is
+# matched by hand: search TMDB (in any language), pick the right one.
+MATCH_LANGUAGES = ["uk-UA", "en-US", "pl-PL", "de-DE", "fr-FR", "es-ES", "it-IT", "pt-BR", "cs-CZ", "tr-TR", "ja-JP", "ko-KR"]
+LANGUAGE_RE = re.compile(r"^[a-z]{2}-[A-Z]{2}$")
+
+
+def _library_item(item_id: str):
+    return next((i for i in LIBRARY.items() if i["id"] == item_id), None)
+
+
+def _match_result(d: dict, media_type: str) -> dict:
+    return {"tmdb_id": d.get("id"), "media_type": media_type,
+            "title": d.get("title") or d.get("name") or "",
+            "original_title": d.get("original_title") or d.get("original_name") or "",
+            "year": (d.get("release_date") or d.get("first_air_date") or "")[:4] or None,
+            "poster": _tmdb_image(d.get("poster_path"), "w342"),
+            "overview": d.get("overview") or "", "votes": d.get("vote_count") or 0}
+
+
+@app.route("/api/library/match", methods=["GET"])
+def library_match_info():
+    """What the Fix match screen shows: the title's file names, its current
+    match, and a search to start from."""
+    item = _library_item(request.args.get("id", ""))
+    if not item:
+        return jsonify({"error": "Not a library title"}), 404
+    files = [f["name"] for f in (LIBRARY.files(item["id"]) or [])][:60]
+    with LIBRARY_META_LOCK:
+        entry = dict(LIBRARY_META.get(item["id"]) or {})
+    title, _, year = extract_title_and_year(item["name"])
+    current = None
+    if entry.get("tmdb_id"):
+        current = {"tmdb_id": entry["tmdb_id"], "media_type": entry.get("media_type"), "title": entry.get("display_title"),
+                   "year": entry.get("tmdb_year"), "poster": entry.get("poster")}
+    return jsonify({"id": item["id"], "name": item["name"], "files": files,
+                    "type": "tv" if library_structure(item) == "tv" else "movie",
+                    "query": title or item["name"], "year": year, "current": current,
+                    "manual": bool(entry.get("manual")), "language": entry.get("language") or TMDB_LANGUAGE,
+                    "languages": list(dict.fromkeys([TMDB_LANGUAGE, *MATCH_LANGUAGES]))})
+
+
+@app.route("/api/library/match/search")
+def library_match_search():
+    """TMDB films or shows for a name, in the language asked."""
+    if not TMDB_API_KEY:
+        return jsonify({"error": "Details need a TMDB API key - add one in Settings"}), 503
+    query = request.args.get("q", "").strip()
+    media_type = request.args.get("type", "all")
+    language = request.args.get("language", "")
+    language = language if LANGUAGE_RE.match(language) else TMDB_LANGUAGE
+    year = request.args.get("year", "").strip()
+    if not query:
+        return jsonify({"results": []})
+    params = {"query": query, "include_adult": "false", "language": language}
+    try:
+        if media_type in ("movie", "tv"):
+            if year.isdigit():
+                params["year" if media_type == "movie" else "first_air_date_year"] = year
+            found = [(r, media_type) for r in _tmdb_get(f"/search/{media_type}", **params).get("results", [])]
+        else:
+            found = [(r, r["media_type"]) for r in _tmdb_get("/search/multi", **params).get("results", [])
+                     if r.get("media_type") in ("movie", "tv")]
+    except Exception:
+        return jsonify({"error": "Couldn't reach TMDB"}), 502
+    return jsonify({"results": [_match_result(r, t) for r, t in found[:20]]})
+
+
+@app.route("/api/library/match", methods=["POST", "DELETE"])
+def library_match_save():
+    """POST {id, tmdb_id, media_type, language}: the title is that film or
+    show from now on, in that language. DELETE {id}: match it automatically again."""
+    payload = request.get_json(silent=True) or {}
+    item = _library_item(str(payload.get("id", "")))
+    if not item:
+        return jsonify({"error": "Not a library title"}), 404
+    if request.method == "DELETE":
+        with LIBRARY_META_LOCK:
+            LIBRARY_META.pop(item["id"], None)
+            LIBRARY_META_FILE.write_text(json.dumps(LIBRARY_META, ensure_ascii=False))
+        return jsonify({"ok": True})
+    media_type, tmdb_id = payload.get("media_type"), payload.get("tmdb_id")
+    language = payload.get("language") if LANGUAGE_RE.match(str(payload.get("language", ""))) else TMDB_LANGUAGE
+    if media_type not in ("movie", "tv") or not isinstance(tmdb_id, int) or isinstance(tmdb_id, bool):
+        return jsonify({"error": "Expected a TMDB id and type"}), 400
+    if not TMDB_API_KEY:
+        return jsonify({"error": "Details need a TMDB API key - add one in Settings"}), 503
+    try:
+        d = _tmdb_get(f"/{media_type}/{tmdb_id}", language=language)
+    except Exception:
+        return jsonify({"error": "Couldn't reach TMDB"}), 502
+    entry = {"checked": time.time(), "structure": library_structure(item), "manual": True, "language": language,
+             "confident": True, "animation": TMDB_ANIMATION_GENRE_ID in [g.get("id") for g in d.get("genres") or []],
+             "display_title": d.get("title") or d.get("name") or item["name"],
+             "poster": _tmdb_image(d.get("poster_path"), "w200"), "rating": d.get("vote_average"),
+             "overview": d.get("overview") or "", "tmdb_id": tmdb_id, "media_type": media_type,
+             "tmdb_year": (d.get("release_date") or d.get("first_air_date") or "")[:4], "votes": d.get("vote_count") or 0}
+    with LIBRARY_META_LOCK:
+        LIBRARY_META[item["id"]] = entry
+        LIBRARY_META_FILE.write_text(json.dumps(LIBRARY_META, ensure_ascii=False))
+    return jsonify({"ok": True, "match": entry})
+
+
 FAVORITES = Favorites(STATE_DIR / "favorites.json")
 
 
@@ -2750,11 +2862,17 @@ def library_intro():
 
 @app.route("/api/library/metadata", methods=["DELETE"])
 def reset_library_metadata():
-    """Forget every saved match; the next /api/library looks them all up again."""
+    """Forget every saved match; the next /api/library looks them all up again.
+    Matches fixed by hand stay."""
     with LIBRARY_META_LOCK:
+        manual = {k: v for k, v in LIBRARY_META.items() if v.get("manual")}
         LIBRARY_META.clear()
+        LIBRARY_META.update(manual)
         try:
-            LIBRARY_META_FILE.unlink()
+            if manual:
+                LIBRARY_META_FILE.write_text(json.dumps(LIBRARY_META, ensure_ascii=False))
+            else:
+                LIBRARY_META_FILE.unlink()
         except OSError:
             pass
     TMDB_CACHE.clear()

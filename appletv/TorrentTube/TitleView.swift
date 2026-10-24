@@ -29,6 +29,7 @@ struct TitleView: View {
     @State private var playback: PlaybackRequest?
     @State private var pendingPlayback: PlaybackRequest?
     @State private var showServerNotice = false
+    @State private var fixingMatch = false
     private var value: MediaItem { catalog.resolved(item) }
     private var details: Details? { catalog.details(for: value) }
     private func playTrailer() {
@@ -79,6 +80,12 @@ struct TitleView: View {
                             .accessibilityIdentifier("choose-version")
                         }
                         FavoriteButton(item: value, details: details, server: api.baseURL)
+                        // After the heart: search TMDB and pick the right film or show by hand.
+                        if item.sourceOverride?.path != nil && config.capabilities?.libraryMatch == true {
+                            Button { fixingMatch = true } label: { Image(systemName: "text.magnifyingglass") }
+                                .buttonStyle(.bordered).tint(.white)
+                                .accessibilityLabel(L("Fix match")).accessibilityIdentifier("fix-match")
+                        }
                     }
                 }
                 if details?.mediaType == "tv", let seasons = details?.seasonList, !seasons.isEmpty {
@@ -225,6 +232,13 @@ struct TitleView: View {
             Button(L("OK"), role: .cancel) {}
         } message: { Text(trailerError ?? "") }
         .fullScreenCover(item: $playback) { request in PlaybackLauncher(request: request, api: api) }
+        .fullScreenCover(isPresented: $fixingMatch) {
+            if let path = item.sourceOverride?.path {
+                TVMatchEditor(itemID: path, api: api) {
+                    Task { await catalog.loadDetails(item, api: api, config: config, refresh: true) }
+                }
+            }
+        }
         // Back from the player: tvOS gave focus to Play, so the page jumped up.
         // Give it to the episode that played as the player starts to close.
         .onChange(of: playback == nil) { _, closed in
@@ -284,4 +298,112 @@ struct TitleView: View {
             episodesKey = key
         }
     }
+}
+
+/// Fix match on Apple TV: the file names and the search on the left, the
+/// TMDB results as posters on the right - pick one to use it.
+struct TVMatchEditor: View {
+    let api: TorrentTubeAPI
+    let onSaved: () -> Void
+    @Environment(CatalogStore.self) private var catalog
+    @Environment(\.dismiss) private var dismiss
+    @State private var editor: MatchEditor
+    @State private var choice: MatchCandidate?
+    init(itemID: String, api: TorrentTubeAPI, onSaved: @escaping () -> Void) {
+        self.api = api
+        self.onSaved = onSaved
+        _editor = State(initialValue: MatchEditor(itemID: itemID))
+    }
+    var body: some View {
+        @Bindable var editor = editor
+        HStack(alignment: .top, spacing: 64) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    Text(L("Fix match")).font(.system(size: 50, weight: .bold))
+                    if let info = editor.info {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(L("Files")).font(.system(size: 22, weight: .semibold)).foregroundStyle(.white.opacity(0.6))
+                            ForEach(info.files.prefix(5), id: \.self) { name in
+                                Text(name).font(.system(size: 21, design: .monospaced)).foregroundStyle(.white.opacity(0.8)).lineLimit(2)
+                            }
+                            if info.files.count > 5 {
+                                Text(L("+ %ld more", info.files.count - 5)).font(.system(size: 20)).foregroundStyle(.white.opacity(0.5))
+                            }
+                        }
+                        if let current = info.current {
+                            Text(L("Now: %@", [current.title, current.year].compactMap { $0 }.joined(separator: " · ")))
+                                .font(.system(size: 22)).foregroundStyle(.white.opacity(0.6))
+                        }
+                    }
+                    TextField(L("Title"), text: $editor.query).onSubmit(search)
+                    TextField(L("Year"), text: $editor.year).onSubmit(search)
+                    HStack(spacing: 18) {
+                        Button(editor.type == "tv" ? L("TV Show") : L("Movie")) { editor.type = editor.type == "tv" ? "movie" : "tv" }
+                            .buttonStyle(ChipStyle(selected: false))
+                        Button(MatchEditor.languageName(editor.language)) {
+                            let all = editor.info?.languages ?? [editor.language]
+                            editor.language = all[((all.firstIndex(of: editor.language) ?? -1) + 1) % all.count]
+                        }.buttonStyle(ChipStyle(selected: false)).accessibilityLabel(L("Metadata language"))
+                    }
+                    Button(action: search) { Label(L("Search"), systemImage: "magnifyingglass") }
+                        .buttonStyle(.bordered).disabled(editor.searching)
+                    if editor.info?.manual == true {
+                        Button(L("Match automatically again"), role: .destructive) {
+                            Task { if await editor.reset(api: api, catalog: catalog) { onSaved(); dismiss() } }
+                        }.buttonStyle(.bordered)
+                    }
+                }.padding(.vertical, 20)
+            }
+            .frame(width: 640).focusSection()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    if editor.searching {
+                        LoadingState(text: L("Searching…"), minHeight: 500)
+                    } else if editor.results.isEmpty && editor.info != nil {
+                        ContentUnavailableView(L("Nothing found"), systemImage: "magnifyingglass",
+                                               description: Text(L("Nothing found. Try the original title, another year or another language.")))
+                            .frame(maxWidth: .infinity, minHeight: 500)
+                    }
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 220, maximum: 260), spacing: 34)], alignment: .leading, spacing: 34) {
+                        ForEach(editor.results) { candidate in
+                            Button { choice = candidate } label: {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    ArtworkView(url: candidate.poster, seed: candidate.title ?? "").aspectRatio(2.0 / 3.0, contentMode: .fit)
+                                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                        .overlay(alignment: .topTrailing) {
+                                            if candidate.id == editor.info?.current?.id {
+                                                Image(systemName: "checkmark.circle.fill").font(.system(size: 34)).foregroundStyle(.white, Color.torrentAccent).padding(10)
+                                            }
+                                        }
+                                    Text(candidate.title ?? "").font(.system(size: 21, weight: .semibold)).lineLimit(2)
+                                        .frame(maxWidth: .infinity, minHeight: 52, alignment: .topLeading)
+                                    Text(candidate.subtitle).font(.system(size: 18)).foregroundStyle(.white.opacity(0.6)).lineLimit(2)
+                                        .frame(maxWidth: .infinity, minHeight: 46, alignment: .topLeading)
+                                }
+                            }
+                            .buttonStyle(CinemaCardStyle())
+                            .accessibilityIdentifier("match-\(candidate.id)")
+                        }
+                    }
+                }.padding(.vertical, 20)
+            }
+            .focusSection()
+        }
+        .padding(.horizontal, TVLayout.edge).padding(.top, 60).padding(.bottom, 40)
+        .background(AppBackground())
+        .disabled(editor.saving)
+        .onChange(of: editor.type) { search() }
+        .onChange(of: editor.language) { search() }
+        .task { await editor.load(api: api) }
+        .alert(L("Use this match?"), isPresented: Binding(get: { choice != nil }, set: { if !$0 { choice = nil } }), presenting: choice) { candidate in
+            Button(L("Use “%@”", candidate.title ?? "")) {
+                Task { if await editor.save(candidate, api: api, catalog: catalog) { onSaved(); dismiss() } }
+            }
+            Button(L("Cancel"), role: .cancel) {}
+        } message: { candidate in Text(candidate.subtitle) }
+        .alert(L("Couldn’t fix the match"), isPresented: Binding(get: { editor.error != nil }, set: { if !$0 { editor.error = nil } })) {
+            Button(L("OK"), role: .cancel) {}
+        } message: { Text(editor.error ?? "") }
+    }
+    private func search() { Task { await editor.search(api: api) } }
 }

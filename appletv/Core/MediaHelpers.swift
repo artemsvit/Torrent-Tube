@@ -18,6 +18,7 @@ func libraryItem(_ title: LibraryTitle) -> MediaItem {
             item.cleanTitle = title.displayTitle ?? title.title
             item.poster = title.poster; item.rating = title.rating; item.overview = title.overview
             item.tmdbId = title.tmdbId; item.mediaType = title.mediaType ?? item.mediaType
+            item.metadataLanguage = title.metadataLanguage
         }
     }
     return item

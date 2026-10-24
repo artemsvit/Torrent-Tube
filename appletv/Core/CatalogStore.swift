@@ -18,7 +18,9 @@ final class CatalogStore {
     var errors: [String: String] = [:]
     var metadata: [String: Metadata] = [:]
     var details: [String: Details] = [:]
-    var library: [LibraryTitle] = []
+    var library: [LibraryTitle] = [] { didSet { libraryByID = Dictionary(library.map { ($0.id, $0) }) { first, _ in first } } }
+    /// The library by path, so an open title page follows a fixed match.
+    private var libraryByID: [String: LibraryTitle] = [:]
     var libraryError: String?
     var libraryLoading = false
     /// The server matches library titles itself (and says how many are left);
@@ -34,8 +36,14 @@ final class CatalogStore {
 
     func resolved(_ item: MediaItem) -> MediaItem {
         var value = item
-        // A library title the server matched carries its own metadata.
-        if item.sourceOverride?.path != nil && libraryMatchedByServer { return value }
+        // A library title the server matched carries its own metadata - the
+        // latest, so a page opened before Fix match shows the new one.
+        if let path = item.sourceOverride?.path, libraryMatchedByServer {
+            if let current = libraryByID[path], current.tmdbId != item.tmdbId || current.metadataLanguage != item.metadataLanguage {
+                return libraryItem(current)
+            }
+            return value
+        }
         if let meta = metadata[item.title] {
             // A title lookup must not replace a known movie/show with its namesake.
             if let id = item.tmdbId,
@@ -279,6 +287,7 @@ final class CatalogStore {
         var query = [URLQueryItem(name: "title", value: item.title)]
         if let id = resolved.tmdbId, let type = resolved.mediaType {
             query = [.init(name: "type", value: type), .init(name: "id", value: String(id))]
+            if let language = resolved.metadataLanguage { query.append(.init(name: "language", value: language)) }
         }
         if let result: Details = try? await api.request("api/details", query: query), !Task.isCancelled {
             details[item.title] = result

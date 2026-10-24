@@ -16,6 +16,8 @@ struct ServerConfig: Decodable {
         var continueWatching: Bool? = nil
         /// Download new episodes and the Default audio track (/api/library/settings).
         var librarySettings: Bool? = nil
+        /// Fix match: a library title's TMDB match chosen by hand (/api/library/match).
+        var libraryMatch: Bool? = nil
     }
     /// The Default audio track, the same on every device ("uk", "en", ...).
     var audioLanguage: String? = nil
@@ -53,6 +55,8 @@ struct MediaItem: Codable, Identifiable, Hashable, Sendable {
     let seeders: Int?
     let releases: [Release]?
     var sourceOverride: PlaybackSource? = nil
+    /// A library title matched by hand in another language ("en-US"): its details come in it too.
+    var metadataLanguage: String? = nil
     var id: String {
         if let sourceID = sourceOverride?.id ?? sourceOverride?.path ?? downloadLink ?? magnet { return sourceID }
         // Different recommendations can have the same translated title.
@@ -154,6 +158,40 @@ struct TorrentListEntry: Decodable {
 }
 /// One title already on the server: a film file or a show's folder in the
 /// category folders (or, on older servers, a finished torrent).
+/// Fix match: what the screen starts with - the title's files, its current
+/// match, a search to begin with and the languages to search in.
+struct MatchInfo: Decodable {
+    let id: String
+    let name: String
+    let files: [String]
+    let type: String
+    let query: String
+    let year: String?
+    let current: MatchCandidate?
+    let manual: Bool
+    let language: String
+    let languages: [String]
+}
+/// A TMDB film or show found by the Fix match search.
+struct MatchCandidate: Codable, Identifiable, Hashable {
+    let tmdbId: Int
+    let mediaType: String?
+    let title: String?
+    var originalTitle: String? = nil
+    var year: String? = nil
+    var poster: String? = nil
+    var overview: String? = nil
+    var id: String { "\(mediaType ?? ""):\(tmdbId)" }
+    /// "Home Alone · 1990", with the original title when it differs.
+    var subtitle: String {
+        [originalTitle.flatMap { $0 == title || $0.isEmpty ? nil : $0 }, year, mediaType == "tv" ? L("TV Show") : L("Movie")]
+            .compactMap { $0 }.joined(separator: " · ")
+    }
+}
+struct MatchSearchResponse: Decodable { let results: [MatchCandidate] }
+struct MatchChange: Encodable { let id: String; let tmdbId: Int; let mediaType: String; let language: String }
+struct MatchReset: Encodable { let id: String }
+
 /// A film's TMDB collection: its name and artwork, how many films it has,
 /// and which one this film is (1 for the first, by release date).
 struct TitleCollection: Codable, Hashable, Sendable {
@@ -197,8 +235,11 @@ struct LibraryTitle: Codable, Identifiable, Hashable, Sendable {
     var versions: [LibraryVersion] = []
     /// The TMDB collection a film is in (Harry Potter, Toy Story), with its place in it.
     var collection: TitleCollection? = nil
+    /// Matched by hand (Fix match), in this TMDB language.
+    var metadataManual = false
+    var metadataLanguage: String? = nil
     var source: PlaybackSource { isTorrent ? PlaybackSource(id: id) : PlaybackSource(path: id) }
-    private enum CodingKeys: String, CodingKey { case id, name, title, year, kind, files, added, displayTitle, poster, rating, overview, tmdbId, mediaType, versions, isTorrent, collection }
+    private enum CodingKeys: String, CodingKey { case id, name, title, year, kind, files, added, displayTitle, poster, rating, overview, tmdbId, mediaType, versions, isTorrent, collection, metadataManual, metadataLanguage }
     init(id: String, name: String, kind: String = "movie", files: Int = 1, added: Double = 0, isTorrent: Bool = false) {
         self.id = id; self.name = name; self.kind = kind; self.files = files; self.added = added; self.isTorrent = isTorrent
     }
@@ -220,6 +261,8 @@ struct LibraryTitle: Codable, Identifiable, Hashable, Sendable {
         versions = try c.decodeIfPresent([LibraryVersion].self, forKey: .versions) ?? []
         isTorrent = try c.decodeIfPresent(Bool.self, forKey: .isTorrent) ?? false
         collection = try? c.decodeIfPresent(TitleCollection.self, forKey: .collection)
+        metadataManual = try c.decodeIfPresent(Bool.self, forKey: .metadataManual) ?? false
+        metadataLanguage = try c.decodeIfPresent(String.self, forKey: .metadataLanguage)
     }
     /// Saved on the device (the Library opens before the server answers).
     func encode(to encoder: Encoder) throws {
@@ -231,6 +274,8 @@ struct LibraryTitle: Codable, Identifiable, Hashable, Sendable {
         try c.encodeIfPresent(rating, forKey: .rating); try c.encodeIfPresent(overview, forKey: .overview)
         try c.encodeIfPresent(tmdbId, forKey: .tmdbId); try c.encodeIfPresent(mediaType, forKey: .mediaType)
         try c.encodeIfPresent(collection, forKey: .collection)
+        if metadataManual { try c.encode(true, forKey: .metadataManual) }
+        try c.encodeIfPresent(metadataLanguage, forKey: .metadataLanguage)
         try c.encode(versions, forKey: .versions); try c.encode(isTorrent, forKey: .isTorrent)
     }
 }

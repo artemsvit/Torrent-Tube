@@ -129,3 +129,77 @@ final class LibrarySettingsStore {
         return settings.audioLanguages.first { $0.code == settings.audioLanguage }?.name ?? settings.audioLanguage
     }
 }
+
+/// Fix match: search TMDB for a library title's right film or show (in any
+/// language) and save it. The same steps on every device; each draws it its way.
+@MainActor @Observable
+final class MatchEditor {
+    let itemID: String
+    var info: MatchInfo?
+    var query = ""
+    var year = ""
+    var type = "movie"
+    var language = "uk-UA"
+    var results: [MatchCandidate] = []
+    var searching = false
+    var saving = false
+    var error: String?
+
+    init(itemID: String) { self.itemID = itemID }
+
+    func load(api: TorrentTubeAPI) async {
+        do {
+            let loaded: MatchInfo = try await api.request("api/library/match", query: [.init(name: "id", value: itemID)])
+            info = loaded
+            query = loaded.query; year = loaded.year ?? ""; type = loaded.type; language = loaded.language
+            await search(api: api)
+        } catch is CancellationError {} catch { self.error = AppStore.describe(error).0 }
+    }
+
+    func search(api: TorrentTubeAPI) async {
+        let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !term.isEmpty else { results = []; return }
+        searching = true
+        defer { searching = false }
+        var items: [URLQueryItem] = [.init(name: "q", value: term), .init(name: "type", value: type), .init(name: "language", value: language)]
+        let digits = year.filter(\.isNumber)
+        if digits.count == 4 { items.append(.init(name: "year", value: digits)) }
+        do {
+            let found: MatchSearchResponse = try await api.request("api/library/match/search", query: items)
+            results = found.results
+            error = nil
+        } catch is CancellationError {} catch { self.error = AppStore.describe(error).0 }
+    }
+
+    /// Saves the match, then reloads the library and the title's details.
+    func save(_ candidate: MatchCandidate, api: TorrentTubeAPI, catalog: CatalogStore) async -> Bool {
+        saving = true
+        defer { saving = false }
+        do {
+            let change = MatchChange(id: itemID, tmdbId: candidate.tmdbId, mediaType: candidate.mediaType ?? type, language: language)
+            let _: Saved = try await api.post("api/library/match", body: change)
+            await catalog.loadLibrary(api: api)
+            return true
+        } catch is CancellationError { return false } catch { self.error = AppStore.describe(error).0; return false }
+    }
+
+    /// Forgets the hand-picked match: the server matches the title again.
+    func reset(api: TorrentTubeAPI, catalog: CatalogStore) async -> Bool {
+        saving = true
+        defer { saving = false }
+        do {
+            let encoder = JSONEncoder()
+            encoder.keyEncodingStrategy = .convertToSnakeCase
+            let _: Saved = try await api.request("api/library/match", method: "DELETE", body: try encoder.encode(MatchReset(id: itemID)))
+            await catalog.loadLibrary(api: api)
+            return true
+        } catch is CancellationError { return false } catch { self.error = AppStore.describe(error).0; return false }
+    }
+    private struct Saved: Decodable { let ok: Bool }
+
+    /// "Українська", "English": a TMDB language in the app's language.
+    static func languageName(_ code: String) -> String {
+        let name = Localizer.shared.language.locale.localizedString(forLanguageCode: String(code.prefix(2))) ?? code
+        return name.prefix(1).uppercased() + name.dropFirst()
+    }
+}

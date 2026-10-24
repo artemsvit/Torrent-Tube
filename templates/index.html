@@ -161,6 +161,29 @@
   </div>
 </div>
 
+<!-- Fix match: pick a library title's right film or show on TMDB by hand. -->
+<div class="modal-overlay" id="matchModal">
+  <div class="modal-box match-box" role="dialog" aria-modal="true" aria-labelledby="matchModalTitle">
+    <div class="modal-head">
+      <div class="modal-title" id="matchModalTitle">Fix match</div>
+      <button type="button" class="icon-btn modal-close-btn" id="matchClose" aria-label="Close" title="Close"></button>
+    </div>
+    <div class="match-files" id="matchFiles"></div>
+    <form class="match-search" id="matchSearch">
+      <input type="search" class="match-query" id="matchQuery" placeholder="Title" aria-label="Title" autocomplete="off" spellcheck="false">
+      <input type="text" class="match-year" id="matchYear" placeholder="Year" aria-label="Year" inputmode="numeric" maxlength="4" autocomplete="off">
+      <select class="inline-category-select" id="matchType" aria-label="Type"><option value="movie">Movie</option><option value="tv">TV show</option></select>
+      <select class="inline-category-select" id="matchLanguage" aria-label="Metadata language"></select>
+      <button type="submit" class="btn-secondary">Search</button>
+    </form>
+    <div class="match-results" id="matchResults" role="listbox" aria-label="Results"></div>
+    <div class="modal-actions match-actions">
+      <button type="button" class="btn-secondary match-reset" id="matchReset" hidden>Match automatically again</button>
+      <button type="button" class="btn-primary btn-pill" id="matchUse" disabled>Use this match</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="settingsModal">
   <div class="modal-box settings-box" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle">
     <div class="modal-head">

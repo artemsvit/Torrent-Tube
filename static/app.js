@@ -7,6 +7,7 @@
 // which can render enormous and misplaced (seen in Safari).
 const ICONS = {
   download: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M6 11l6 6 6-6"/><path d="M5 21h14"/></svg>`,
+  fixMatch: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h9M4 11h6M4 16h5"/><circle cx="16.5" cy="13.5" r="3.5"/><path d="M19 16l2.5 2.5"/></svg>`,
   heart: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.5 8 3.6 4.5 7.2 4.5c2 0 3.6 1.1 4.8 2.8 1.2-1.7 2.8-2.8 4.8-2.8 3.6 0 5.7 3.5 4.5 6.8-1.8 4.6-9.3 9.2-9.3 9.2z"/></svg>`,
   heartFilled: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.5 8 3.6 4.5 7.2 4.5c2 0 3.6 1.1 4.8 2.8 1.2-1.7 2.8-2.8 4.8-2.8 3.6 0 5.7 3.5 4.5 6.8-1.8 4.6-9.3 9.2-9.3 9.2z"/></svg>`,
   check: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>`,
@@ -270,6 +271,7 @@ document.addEventListener("keydown", (e) => {
   if (getAppModal.classList.contains("is-open")) { closeGetApp(); return; }
   if (helperModal.classList.contains("is-open")) { closeVlcHelper(); return; }
   if (playerModal.classList.contains("is-open")) { closePlayerPicker(); return; }
+  if (matchModal.classList.contains("is-open")) { closeMatchEditor(); return; }
   if (settingsModal.classList.contains("is-open")) { closeSettings(); return; }
   if (uploadModal.classList.contains("is-open")) { closeUploadModal(); return; }
   if (confirmModal.classList.contains("is-open")) { closeConfirm(false); return; }
@@ -1877,9 +1879,11 @@ function openDetails(item, torrent = null, { fromHistory = false, season = null 
   detailsModal.querySelector(".details-box").focus({ preventScroll: true });
   document.title = `${item.clean_title || item.title} · Torrent Tube`;
 
-  const cacheKey = item.tmdb_id && item.media_type ? `${item.media_type}:${item.tmdb_id}` : `title:${item.title}`;
+  // A title matched by hand in another language has its details in it too.
+  const language = item.library?.metadata_language || "";
+  const cacheKey = item.tmdb_id && item.media_type ? `${item.media_type}:${item.tmdb_id}:${language}` : `title:${item.title}`;
   const params = item.tmdb_id && item.media_type
-    ? `type=${encodeURIComponent(item.media_type)}&id=${encodeURIComponent(item.tmdb_id)}`
+    ? `type=${encodeURIComponent(item.media_type)}&id=${encodeURIComponent(item.tmdb_id)}${language ? `&language=${encodeURIComponent(language)}` : ""}`
     : `title=${encodeURIComponent(item.title)}`;
   const request = detailsCache.get(cacheKey) || fetch(`/api/details?${params}`).then(res => res.json());
   detailsCache.set(cacheKey, request);
@@ -2624,6 +2628,8 @@ function renderDetailsBody() {
   </div>`);
   const saved = titleFavorites(s).length > 0;
   actions.push(`<button type="button" class="btn-secondary dt-favorite${saved ? " is-saved" : ""}" data-act="favorite" aria-pressed="${saved}" title="${saved ? "Remove from Favorites" : "Add to Favorites"}">${saved ? ICONS.heartFilled : ICONS.heart}${saved ? "Unfavorite" : "Favorite"}</button>`);
+  // After the heart: a library title's metadata, fixed by hand.
+  if (s.library) actions.push(`<button type="button" class="btn-secondary" data-act="fix-match" title="Search TMDB and pick the right film or show">${ICONS.fixMatch}Fix match</button>`);
   if (!detailsHasBanner(s) && !s.playing && !s.loading) {
     if (s.trailers && s.trailers.length > 0) {
       actions.push(`<button type="button" class="btn-secondary" data-act="trailer">${PLAY_ICON}Trailer</button>`);
@@ -2868,6 +2874,7 @@ detailsBody.addEventListener("click", (e) => {
     case "play-release": playRelease(s.releases[Number(el.dataset.index)]); break;
     case "pick-player": openPlayerPicker(); break;
     case "favorite": toggleFavorite(s); break;
+    case "fix-match": openMatchEditor(s.library); break;
     case "download-release": downloadRelease(s.releases[Number(el.dataset.index)]); break;
     case "more": {
       const overviewEl = detailsBody.querySelector(".dt-overview");
@@ -3254,6 +3261,140 @@ function openLibraryTitle(item) {
     overview: item.overview, tmdb_id: item.tmdb_id, media_type: item.media_type, library: item,
   });
 }
+
+// ---------- Fix match ----------
+// A title matched to the wrong film: its file names to go by, a TMDB search
+// (title, year, film or show, language), and the result to use.
+const matchModal = document.getElementById("matchModal");
+const matchFiles = document.getElementById("matchFiles");
+const matchSearch = document.getElementById("matchSearch");
+const matchQuery = document.getElementById("matchQuery");
+const matchYear = document.getElementById("matchYear");
+const matchType = document.getElementById("matchType");
+const matchLanguage = document.getElementById("matchLanguage");
+const matchResults = document.getElementById("matchResults");
+const matchUse = document.getElementById("matchUse");
+const matchReset = document.getElementById("matchReset");
+let matchState = null;
+
+function matchLanguageName(code) {
+  try {
+    const name = new Intl.DisplayNames([document.documentElement.lang || "en"], { type: "language" }).of(code.slice(0, 2));
+    return name.charAt(0).toUpperCase() + name.slice(1);
+  } catch (e) { return code; }
+}
+
+async function openMatchEditor(library) {
+  matchState = { id: library.id, info: null, results: [], chosen: null, request: 0 };
+  matchFiles.innerHTML = '<p class="dt-status">Loading…</p>';
+  matchResults.innerHTML = "";
+  matchUse.disabled = true;
+  matchReset.hidden = true;
+  matchModal.classList.add("is-open");
+  try {
+    const info = await fetch(`/api/library/match?id=${encodeURIComponent(library.id)}`).then(r => r.json());
+    if (info.error) throw new Error(info.error);
+    matchState.info = info;
+    const files = info.files.slice(0, 6).map(f => `<li>${escapeHtml(f)}</li>`).join("");
+    const more = info.files.length > 6 ? `<li class="match-more">+ ${info.files.length - 6}</li>` : "";
+    const current = info.current ? `<div class="match-current"><span>Now:</span> ${escapeHtml([info.current.title, info.current.year].filter(Boolean).join(" · "))}</div>` : "";
+    matchFiles.innerHTML = `<div class="section-label">Files</div><ul>${files}${more}</ul>${current}`;
+    matchQuery.value = info.query || "";
+    matchYear.value = info.year || "";
+    matchType.value = info.type;
+    matchLanguage.replaceChildren(...info.languages.map(code => new Option(matchLanguageName(code), code)));
+    matchLanguage.value = info.language;
+    matchReset.hidden = !info.manual;
+    matchQuery.focus();
+    runMatchSearch();
+  } catch (e) {
+    matchFiles.innerHTML = `<p class="dt-status is-error">${escapeHtml(e.message || "Couldn't load this title")}</p>`;
+  }
+}
+
+function closeMatchEditor() {
+  matchModal.classList.remove("is-open");
+  matchState = null;
+}
+
+async function runMatchSearch() {
+  if (!matchState) return;
+  const request = ++matchState.request;
+  const params = new URLSearchParams({ q: matchQuery.value.trim(), type: matchType.value, language: matchLanguage.value });
+  if (/^\d{4}$/.test(matchYear.value.trim())) params.set("year", matchYear.value.trim());
+  matchResults.innerHTML = '<p class="dt-status">Searching…</p>';
+  matchState.chosen = null;
+  matchUse.disabled = true;
+  try {
+    const d = await fetch(`/api/library/match/search?${params}`).then(r => r.json());
+    if (!matchState || request !== matchState.request) return;
+    if (d.error) throw new Error(d.error);
+    matchState.results = d.results || [];
+    renderMatchResults();
+  } catch (e) {
+    if (matchState && request === matchState.request) matchResults.innerHTML = `<p class="dt-status is-error">${escapeHtml(e.message || "Couldn't search")}</p>`;
+  }
+}
+
+function renderMatchResults() {
+  const { results, chosen, info } = matchState;
+  if (!results.length) {
+    matchResults.innerHTML = '<p class="dt-status">Nothing found. Try the original title, another year or another language.</p>';
+    return;
+  }
+  const currentId = info?.current ? `${info.current.media_type}:${info.current.tmdb_id}` : "";
+  matchResults.innerHTML = results.map((r, i) => {
+    const id = `${r.media_type}:${r.tmdb_id}`;
+    const sub = [r.original_title && r.original_title !== r.title ? r.original_title : "", r.year, r.media_type === "tv" ? "TV show" : "Movie"].filter(Boolean);
+    return `<button type="button" class="match-row${chosen === i ? " is-chosen" : ""}" role="option" aria-selected="${chosen === i}" data-index="${i}">
+      <span class="match-poster">${r.poster ? `<img src="${escapeHtml(r.poster)}" alt="" loading="lazy">` : brandArt(r.title)}</span>
+      <span class="match-text">
+        <span class="match-title">${escapeHtml(r.title)}${id === currentId ? ' <span class="match-badge">Now</span>' : ""}</span>
+        <span class="match-sub">${sub.map(escapeHtml).join(" · ")}</span>
+        ${r.overview ? `<span class="match-overview">${escapeHtml(r.overview)}</span>` : ""}
+      </span>
+    </button>`;
+  }).join("");
+}
+
+async function saveMatch(method, body) {
+  matchUse.disabled = matchReset.disabled = true;
+  try {
+    const d = await fetch("/api/library/match", { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(r => r.json());
+    if (d.error) throw new Error(d.error);
+    const id = matchState.id;
+    closeMatchEditor();
+    await loadLibrary();
+    // The title page again, with its new match.
+    const updated = libraryItems.find(t => t.id === id || (t.versions || []).some(v => v.id === id));
+    if (updated && detailsState?.library) openLibraryTitle(updated);
+    showToast("Match saved");
+  } catch (e) {
+    showToast(e.message || "Couldn't save the match", true);
+  } finally {
+    matchReset.disabled = false;
+    if (matchState) matchUse.disabled = matchState.chosen == null;
+  }
+}
+
+matchSearch.addEventListener("submit", e => { e.preventDefault(); runMatchSearch(); });
+matchType.addEventListener("change", runMatchSearch);
+matchLanguage.addEventListener("change", runMatchSearch);
+matchResults.addEventListener("click", e => {
+  const row = e.target.closest(".match-row");
+  if (!row || !matchState) return;
+  matchState.chosen = Number(row.dataset.index);
+  matchUse.disabled = false;
+  renderMatchResults();
+});
+matchResults.addEventListener("dblclick", e => { if (e.target.closest(".match-row")) matchUse.click(); });
+matchUse.addEventListener("click", () => {
+  const r = matchState?.results[matchState.chosen];
+  if (r) saveMatch("POST", { id: matchState.id, tmdb_id: r.tmdb_id, media_type: r.media_type, language: matchLanguage.value });
+});
+matchReset.addEventListener("click", () => { if (matchState) saveMatch("DELETE", { id: matchState.id }); });
+document.getElementById("matchClose").addEventListener("click", closeMatchEditor);
+matchModal.addEventListener("click", e => { if (e.target === matchModal) closeMatchEditor(); });
 
 function closeSearchDropdownIfOpen() {
   if (typeof searchDropdown !== "undefined") searchDropdown.classList.remove("is-open");
