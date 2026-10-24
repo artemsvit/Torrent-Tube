@@ -109,6 +109,7 @@ struct MainView: View {
             if phase == .active {
                 Task { await catalog.loadFeed("new", api: api, config: config, refresh: true) }
                 favorites.sync(); history.sync()  // changes on another device
+                Task { await catalog.loadLibrary(api: api) }  // a match fixed on another device
             }
         }
         .task(id: api.baseURL) {

@@ -238,7 +238,10 @@ struct MobileRoot: View {
                 }
             }
             .onChange(of: scenePhase) { _, phase in
-                if phase == .active { favorites.sync(); history.sync() }  // changes on another device
+                if phase == .active {  // changes on another device: hearts, positions, fixed matches
+                    favorites.sync(); history.sync()
+                    Task { await catalog.loadLibrary(api: api) }
+                }
             }
             .sheet(isPresented: $settings) {
                 MobileSettings(store: store, api: api, config: config)

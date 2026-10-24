@@ -188,7 +188,11 @@ struct MatchCandidate: Codable, Identifiable, Hashable {
             .compactMap { $0 }.joined(separator: " · ")
     }
 }
-struct MatchSearchResponse: Decodable { let results: [MatchCandidate] }
+struct MatchSearchResponse: Decodable {
+    let results: [MatchCandidate]
+    /// What was searched in the end: without the year, or the name in Cyrillic.
+    var query: String? = nil
+}
 struct MatchChange: Encodable { let id: String; let tmdbId: Int; let mediaType: String; let language: String }
 struct MatchReset: Encodable { let id: String }
 

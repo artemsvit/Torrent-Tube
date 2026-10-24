@@ -2709,6 +2709,31 @@ MATCH_LANGUAGES = ["uk-UA", "en-US", "pl-PL", "de-DE", "fr-FR", "es-ES", "it-IT"
 LANGUAGE_RE = re.compile(r"^[a-z]{2}-[A-Z]{2}$")
 
 
+_TRANSLIT = [("shch", "щ"), ("zh", "ж"), ("kh", "х"), ("ts", "ц"), ("ch", "ч"), ("sh", "ш"), ("yu", "ю"), ("ya", "я"),
+             ("ye", "є"), ("yi", "ї"), ("iu", "ю"), ("ia", "я"), ("ie", "є"), ("a", "а"), ("b", "б"), ("v", "в"),
+             ("h", "г"), ("g", "ґ"), ("d", "д"), ("e", "е"), ("z", "з"), ("y", "и"), ("i", "і"), ("j", "й"), ("k", "к"),
+             ("l", "л"), ("m", "м"), ("n", "н"), ("o", "о"), ("p", "п"), ("r", "р"), ("s", "с"), ("t", "т"), ("u", "у"),
+             ("f", "ф"), ("c", "ц"), ("w", "в"), ("x", "кс"), ("q", "к")]
+
+
+def ukrainian_letters(text: str) -> str:
+    """A Ukrainian name written in Latin letters, back in Cyrillic:
+    "Vartovi Halaktyky 3" -> "Вартові Галактики 3"."""
+    def word(w):
+        out, i, low = "", 0, w.lower()
+        while i < len(w):
+            for latin, cyrillic in _TRANSLIT:
+                if low.startswith(latin, i):
+                    out += cyrillic.upper() if w[i].isupper() else cyrillic
+                    i += len(latin)
+                    break
+            else:
+                out += w[i]
+                i += 1
+        return out
+    return re.sub(r"[A-Za-z]+", lambda m: word(m.group(0)), text)
+
+
 def _library_item(item_id: str):
     return next((i for i in LIBRARY.items() if i["id"] == item_id), None)
 
@@ -2756,18 +2781,31 @@ def library_match_search():
     year = request.args.get("year", "").strip()
     if not query:
         return jsonify({"results": []})
-    params = {"query": query, "include_adult": "false", "language": language}
-    try:
+    def search(text, with_year):
+        params = {"query": text, "include_adult": "false", "language": language}
         if media_type in ("movie", "tv"):
-            if year.isdigit():
+            if with_year and year.isdigit():
                 params["year" if media_type == "movie" else "first_air_date_year"] = year
-            found = [(r, media_type) for r in _tmdb_get(f"/search/{media_type}", **params).get("results", [])]
-        else:
-            found = [(r, r["media_type"]) for r in _tmdb_get("/search/multi", **params).get("results", [])
-                     if r.get("media_type") in ("movie", "tv")]
+            return [(r, media_type) for r in _tmdb_get(f"/search/{media_type}", **params).get("results", [])]
+        return [(r, r["media_type"]) for r in _tmdb_get("/search/multi", **params).get("results", [])
+                if r.get("media_type") in ("movie", "tv")]
+
+    # Nothing found: the year may be off, or the name is Ukrainian in Latin
+    # letters ("Vartovi Halaktyky") - try without the year, then in Cyrillic.
+    attempts = [(query, True), (query, False)]
+    if re.search(r"[A-Za-z]", query) and not re.search(r"[А-Яа-яІіЇїЄєҐґ]", query):
+        attempts += [(ukrainian_letters(query), True), (ukrainian_letters(query), False)]
+    found, used = [], query
+    try:
+        for text, with_year in attempts:
+            if not with_year and not year.isdigit():
+                continue
+            found, used = search(text, with_year), text
+            if found:
+                break
     except Exception:
         return jsonify({"error": "Couldn't reach TMDB"}), 502
-    return jsonify({"results": [_match_result(r, t) for r, t in found[:20]]})
+    return jsonify({"results": [_match_result(r, t) for r, t in found[:20]], "query": used})
 
 
 @app.route("/api/library/match", methods=["POST", "DELETE"])

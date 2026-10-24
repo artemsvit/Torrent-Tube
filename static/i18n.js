@@ -198,6 +198,7 @@ function translateUI(text, language) {
       [/^(\d+) films$/, n => ukrainianCount(n, 'фільм', 'фільми', 'фільмів')],
       [/^(\d+) of (\d+) films$/, (n, total) => `${n} з ${total} фільмів`],
       [/^Part (\d+)$/, n => `Частина ${n}`],
+      [/^Results for “(.+)”$/, q => `Результати для «${q}»`],
       [/^Page (\d+) of (\d+)$/, (n, total) => `Сторінка ${n} з ${total}`],
       [/^Play in (.+)$/, app => `Відкрити в ${app}`], [/^Copy link for (.+)$/, app => `Копіювати посилання для ${app}`],
       [/^Play this release in (.+)$/, app => `Відтворити цю версію в ${app}`],

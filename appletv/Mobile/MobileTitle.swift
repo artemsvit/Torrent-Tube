@@ -627,17 +627,20 @@ struct MobileTitle: View {
 }
 
 
-/// Fix match on iPhone, iPad and Mac: the title's file names to go by, a
-/// TMDB search (title, year, film or show, language), and the results to
-/// pick from. The same steps as on Apple TV and the web page.
+/// Fix match on iPhone, iPad and Mac, in the app's own look: the title's
+/// files on top, a search field with the year, chips for film or show and
+/// the language, results as cards, and "Use this match" pinned below.
+/// Searches as you type. The same steps as on Apple TV and the web page.
 struct MobileMatchEditor: View {
     let api: TorrentTubeAPI
     let onSaved: () -> Void
     @Environment(CatalogStore.self) private var catalog
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var editor: MatchEditor
-    @State private var choice: MatchCandidate?
     @State private var showAllFiles = false
+    @FocusState private var typing: Bool
+    private let edge: CGFloat = 20
     init(itemID: String, api: TorrentTubeAPI, onSaved: @escaping () -> Void) {
         self.api = api
         self.onSaved = onSaved
@@ -645,107 +648,211 @@ struct MobileMatchEditor: View {
     }
     var body: some View {
         @Bindable var editor = editor
-        NavigationStack {
-            Form {
-                if let info = editor.info {
-                    Section {
-                        let files = showAllFiles ? info.files : Array(info.files.prefix(4))
-                        ForEach(files, id: \.self) { name in
-                            Text(name).font(.footnote.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
-                        }
-                        if info.files.count > files.count {
-                            Button(L("Show all %ld files", info.files.count)) { showAllFiles = true }
-                        }
-                    } header: { Text(L("Files")) } footer: {
-                        // The folder, when it is one: a single file's name is already above.
-                        if !(info.files.count == 1 && info.files[0].hasPrefix(info.name)) { Text(info.name) }
+        VStack(alignment: .leading, spacing: 0) {
+            header
+            searchBar(query: $editor.query, year: $editor.year)
+            filters
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 10) {
+                    if let searched = editor.searchedFor, !editor.results.isEmpty {
+                        Text(L("Results for “%@”", searched)).font(.footnote).foregroundStyle(.secondary)
                     }
-                    if let current = info.current {
-                        Section(L("Current match")) { row(current, current: true) }
-                    }
-                }
-                Section {
-                    HStack(spacing: 10) {
-                        TextField(L("Title"), text: $editor.query).onSubmit(search)
-                            .autocorrectionDisabled()
-                        TextField(L("Year"), text: $editor.year).onSubmit(search).frame(width: 64)
-                        #if os(iOS)
-                            .keyboardType(.numberPad)
-                        #endif
-                    }
-                    Picker(L("Type"), selection: $editor.type) {
-                        Text(L("Movie")).tag("movie")
-                        Text(L("TV Show")).tag("tv")
-                    }.pickerStyle(.segmented)
-                    Picker(L("Metadata language"), selection: $editor.language) {
-                        ForEach(editor.info?.languages ?? [editor.language], id: \.self) { Text(MatchEditor.languageName($0)).tag($0) }
-                    }.pickerStyle(.menu)
-                    Button(action: search) {
-                        HStack { Label(L("Search"), systemImage: "magnifyingglass"); Spacer(); if editor.searching { ProgressView() } }
-                    }.disabled(editor.searching)
-                } header: { Text(L("Search TMDB")) }
-                Section(L("Results")) {
-                    if editor.results.isEmpty && !editor.searching && editor.info != nil {
-                        Text(L("Nothing found. Try the original title, another year or another language.")).foregroundStyle(.secondary)
+                    if editor.searching && editor.results.isEmpty {
+                        ProgressView().frame(maxWidth: .infinity, minHeight: 200)
+                    } else if editor.results.isEmpty && editor.info != nil {
+                        ContentUnavailableView(L("Nothing found"), systemImage: "magnifyingglass",
+                                               description: Text(L("Nothing found. Try the original title, another year or another language.")))
+                            .padding(.top, 30)
                     }
                     ForEach(editor.results) { candidate in
-                        Button { choice = candidate } label: { row(candidate, current: candidate.id == editor.info?.current?.id) }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("match-\(candidate.id)")
+                        resultCard(candidate)
                     }
-                }
-                if editor.info?.manual == true {
-                    Section {
+                    if editor.info?.manual == true {
                         Button(L("Match automatically again"), role: .destructive) {
                             Task { if await editor.reset(api: api, catalog: catalog) { onSaved(); dismiss() } }
                         }
-                    } footer: { Text(L("This title was matched by hand.")) }
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(.red)
+                        .frame(maxWidth: .infinity).padding(.top, 14)
+                        .hapticButtonStyle(PlainButtonStyle())
+                    }
                 }
+                .padding(.horizontal, edge).padding(.top, 6).padding(.bottom, 20)
             }
-            .formStyle(.grouped)
-            .disabled(editor.saving)
-            .navigationTitle(L("Fix match"))
-            #if !os(macOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button(L("Cancel")) { dismiss() } }
-            }
-            .onChange(of: editor.type) { search() }
-            .onChange(of: editor.language) { search() }
-            .task { await editor.load(api: api) }
-            .confirmationDialog(L("Use this match?"), isPresented: Binding(get: { choice != nil }, set: { if !$0 { choice = nil } }),
-                                titleVisibility: .visible, presenting: choice) { candidate in
-                Button(L("Use “%@”", candidate.title ?? "")) {
-                    Task { if await editor.save(candidate, api: api, catalog: catalog) { onSaved(); dismiss() } }
-                }
-                Button(L("Cancel"), role: .cancel) {}
-            } message: { candidate in Text(candidate.subtitle) }
-            .alert(L("Couldn’t fix the match"), isPresented: Binding(get: { editor.error != nil }, set: { if !$0 { editor.error = nil } })) {
-                Button(L("OK"), role: .cancel) {}
-            } message: { Text(editor.error ?? "") }
+            .scrollDismissesKeyboard(.immediately)
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) { useBar }
+        .background(AppBackground())
+        .disabled(editor.saving)
+        .task { await editor.load(api: api) }
+        .task(id: editor.searchKey) {
+            guard editor.info != nil else { return }
+            do { try await Task.sleep(for: .milliseconds(450)) } catch { return }
+            await editor.search(api: api)
+        }
+        .alert(L("Couldn’t fix the match"), isPresented: Binding(get: { editor.error != nil }, set: { if !$0 { editor.error = nil } })) {
+            Button(L("OK"), role: .cancel) {}
+        } message: { Text(editor.error ?? "") }
         #if os(macOS)
-        .frame(minWidth: 640, idealWidth: 720, minHeight: 680, idealHeight: 820)
+        .frame(minWidth: 620, idealWidth: 700, minHeight: 640, idealHeight: 780)
+        #else
+        .presentationDragIndicator(.visible)
         #endif
     }
-    private func search() { Task { await editor.search(api: api) } }
-    private func row(_ candidate: MatchCandidate, current: Bool) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            MobileArtwork(url: candidate.poster, seed: candidate.title ?? "").frame(width: 54)
-                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(candidate.title ?? "").font(.body.weight(.semibold)).lineLimit(2)
-                    Spacer(minLength: 4)
-                    if current { Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.torrentAccent).accessibilityLabel(L("Current match")) }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center) {
+                Text(L("Fix match")).font(.title2.bold())
+                Spacer()
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark").font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
+                        .frame(width: 36, height: 36).background(Color.white.opacity(0.15), in: Circle())
                 }
-                Text(candidate.subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                if let overview = candidate.overview, !overview.isEmpty {
-                    Text(overview).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                .hapticButtonStyle(PlainButtonStyle())
+                .accessibilityLabel(L("Close")).accessibilityIdentifier("close-fix-match")
+            }
+            if let info = editor.info {
+                VStack(alignment: .leading, spacing: 6) {
+                    let files = showAllFiles ? info.files : Array(info.files.prefix(2))
+                    ForEach(files, id: \.self) { name in
+                        Label { Text(name).font(.caption.monospaced()).lineLimit(2).textSelection(.enabled) } icon: {
+                            Image(systemName: "film").font(.caption)
+                        }
+                        .foregroundStyle(.white.opacity(0.75))
+                    }
+                    if info.files.count > files.count {
+                        Button(L("Show all %ld files", info.files.count)) { withAnimation { showAllFiles = true } }
+                            .font(.caption.weight(.semibold)).hapticButtonStyle(PlainButtonStyle())
+                    }
+                    if let current = info.current {
+                        Text(L("Now: %@", [current.title, current.year].compactMap { $0 }.joined(separator: " · ")))
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                 }
+                .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
         }
-        .padding(.vertical, 2).contentShape(Rectangle())
+        .padding(.horizontal, edge).padding(.top, 18).padding(.bottom, 14)
+    }
+
+    private func searchBar(query: Binding<String>, year: Binding<String>) -> some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                TextField(L("Title"), text: query)
+                    .textFieldStyle(.plain).focused($typing).submitLabel(.search).autocorrectionDisabled()
+                    #if os(iOS)
+                    .textInputAutocapitalization(.never)
+                    #endif
+                    .accessibilityIdentifier("match-query")
+                if editor.searching && !editor.results.isEmpty { ProgressView().controlSize(.small) }
+                else if !query.wrappedValue.isEmpty {
+                    Button { query.wrappedValue = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
+                        .hapticButtonStyle(PlainButtonStyle())
+                }
+            }
+            .padding(.horizontal, 14).padding(.vertical, 10)
+            .background(Color.white.opacity(0.12), in: Capsule())
+            TextField(L("Year"), text: year)
+                .textFieldStyle(.plain).multilineTextAlignment(.center).focused($typing)
+                #if os(iOS)
+                .keyboardType(.numberPad)
+                #endif
+                .frame(width: 58).padding(.vertical, 10).padding(.horizontal, 6)
+                .background(Color.white.opacity(0.12), in: Capsule())
+                .accessibilityIdentifier("match-year")
+        }
+        .padding(.horizontal, edge)
+    }
+
+    private var filters: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 8) {
+                chip(L("Movie"), selected: editor.type == "movie") { editor.type = "movie" }
+                chip(L("TV Show"), selected: editor.type == "tv") { editor.type = "tv" }
+                Menu {
+                    Picker(L("Metadata language"), selection: Binding(get: { editor.language }, set: { editor.language = $0 })) {
+                        ForEach(editor.info?.languages ?? [editor.language], id: \.self) { Text(MatchEditor.languageName($0)).tag($0) }
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "globe")
+                        Text(MatchEditor.languageName(editor.language))
+                        Image(systemName: "chevron.down").font(.caption2.weight(.bold))
+                    }
+                    .font(HeroFont.chip).padding(HeroFont.chipPadding)
+                    .foregroundStyle(.white).background(Color.white.opacity(0.12), in: Capsule())
+                }
+                .menuStyle(.button).buttonStyle(.plain)
+                .accessibilityLabel(L("Metadata language"))
+            }
+            .padding(.horizontal, edge)
+        }
+        .scrollIndicators(.hidden).padding(.vertical, 12)
+    }
+
+    private func chip(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title).font(HeroFont.chip).padding(HeroFont.chipPadding)
+                .foregroundStyle(selected ? .black : .white)
+                .background(selected ? Color.white : Color.white.opacity(0.12), in: Capsule())
+        }
+        .hapticButtonStyle(PlainButtonStyle())
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func resultCard(_ candidate: MatchCandidate) -> some View {
+        let chosen = editor.chosen == candidate
+        let current = candidate.id == editor.info?.current?.id
+        return Button { typing = false; editor.chosen = chosen ? nil : candidate } label: {
+            HStack(alignment: .top, spacing: 14) {
+                MobileArtwork(url: candidate.poster, seed: candidate.title ?? "").frame(width: sizeClass == .regular ? 72 : 60)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(candidate.title ?? "").font(.headline).foregroundStyle(.white).lineLimit(2)
+                    Text(candidate.subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    if current {
+                        Text(L("Now")).font(.caption2.weight(.bold)).padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(Color.white.opacity(0.14), in: Capsule())
+                    }
+                    if let overview = candidate.overview, !overview.isEmpty {
+                        Text(overview).font(.caption).foregroundStyle(.white.opacity(0.6)).lineLimit(3)
+                    }
+                }
+                .multilineTextAlignment(.leading)
+                Spacer(minLength: 0)
+                Image(systemName: chosen ? "checkmark.circle.fill" : "circle")
+                    .font(.title3).foregroundStyle(chosen ? Color.torrentAccent : .white.opacity(0.3))
+            }
+            .padding(12)
+            .background(Color.white.opacity(chosen ? 0.12 : 0.06), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay { RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(chosen ? Color.torrentAccent : .clear, lineWidth: 2) }
+            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .hapticButtonStyle(PlainButtonStyle())
+        .accessibilityAddTraits(chosen ? .isSelected : [])
+        .accessibilityIdentifier("match-\(candidate.id)")
+    }
+
+    /// The one action, always in reach: shows what it will use.
+    private var useBar: some View {
+        Button {
+            guard let candidate = editor.chosen else { return }
+            Task { if await editor.save(candidate, api: api, catalog: catalog) { onSaved(); dismiss() } }
+        } label: {
+            HStack(spacing: 8) {
+                if editor.saving { ProgressView().tint(.black) } else { Image(systemName: "checkmark") }
+                Text(editor.chosen.map { L("Use “%@”", $0.title ?? "") } ?? L("Choose the right title")).lineLimit(1)
+            }
+            .font(HeroFont.button).foregroundStyle(.black)
+            .frame(maxWidth: .infinity, minHeight: HeroFont.buttonHeight + 8)
+            .background(Color.white.opacity(editor.chosen == nil ? 0.45 : 1), in: Capsule())
+        }
+        .hapticButtonStyle(PlainButtonStyle())
+        .disabled(editor.chosen == nil || editor.saving)
+        .padding(.horizontal, edge).padding(.top, 12).padding(.bottom, 10)
+        .background(.ultraThinMaterial.opacity(0.9))
+        .accessibilityIdentifier("use-match")
     }
 }

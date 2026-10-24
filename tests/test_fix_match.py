@@ -82,6 +82,22 @@ class FixMatchTests(unittest.TestCase):
         self.client.delete("/api/library/metadata")
         self.assertTrue(server.LIBRARY_META[ID]["manual"])
 
+    def test_a_latin_ukrainian_name_is_tried_in_cyrillic(self):
+        self.assertEqual(server.ukrainian_letters("Vartovi Halaktyky 3"), "Вартові Галактики 3")
+        asked = []
+
+        def tmdb_search(path, **params):
+            asked.append((params["query"], params.get("year")))
+            return {"results": [{"id": 447365, "title": "Вартові Галактики 3", "release_date": "2023-05-03"}]
+                    if params["query"] == "Вартові Галактики 3" and "year" not in params else []}
+        with patch.object(server, "_tmdb_get", side_effect=tmdb_search):
+            found = self.client.get("/api/library/match/search",
+                                    query_string={"q": "Vartovi Halaktyky 3", "type": "movie", "year": "2024"}).json
+        self.assertEqual(found["results"][0]["tmdb_id"], 447365)
+        self.assertEqual(found["query"], "Вартові Галактики 3")
+        self.assertEqual(asked, [("Vartovi Halaktyky 3", "2024"), ("Vartovi Halaktyky 3", None),
+                                 ("Вартові Галактики 3", "2024"), ("Вартові Галактики 3", None)])
+
     def test_reset_matches_automatically_again(self):
         server.LIBRARY_META[ID]["manual"] = True
         self.assertEqual(self.client.delete("/api/library/match", json={"id": ID}).status_code, 200)

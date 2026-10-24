@@ -300,8 +300,10 @@ struct TitleView: View {
     }
 }
 
-/// Fix match on Apple TV: the file names and the search on the left, the
-/// TMDB results as posters on the right - pick one to use it.
+/// Fix match on Apple TV, laid out like Search: a large query line and the
+/// app's own keyboard on the left, with chips for film or show, language and
+/// year; on the right the title's files and the results as posters, with
+/// room around them so a focused poster is never cut. Searches as you type.
 struct TVMatchEditor: View {
     let api: TorrentTubeAPI
     let onSaved: () -> Void
@@ -309,92 +311,89 @@ struct TVMatchEditor: View {
     @Environment(\.dismiss) private var dismiss
     @State private var editor: MatchEditor
     @State private var choice: MatchCandidate?
+    @State private var layout: KeyboardLayout = Localizer.shared.language == .uk ? .ukrainian : .english
+    @FocusState private var focusedKey: String?
     init(itemID: String, api: TorrentTubeAPI, onSaved: @escaping () -> Void) {
         self.api = api
         self.onSaved = onSaved
         _editor = State(initialValue: MatchEditor(itemID: itemID))
     }
     var body: some View {
-        @Bindable var editor = editor
-        HStack(alignment: .top, spacing: 64) {
+        HStack(alignment: .top, spacing: 70) {
+            VStack(alignment: .leading, spacing: 24) {
+                Text(L("Fix match")).font(.system(size: 50, weight: .bold))
+                queryLine
+                HStack(spacing: 16) {
+                    Button(editor.type == "tv" ? L("TV Show") : L("Movie")) { editor.type = editor.type == "tv" ? "movie" : "tv" }
+                        .buttonStyle(ChipStyle(selected: false))
+                    Button(MatchEditor.languageName(editor.language)) {
+                        let all = editor.info?.languages ?? [editor.language]
+                        editor.language = all[((all.firstIndex(of: editor.language) ?? -1) + 1) % all.count]
+                    }
+                    .buttonStyle(ChipStyle(selected: false)).accessibilityLabel(L("Metadata language"))
+                    if let fileYear = editor.fileYear {
+                        Button(editor.year.isEmpty ? L("Any year") : editor.year) { editor.year = editor.year.isEmpty ? fileYear : "" }
+                            .buttonStyle(ChipStyle(selected: !editor.year.isEmpty)).accessibilityLabel(L("Year"))
+                    }
+                }
+                SearchKeyboard(layout: $layout, focusedKey: $focusedKey, type: { editor.query += $0 },
+                               delete: { if !editor.query.isEmpty { editor.query.removeLast() } })
+                if editor.info?.manual == true {
+                    Button(L("Match automatically again"), role: .destructive) {
+                        Task { if await editor.reset(api: api, catalog: catalog) { onSaved(); dismiss() } }
+                    }.buttonStyle(.bordered)
+                }
+            }
+            .frame(width: 620, alignment: .leading)
+            .focusSection()
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    Text(L("Fix match")).font(.system(size: 50, weight: .bold))
+                VStack(alignment: .leading, spacing: 26) {
                     if let info = editor.info {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(L("Files")).font(.system(size: 22, weight: .semibold)).foregroundStyle(.white.opacity(0.6))
-                            ForEach(info.files.prefix(5), id: \.self) { name in
-                                Text(name).font(.system(size: 21, design: .monospaced)).foregroundStyle(.white.opacity(0.8)).lineLimit(2)
+                            ForEach(info.files.prefix(3), id: \.self) { name in
+                                Label { Text(name).lineLimit(1).truncationMode(.middle) } icon: { Image(systemName: "film") }
+                                    .font(.system(size: 22, design: .monospaced)).foregroundStyle(.white.opacity(0.75))
                             }
-                            if info.files.count > 5 {
-                                Text(L("+ %ld more", info.files.count - 5)).font(.system(size: 20)).foregroundStyle(.white.opacity(0.5))
+                            if info.files.count > 3 {
+                                Text(L("+ %ld more", info.files.count - 3)).font(.system(size: 20)).foregroundStyle(.white.opacity(0.5))
+                            }
+                            if let current = info.current {
+                                Text(L("Now: %@", [current.title, current.year].compactMap { $0 }.joined(separator: " · ")))
+                                    .font(.system(size: 22, weight: .medium)).foregroundStyle(.white.opacity(0.6))
                             }
                         }
-                        if let current = info.current {
-                            Text(L("Now: %@", [current.title, current.year].compactMap { $0 }.joined(separator: " · ")))
-                                .font(.system(size: 22)).foregroundStyle(.white.opacity(0.6))
-                        }
+                        .padding(22).frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
                     }
-                    TextField(L("Title"), text: $editor.query).onSubmit(search)
-                    TextField(L("Year"), text: $editor.year).onSubmit(search)
-                    HStack(spacing: 18) {
-                        Button(editor.type == "tv" ? L("TV Show") : L("Movie")) { editor.type = editor.type == "tv" ? "movie" : "tv" }
-                            .buttonStyle(ChipStyle(selected: false))
-                        Button(MatchEditor.languageName(editor.language)) {
-                            let all = editor.info?.languages ?? [editor.language]
-                            editor.language = all[((all.firstIndex(of: editor.language) ?? -1) + 1) % all.count]
-                        }.buttonStyle(ChipStyle(selected: false)).accessibilityLabel(L("Metadata language"))
+                    if let searched = editor.searchedFor, !editor.results.isEmpty {
+                        Text(L("Results for “%@”", searched)).font(.system(size: 24)).foregroundStyle(.white.opacity(0.6))
                     }
-                    Button(action: search) { Label(L("Search"), systemImage: "magnifyingglass") }
-                        .buttonStyle(.bordered).disabled(editor.searching)
-                    if editor.info?.manual == true {
-                        Button(L("Match automatically again"), role: .destructive) {
-                            Task { if await editor.reset(api: api, catalog: catalog) { onSaved(); dismiss() } }
-                        }.buttonStyle(.bordered)
-                    }
-                }.padding(.vertical, 20)
-            }
-            .frame(width: 640).focusSection()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    if editor.searching {
+                    if editor.searching && editor.results.isEmpty {
                         LoadingState(text: L("Searching…"), minHeight: 500)
                     } else if editor.results.isEmpty && editor.info != nil {
                         ContentUnavailableView(L("Nothing found"), systemImage: "magnifyingglass",
                                                description: Text(L("Nothing found. Try the original title, another year or another language.")))
-                            .frame(maxWidth: .infinity, minHeight: 500)
+                            .frame(maxWidth: .infinity, minHeight: 460)
                     }
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 220, maximum: 260), spacing: 34)], alignment: .leading, spacing: 34) {
-                        ForEach(editor.results) { candidate in
-                            Button { choice = candidate } label: {
-                                VStack(alignment: .leading, spacing: 10) {
-                                    ArtworkView(url: candidate.poster, seed: candidate.title ?? "").aspectRatio(2.0 / 3.0, contentMode: .fit)
-                                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                                        .overlay(alignment: .topTrailing) {
-                                            if candidate.id == editor.info?.current?.id {
-                                                Image(systemName: "checkmark.circle.fill").font(.system(size: 34)).foregroundStyle(.white, Color.torrentAccent).padding(10)
-                                            }
-                                        }
-                                    Text(candidate.title ?? "").font(.system(size: 21, weight: .semibold)).lineLimit(2)
-                                        .frame(maxWidth: .infinity, minHeight: 52, alignment: .topLeading)
-                                    Text(candidate.subtitle).font(.system(size: 18)).foregroundStyle(.white.opacity(0.6)).lineLimit(2)
-                                        .frame(maxWidth: .infinity, minHeight: 46, alignment: .topLeading)
-                                }
-                            }
-                            .buttonStyle(CinemaCardStyle())
-                            .accessibilityIdentifier("match-\(candidate.id)")
-                        }
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 230, maximum: 270), spacing: 40)], alignment: .leading, spacing: 40) {
+                        ForEach(editor.results) { candidate in resultCard(candidate) }
                     }
-                }.padding(.vertical, 20)
+                }
+                // Room for a focused poster to grow without the edge cutting it.
+                .padding(.horizontal, 30).padding(.vertical, 40)
             }
+            .scrollClipDisabled()
             .focusSection()
         }
-        .padding(.horizontal, TVLayout.edge).padding(.top, 60).padding(.bottom, 40)
+        .padding(.leading, TVLayout.edge).padding(.trailing, TVLayout.edge - 30).padding(.top, 50)
         .background(AppBackground())
         .disabled(editor.saving)
-        .onChange(of: editor.type) { search() }
-        .onChange(of: editor.language) { search() }
         .task { await editor.load(api: api) }
+        .task(id: editor.searchKey) {
+            guard editor.info != nil else { return }
+            do { try await Task.sleep(for: .milliseconds(500)) } catch { return }
+            await editor.search(api: api)
+        }
         .alert(L("Use this match?"), isPresented: Binding(get: { choice != nil }, set: { if !$0 { choice = nil } }), presenting: choice) { candidate in
             Button(L("Use “%@”", candidate.title ?? "")) {
                 Task { if await editor.save(candidate, api: api, catalog: catalog) { onSaved(); dismiss() } }
@@ -405,5 +404,42 @@ struct TVMatchEditor: View {
             Button(L("OK"), role: .cancel) {}
         } message: { Text(editor.error ?? "") }
     }
-    private func search() { Task { await editor.search(api: api) } }
+    /// What is being searched, large - typed on the keyboard below.
+    private var queryLine: some View {
+        HStack(spacing: 16) {
+            Image(systemName: "magnifyingglass").font(.system(size: 30, weight: .semibold))
+            Text(editor.query.isEmpty ? L("Title") : editor.query)
+                .font(.system(size: 34, weight: .semibold)).lineLimit(1).truncationMode(.head)
+            Spacer(minLength: 0)
+            if editor.searching { ProgressView() }
+        }
+        .foregroundStyle(focusedKey == "match-input" ? .black : .white)
+        .padding(.horizontal, 26)
+        .frame(maxWidth: .infinity, minHeight: 80, alignment: .leading)
+        .background(focusedKey == "match-input" ? Color.white : Color.white.opacity(0.1), in: Capsule())
+        .focusable()
+        .focused($focusedKey, equals: "match-input")
+        .accessibilityLabel(L("Title")).accessibilityValue(editor.query)
+        .accessibilityIdentifier("match-query")
+    }
+    private func resultCard(_ candidate: MatchCandidate) -> some View {
+        Button { choice = candidate } label: {
+            VStack(alignment: .leading, spacing: 12) {
+                ArtworkView(url: candidate.poster, seed: candidate.title ?? "").aspectRatio(2.0 / 3.0, contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay(alignment: .topTrailing) {
+                        if candidate.id == editor.info?.current?.id {
+                            Text(L("Now")).font(.system(size: 20, weight: .bold)).padding(.horizontal, 14).padding(.vertical, 6)
+                                .background(.black.opacity(0.65), in: Capsule()).padding(12)
+                        }
+                    }
+                Text(candidate.title ?? "").font(.system(size: 22, weight: .semibold)).lineLimit(2)
+                    .frame(maxWidth: .infinity, minHeight: 56, alignment: .topLeading)
+                Text(candidate.subtitle).font(.system(size: 19)).foregroundStyle(.white.opacity(0.6)).lineLimit(2)
+                    .frame(maxWidth: .infinity, minHeight: 48, alignment: .topLeading)
+            }
+        }
+        .buttonStyle(CinemaCardStyle())
+        .accessibilityIdentifier("match-\(candidate.id)")
+    }
 }

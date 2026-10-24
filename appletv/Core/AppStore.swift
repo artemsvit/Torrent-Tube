@@ -141,6 +141,11 @@ final class MatchEditor {
     var type = "movie"
     var language = "uk-UA"
     var results: [MatchCandidate] = []
+    /// The name the results are for, when the server searched another one
+    /// ("Vartovi Halaktyky" -> "Вартові Галактики").
+    var searchedFor: String?
+    /// The pick, before "Use this match".
+    var chosen: MatchCandidate?
     var searching = false
     var saving = false
     var error: String?
@@ -151,8 +156,8 @@ final class MatchEditor {
         do {
             let loaded: MatchInfo = try await api.request("api/library/match", query: [.init(name: "id", value: itemID)])
             info = loaded
+            // The view searches once these change (searchKey).
             query = loaded.query; year = loaded.year ?? ""; type = loaded.type; language = loaded.language
-            await search(api: api)
         } catch is CancellationError {} catch { self.error = AppStore.describe(error).0 }
     }
 
@@ -167,6 +172,8 @@ final class MatchEditor {
         do {
             let found: MatchSearchResponse = try await api.request("api/library/match/search", query: items)
             results = found.results
+            searchedFor = found.query.flatMap { $0.caseInsensitiveCompare(term) == .orderedSame ? nil : $0 }
+            if let chosen, !found.results.contains(chosen) { self.chosen = nil }
             error = nil
         } catch is CancellationError {} catch { self.error = AppStore.describe(error).0 }
     }
@@ -196,6 +203,11 @@ final class MatchEditor {
         } catch is CancellationError { return false } catch { self.error = AppStore.describe(error).0; return false }
     }
     private struct Saved: Decodable { let ok: Bool }
+
+    /// What changes the results: searched again, shortly after it changes.
+    var searchKey: String { "\(query)|\(year)|\(type)|\(language)" }
+    /// The year from the file name, to search with or without.
+    var fileYear: String? { info?.year }
 
     /// "Українська", "English": a TMDB language in the app's language.
     static func languageName(_ code: String) -> String {

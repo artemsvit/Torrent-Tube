@@ -3275,7 +3275,9 @@ const matchLanguage = document.getElementById("matchLanguage");
 const matchResults = document.getElementById("matchResults");
 const matchUse = document.getElementById("matchUse");
 const matchReset = document.getElementById("matchReset");
+const matchNote = document.getElementById("matchNote");
 let matchState = null;
+let matchTimer = null;
 
 function matchLanguageName(code) {
   try {
@@ -3295,6 +3297,7 @@ async function openMatchEditor(library) {
     const info = await fetch(`/api/library/match?id=${encodeURIComponent(library.id)}`).then(r => r.json());
     if (info.error) throw new Error(info.error);
     matchState.info = info;
+    matchNote.textContent = "";
     const files = info.files.slice(0, 6).map(f => `<li>${escapeHtml(f)}</li>`).join("");
     const more = info.files.length > 6 ? `<li class="match-more">+ ${info.files.length - 6}</li>` : "";
     const current = info.current ? `<div class="match-current"><span>Now:</span> ${escapeHtml([info.current.title, info.current.year].filter(Boolean).join(" · "))}</div>` : "";
@@ -3322,7 +3325,7 @@ async function runMatchSearch() {
   const request = ++matchState.request;
   const params = new URLSearchParams({ q: matchQuery.value.trim(), type: matchType.value, language: matchLanguage.value });
   if (/^\d{4}$/.test(matchYear.value.trim())) params.set("year", matchYear.value.trim());
-  matchResults.innerHTML = '<p class="dt-status">Searching…</p>';
+  if (!matchState.results.length) matchResults.innerHTML = '<p class="dt-status">Searching…</p>';
   matchState.chosen = null;
   matchUse.disabled = true;
   try {
@@ -3330,6 +3333,9 @@ async function runMatchSearch() {
     if (!matchState || request !== matchState.request) return;
     if (d.error) throw new Error(d.error);
     matchState.results = d.results || [];
+    // The server searched another name: without the year, or in Cyrillic.
+    const asked = matchQuery.value.trim();
+    matchNote.textContent = d.query && d.query.toLowerCase() !== asked.toLowerCase() && matchState.results.length ? `Results for “${d.query}”` : "";
     renderMatchResults();
   } catch (e) {
     if (matchState && request === matchState.request) matchResults.innerHTML = `<p class="dt-status is-error">${escapeHtml(e.message || "Couldn't search")}</p>`;
@@ -3377,7 +3383,12 @@ async function saveMatch(method, body) {
   }
 }
 
-matchSearch.addEventListener("submit", e => { e.preventDefault(); runMatchSearch(); });
+matchSearch.addEventListener("submit", e => { e.preventDefault(); clearTimeout(matchTimer); runMatchSearch(); });
+// Searches as you type, shortly after the last key.
+[matchQuery, matchYear].forEach(input => input.addEventListener("input", () => {
+  clearTimeout(matchTimer);
+  matchTimer = setTimeout(runMatchSearch, 450);
+}));
 matchType.addEventListener("change", runMatchSearch);
 matchLanguage.addEventListener("change", runMatchSearch);
 matchResults.addEventListener("click", e => {
