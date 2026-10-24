@@ -478,6 +478,7 @@ struct MobileRoot: View {
                 .navigationBarTitleDisplayMode(title == nil ? .inline : .large)
                 .navigationDestination(for: MediaItem.self) { MobileTitle(item: $0, api: api, config: config).sidesUnderInsets() }
                 .navigationDestination(for: PersonRoute.self) { MobilePerson(route: $0, api: api) }
+                .navigationDestination(for: LibraryCollection.self) { MobileCollection(collection: $0) }
                 #if os(macOS)
                 .navigationDestination(for: SettingsRoute.self) { _ in MobileSettings(store: store, api: api, config: config) }
                 #endif

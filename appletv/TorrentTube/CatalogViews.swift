@@ -77,6 +77,7 @@ struct MainView: View {
         NavigationStack(path: path(tab)) {
             root().navigationDestination(for: MediaItem.self) { item in TitleView(item: item, api: api, config: config) }
                 .navigationDestination(for: PersonRoute.self) { PersonView(route: $0, api: api, config: config) }
+                .navigationDestination(for: LibraryCollection.self) { CollectionView(collection: $0, api: api, config: config) }
         }
         .environment(\.backToTop) { setPath(NavigationPath(), for: tab) }
     }

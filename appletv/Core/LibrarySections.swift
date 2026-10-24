@@ -1,14 +1,45 @@
 import Foundation
 
+/// Films of one TMDB collection on the server - two or more, never shows -
+/// in release order: Harry Potter 1, 2, 3.
+struct LibraryCollection: Identifiable, Hashable {
+    let info: TitleCollection
+    let titles: [LibraryTitle]
+    var id: Int { info.id }
+    var name: String { info.name }
+    var poster: String? { info.poster ?? titles.first?.poster }
+    /// "3 films", or "3 of 8 films" when the series has more.
+    var count: String {
+        if let total = info.total, total > titles.count { return L("%ld of %ld films", titles.count, total) }
+        return L("%ld films", titles.count)
+    }
+    /// "Part 2 · 2002" under each film.
+    static func line(_ title: LibraryTitle) -> String {
+        [title.collection?.part.map { L("Part %ld", $0) }, title.year].compactMap { $0 }.joined(separator: " · ")
+    }
+}
+
 /// The Library screen's chips, the same on every device: one per type of
-/// title on the server (with its count), then Favorites.
+/// title on the server (with its count), then Collections and Favorites.
 enum LibrarySections {
     static let kinds = [("movie", "Movies"), ("tv", "TV Shows"), ("cartoon", "Cartoons")]
     static func chips(_ library: [LibraryTitle], favorites: Int) -> [(String, String)] {
-        kinds.map { kind, label in
+        let collections = collections(library).count
+        return kinds.map { kind, label in
             let count = library.filter { $0.kind == kind }.count
             return (kind, count > 0 ? "\(L(label)) · \(count)" : label)
-        } + [("favorites", favorites > 0 ? "\(L("Favorites")) · \(favorites)" : "Favorites")]
+        } + [("collections", collections > 0 ? "\(L("Collections")) · \(collections)" : "Collections"),
+             ("favorites", favorites > 0 ? "\(L("Favorites")) · \(favorites)" : "Favorites")]
+    }
+    static func collections(_ library: [LibraryTitle]) -> [LibraryCollection] {
+        let films = library.filter { $0.kind != "tv" && $0.mediaType == "movie" && $0.collection != nil }
+        return Dictionary(grouping: films) { $0.collection!.id }.values.compactMap { titles -> LibraryCollection? in
+            guard titles.count >= 2, let info = titles.first?.collection else { return nil }
+            let ordered = titles.sorted {
+                ($0.collection?.part ?? 99, $0.year ?? "9999") < ($1.collection?.part ?? 99, $1.year ?? "9999")
+            }
+            return LibraryCollection(info: info, titles: ordered)
+        }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
     /// The first type the server has, else Favorites.
     static func defaultSection(_ library: [LibraryTitle]) -> String {

@@ -2405,6 +2405,60 @@ def _lookup_library_item(item: dict):
             LIBRARY_META_PENDING.discard(item["id"])
 
 
+LIBRARY_COLLECTIONS_PENDING = set()
+LIBRARY_COLLECTION_RETRY = 30 * 24 * 3600  # a film's collection is asked again after a month
+
+
+def tmdb_collection(collection_id: int) -> dict:
+    """A TMDB collection ("Harry Potter Collection"): its name, overview,
+    artwork and films (TMDB ids, by release date)."""
+    cache_key = f"collection:{collection_id}:{TMDB_LANGUAGE}"
+    hit, val = TMDB_CACHE.get(cache_key)
+    if hit:
+        return val
+    d = _tmdb_get(f"/collection/{collection_id}", language=TMDB_LANGUAGE)
+    overview = d.get("overview") or ""
+    if not overview and not TMDB_LANGUAGE.startswith("en"):
+        try:
+            overview = _tmdb_get(f"/collection/{collection_id}", language="en-US").get("overview") or ""
+        except Exception:
+            pass
+    parts = sorted(d.get("parts") or [], key=lambda p: p.get("release_date") or "9999")
+    result = {"id": collection_id, "name": d.get("name") or "", "overview": overview,
+              "poster": _tmdb_image(d.get("poster_path"), "w500"),
+              "backdrop": _tmdb_image(d.get("backdrop_path"), "w1280"),
+              "parts": [p["id"] for p in parts if p.get("id")]}
+    TMDB_CACHE.set(cache_key, result, ttl=TMDB_CACHE_TTL, is_hit=True)
+    return result
+
+
+def _lookup_library_collection(item_id: str, tmdb_id: int):
+    """Which collection a library film is in (None for most), saved with its match."""
+    try:
+        d = _tmdb_get(f"/movie/{tmdb_id}", language=TMDB_LANGUAGE)
+        found = d.get("belongs_to_collection") or {}
+        collection = None
+        if found.get("id"):
+            info = tmdb_collection(found["id"])
+            parts = info["parts"]
+            collection = {key: info[key] for key in ("id", "name", "overview", "poster", "backdrop")}
+            collection["name"] = collection["name"] or found.get("name") or ""
+            collection["total"] = len(parts)
+            # Its place in the series: 1 for the first film, by release date.
+            collection["part"] = parts.index(tmdb_id) + 1 if tmdb_id in parts else None
+        with LIBRARY_META_LOCK:
+            entry = LIBRARY_META.get(item_id)
+            if entry and entry.get("tmdb_id") == tmdb_id:
+                entry["collection"] = collection
+                entry["collection_checked"] = time.time()
+                LIBRARY_META_FILE.write_text(json.dumps(LIBRARY_META, ensure_ascii=False))
+    except Exception:
+        pass
+    finally:
+        with LIBRARY_META_LOCK:
+            LIBRARY_COLLECTIONS_PENDING.discard(item_id)
+
+
 def _library_with_metadata(items: list) -> list:
     """Each title with its saved TMDB match and its tab; titles not looked up
     yet are queued (in the background) and keep their folder's tab meanwhile."""
@@ -2422,9 +2476,15 @@ def _library_with_metadata(items: list) -> list:
                 LIBRARY_META_PENDING.add(item["id"])
                 TMDB_EXECUTOR.submit(_lookup_library_item, item)
             merged = dict(item, folder_kind=item["kind"])
+            # A matched film: which collection it is in (Harry Potter 1, 2, 3...).
+            if (entry and entry.get("media_type") == "movie" and entry.get("tmdb_id") and TMDB_API_KEY
+                    and now - entry.get("collection_checked", 0) > LIBRARY_COLLECTION_RETRY
+                    and item["id"] not in LIBRARY_COLLECTIONS_PENDING):
+                LIBRARY_COLLECTIONS_PENDING.add(item["id"])
+                TMDB_EXECUTOR.submit(_lookup_library_collection, item["id"], entry["tmdb_id"])
             if entry:
                 merged["kind"] = classify_library_item(item["kind"], structure, entry)
-                for key in ("poster", "rating", "overview", "tmdb_id", "media_type", "display_title"):
+                for key in ("poster", "rating", "overview", "tmdb_id", "media_type", "display_title", "collection"):
                     if entry.get(key) is not None:
                         merged[key] = entry[key]
             result.append(merged)

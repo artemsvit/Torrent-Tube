@@ -154,6 +154,17 @@ struct TorrentListEntry: Decodable {
 }
 /// One title already on the server: a film file or a show's folder in the
 /// category folders (or, on older servers, a finished torrent).
+/// A film's TMDB collection: its name and artwork, how many films it has,
+/// and which one this film is (1 for the first, by release date).
+struct TitleCollection: Codable, Hashable, Sendable {
+    let id: Int
+    let name: String
+    var overview: String? = nil
+    var poster: String? = nil
+    var backdrop: String? = nil
+    var total: Int? = nil
+    var part: Int? = nil
+}
 /// One copy of a Library title: the same film in two folders, or a show split over two.
 struct LibraryVersion: Codable, Hashable, Sendable {
     let id: String
@@ -184,8 +195,10 @@ struct LibraryTitle: Codable, Identifiable, Hashable, Sendable {
     var mediaType: String? = nil
     /// Every copy on the server when there is more than one; the first plays by default.
     var versions: [LibraryVersion] = []
+    /// The TMDB collection a film is in (Harry Potter, Toy Story), with its place in it.
+    var collection: TitleCollection? = nil
     var source: PlaybackSource { isTorrent ? PlaybackSource(id: id) : PlaybackSource(path: id) }
-    private enum CodingKeys: String, CodingKey { case id, name, title, year, kind, files, added, displayTitle, poster, rating, overview, tmdbId, mediaType, versions, isTorrent }
+    private enum CodingKeys: String, CodingKey { case id, name, title, year, kind, files, added, displayTitle, poster, rating, overview, tmdbId, mediaType, versions, isTorrent, collection }
     init(id: String, name: String, kind: String = "movie", files: Int = 1, added: Double = 0, isTorrent: Bool = false) {
         self.id = id; self.name = name; self.kind = kind; self.files = files; self.added = added; self.isTorrent = isTorrent
     }
@@ -206,6 +219,7 @@ struct LibraryTitle: Codable, Identifiable, Hashable, Sendable {
         added = try c.decodeIfPresent(Double.self, forKey: .added) ?? 0
         versions = try c.decodeIfPresent([LibraryVersion].self, forKey: .versions) ?? []
         isTorrent = try c.decodeIfPresent(Bool.self, forKey: .isTorrent) ?? false
+        collection = try? c.decodeIfPresent(TitleCollection.self, forKey: .collection)
     }
     /// Saved on the device (the Library opens before the server answers).
     func encode(to encoder: Encoder) throws {
@@ -216,6 +230,7 @@ struct LibraryTitle: Codable, Identifiable, Hashable, Sendable {
         try c.encodeIfPresent(displayTitle, forKey: .displayTitle); try c.encodeIfPresent(poster, forKey: .poster)
         try c.encodeIfPresent(rating, forKey: .rating); try c.encodeIfPresent(overview, forKey: .overview)
         try c.encodeIfPresent(tmdbId, forKey: .tmdbId); try c.encodeIfPresent(mediaType, forKey: .mediaType)
+        try c.encodeIfPresent(collection, forKey: .collection)
         try c.encode(versions, forKey: .versions); try c.encode(isTorrent, forKey: .isTorrent)
     }
 }

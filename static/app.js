@@ -3076,6 +3076,66 @@ async function loadLibrary(refresh = false) {
 
 function libraryTitle(item) { return item.display_title || item.title || item.name; }
 
+// Collections: films of one TMDB collection (Harry Potter 1, 2, 3...) - two
+// or more on the server. Shows are never in one. Films in release order.
+let openCollectionId = null;
+function libraryCollections(items) {
+  const groups = new Map();
+  items.forEach(item => {
+    const c = item.collection;
+    if (!c || !c.id || item.media_type !== "movie" || item.kind === "tv") return;
+    if (!groups.has(c.id)) groups.set(c.id, { ...c, items: [] });
+    groups.get(c.id).items.push(item);
+  });
+  const order = item => [item.collection.part ?? 99, item.year || "9999"];
+  return [...groups.values()].filter(c => c.items.length >= 2).map(c => ({
+    ...c, items: c.items.sort((a, b) => {
+      const [pa, ya] = order(a), [pb, yb] = order(b);
+      return pa - pb || String(ya).localeCompare(String(yb));
+    })
+  })).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function collectionCount(c) {
+  return c.total > c.items.length ? `${c.items.length} of ${c.total} films` : `${c.items.length} films`;
+}
+
+function buildCollectionCard(c) {
+  const card = document.createElement("button");
+  card.type = "button";
+  card.className = "lib-card collection-card";
+  const poster = c.poster || c.items[0].poster;
+  card.innerHTML = `<div class="lib-poster">${poster
+      ? `<img src="${escapeHtml(poster.replace("/w500/", "/w342/").replace("/w200/", "/w342/"))}" alt="" loading="lazy">`
+      : brandArt(c.name)}<span class="lib-badge">${c.items.length}</span></div>
+    <div class="lib-title">${escapeHtml(c.name)}</div><div class="lib-sub">${collectionCount(c)}</div>`;
+  card.addEventListener("click", () => { openCollectionId = c.id; renderLibrary(); libraryGrid.scrollTop = 0; });
+  return card;
+}
+
+// A collection's own page: artwork, name, overview, then its films in order.
+function renderCollection(c) {
+  const head = document.createElement("div");
+  head.className = "collection-head";
+  head.innerHTML = `${c.backdrop ? `<img class="collection-backdrop" src="${escapeHtml(c.backdrop)}" alt="">` : ""}
+    <div class="collection-head-body">
+      <button type="button" class="btn-secondary collection-back">‹ <span>Collections</span></button>
+      <h2 class="collection-name">${escapeHtml(c.name)}</h2>
+      <div class="collection-count">${collectionCount(c)}</div>
+      ${c.overview ? `<p class="collection-overview">${escapeHtml(c.overview)}</p>` : ""}
+    </div>`;
+  head.querySelector(".collection-back").addEventListener("click", () => { openCollectionId = null; renderLibrary(); libraryGrid.scrollTop = 0; });
+  libraryGrid.appendChild(head);
+  c.items.forEach(item => {
+    const card = buildLibraryCard(item);
+    const sub = card.querySelector(".lib-sub");
+    const line = [item.collection.part ? `Part ${item.collection.part}` : "", item.year].filter(Boolean).join(" · ");
+    if (sub) sub.textContent = line;
+    else if (line) card.insertAdjacentHTML("beforeend", `<div class="lib-sub">${escapeHtml(line)}</div>`);
+    libraryGrid.appendChild(card);
+  });
+}
+
 function renderLibrary() {
   renderServerHome();
   const dedicated = ['library', 'favorites'].includes(document.body.dataset.serverView);
@@ -3094,8 +3154,10 @@ function renderLibrary() {
   }) : favorites;
   const counts = Object.fromEntries(LIBRARY_KINDS.map(([k]) => [k, items.filter(i => i.kind === k).length]));
   counts.favorites = saved.length;
-  // Favorites comes after Cartoons, as in the apps.
-  const tabs = [...LIBRARY_KINDS, ["favorites", "Favorites"]];
+  const collections = libraryCollections(items);
+  counts.collections = collections.length;
+  // Collections, then Favorites, after Cartoons - as in the apps.
+  const tabs = [...LIBRARY_KINDS, ["collections", "Collections"], ["favorites", "Favorites"]];
   if (!librarySection) librarySection = "movie";
   const availableTabs = tabs.filter(([k]) => counts[k] || k === librarySection || k === "movie");
   libraryKinds.innerHTML = availableTabs.map(([k, label]) =>
@@ -3108,11 +3170,17 @@ function renderLibrary() {
   libraryNote.hidden = !libraryPending;
   libraryNote.textContent = libraryPending ? `Matching ${libraryPending} new title${libraryPending === 1 ? "" : "s"} on TMDB…` : "";
   libraryGrid.innerHTML = "";
+  const collection = librarySection === "collections" && collections.find(c => c.id === openCollectionId);
+  libraryGrid.classList.toggle("is-collection", !!collection);
   if (librarySection === "favorites") saved.forEach(f => libraryGrid.appendChild(buildFavoriteCard(f)));
+  else if (collection) renderCollection(collection);
+  else if (librarySection === "collections") collections.forEach(c => libraryGrid.appendChild(buildCollectionCard(c)));
   else items.filter(i => i.kind === librarySection).forEach(item => libraryGrid.appendChild(buildLibraryCard(item)));
   if (!libraryGrid.childElementCount) libraryGrid.innerHTML = libraryFilter.value.trim()
     ? `<div class="library-empty">Nothing in your library matches “${escapeHtml(libraryFilter.value.trim())}”.</div>`
-    : `<div class="library-empty">No titles in this section yet.</div>`;
+    : librarySection === "collections"
+      ? `<div class="library-empty">Films of one series, like Harry Potter, appear here once two of them are on the server.</div>`
+      : `<div class="library-empty">No titles in this section yet.</div>`;
 }
 
 function buildLibraryCard(item) {
@@ -3158,6 +3226,7 @@ libraryChips.addEventListener("click", e => {
   const chip = e.target.closest(".library-chip[data-kind]");
   if (chip) {
     librarySection = chip.dataset.kind;
+    openCollectionId = null;
     document.body.dataset.serverView = 'library';
     updateServerNavigation('library');
     renderLibrary(); libraryGrid.scrollTop = 0;
@@ -3167,6 +3236,7 @@ libraryChips.addEventListener("click", e => {
 if (libraryKindsSelect) {
   libraryKindsSelect.addEventListener("change", () => {
     librarySection = libraryKindsSelect.value;
+    openCollectionId = null;
     document.body.dataset.serverView = 'library';
     updateServerNavigation('library');
     renderLibrary();

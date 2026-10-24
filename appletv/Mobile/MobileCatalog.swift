@@ -833,6 +833,14 @@ struct MobileLibrary: View {
                     }
                     // One grid, newest first - like the other chips and the web page.
                     MobileGrid(items: all.map(\.item))
+                } else if active == "collections" {
+                    let all = LibrarySections.collections(catalog.library)
+                    if all.isEmpty {
+                        ContentUnavailableView(L("No collections yet"), systemImage: "square.stack",
+                                               description: Text(L("Films of one series, like Harry Potter, appear here once two of them are on the server.")))
+                            .padding(.top, 40).frame(maxWidth: .infinity)
+                    }
+                    MobileCollectionGrid(collections: all)
                 } else {
                     let items = catalog.library.filter { $0.kind == active }
                     if items.isEmpty && catalog.libraryLoading {
@@ -1013,6 +1021,7 @@ struct MobileSearch: View {
             MobileTitle(item: item, api: api, config: config).sidesUnderInsets()
         }
         .navigationDestination(for: PersonRoute.self) { MobilePerson(route: $0, api: api) }
+        .navigationDestination(for: LibraryCollection.self) { MobileCollection(collection: $0) }
     }
     .onAppear {
             UserDefaults.standard.removeObject(forKey: "recentSearches")
@@ -1121,5 +1130,93 @@ struct MobilePerson: View {
             .frame(width: 220, height: 44, alignment: .leading)
             .fixedSize(horizontal: true, vertical: false)
             .accessibilityIdentifier("person-floating-name")
+    }
+}
+
+/// The Library's collections, as poster cards like the titles around them.
+struct MobileCollectionGrid: View {
+    @Environment(\.mobileEdge) private var edge
+    let collections: [LibraryCollection]
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    var body: some View {
+        let minimum: CGFloat = typeSize.isAccessibilitySize ? 220 : (sizeClass == .regular ? 160 : 104)
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: minimum, maximum: 240), spacing: 14)], alignment: .leading, spacing: 22) {
+            ForEach(collections) { collection in
+                NavigationLink(value: collection) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        MobileArtwork(url: collection.poster, seed: collection.name)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .overlay { RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(.white.opacity(0.08)) }
+                            .overlay(alignment: .topLeading) {
+                                Label("\(collection.titles.count)", systemImage: "square.stack.fill").font(.caption.weight(.bold))
+                                    .padding(.horizontal, 7).padding(.vertical, 4).background(.black.opacity(0.6), in: Capsule()).padding(6)
+                            }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(collection.name).font(MobileStyle.itemTitle(.subheadline.weight(.medium))).lineLimit(2, reservesSpace: true)
+                                .foregroundStyle(.primary)
+                            Text(collection.count).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        }.multilineTextAlignment(.leading)
+                    }.contentShape(Rectangle())
+                }
+                .buttonStyle(PressableStyle())
+                .accessibilityLabel("\(collection.name), \(collection.count)")
+                .accessibilityIdentifier("collection-\(collection.id)")
+            }
+        }.padding(.horizontal, edge)
+    }
+}
+
+/// A collection's page: its backdrop, poster, name and overview, then its
+/// films in release order, each with its part and year.
+struct MobileCollection: View {
+    @Environment(\.mobileEdge) private var edge
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.dynamicTypeSize) private var typeSize
+    let collection: LibraryCollection
+    var body: some View {
+        let minimum: CGFloat = typeSize.isAccessibilitySize ? 220 : (sizeClass == .regular ? 160 : 104)
+        let poster: CGFloat = sizeClass == .regular ? 180 : 116
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                HStack(alignment: .bottom, spacing: 16) {
+                    MobileArtwork(url: collection.poster, seed: collection.name).frame(width: poster)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay { RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(.white.opacity(0.1)) }
+                        .shadow(color: .black.opacity(0.4), radius: 12, y: 6)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(collection.name).font(sizeClass == .regular ? .largeTitle.bold() : .title2.bold()).lineLimit(3)
+                        Text(collection.count).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+                    }.padding(.bottom, 4)
+                }
+                .padding(.horizontal, edge)
+                if let overview = collection.info.overview, !overview.isEmpty {
+                    Text(overview).font(.callout).foregroundStyle(.white.opacity(0.8)).lineSpacing(3)
+                        .frame(maxWidth: 760, alignment: .leading).padding(.horizontal, edge)
+                }
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: minimum, maximum: 240), spacing: 14)], alignment: .leading, spacing: 22) {
+                    ForEach(collection.titles) { title in
+                        VStack(alignment: .leading, spacing: 2) {
+                            MobileCard(item: libraryItem(title))
+                            Text(LibraryCollection.line(title)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                    }
+                }.padding(.horizontal, edge)
+            }
+            .padding(.top, sizeClass == .regular ? 140 : 110).padding(.bottom, 24)
+        }
+        .background(alignment: .top) {
+            if let backdrop = collection.info.backdrop {
+                MobileArtwork(url: backdrop, ratio: 16 / 9, seed: collection.name)
+                    .frame(maxWidth: .infinity)
+                    .mask(LinearGradient(colors: [.white.opacity(0.7), .white.opacity(0.3), .clear], startPoint: .top, endPoint: .bottom))
+                    .ignoresSafeArea()
+            }
+        }
+        .background(AppBackground())
+        .navigationTitle(collection.name)
+        #if !os(macOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
     }
 }
