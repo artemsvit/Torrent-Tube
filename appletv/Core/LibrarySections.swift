@@ -40,13 +40,14 @@ enum TVFilters {
     ]
 }
 
-/// The Cartoons page's chips: all cartoons, films or series, studios, then genres.
+/// The Cartoons page's chips: all cartoons, films, series or for kids, then
+/// studios (each studio's whole list from TMDB). Genres are left out: TMDB
+/// files most cartoons under Family, Comedy and Adventure at once.
 enum CartoonFilters {
     static let options: [(String, String)] = [
-        ("cartoons", "All"), ("cartoon-films", "Animated films"), ("cartoon-series", "Animated series"),
+        ("cartoons", "All"), ("cartoon-films", "Animated films"), ("cartoon-series", "Animated series"), ("cartoon-kids", "Kids"),
         ("cartoon-disney", "Disney"), ("cartoon-pixar", "Pixar"), ("cartoon-dreamworks", "DreamWorks"),
-        ("cartoon-illumination", "Illumination"), ("cartoon-nickelodeon", "Nickelodeon"), ("cartoon-comedy", "Comedy"),
-        ("cartoon-adventure", "Adventure"), ("cartoon-fantasy", "Fantasy"), ("cartoon-family", "Family"), ("cartoon-kids", "Kids"),
+        ("cartoon-illumination", "Illumination"), ("cartoon-nickelodeon", "Nickelodeon"),
     ]
 }
 

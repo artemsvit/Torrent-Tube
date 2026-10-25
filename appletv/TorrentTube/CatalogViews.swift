@@ -965,7 +965,7 @@ struct CategoryView: View {
                     VStack(alignment: .leading, spacing: 35) {
                         Color.clear.frame(height: 0).id(Self.top)
                         if catalog.loading.contains(activeFeed) && catalog.rows[activeFeed] == nil { LoadingState(text: L("Loading titles…"), minHeight: 500) }
-                        if let error = catalog.errors[activeFeed] { ErrorPanel(message: error) { Task { await catalog.loadFeed(activeFeed, api: api, config: config, refresh: true) } } }
+                        if let error = catalog.errors[activeFeed] { ErrorState(message: error) { Task { await catalog.loadFeed(activeFeed, api: api, config: config, refresh: true) } } }
                         if catalog.rows[activeFeed]?.isEmpty == true && !catalog.loading.contains(activeFeed) && catalog.errors[activeFeed] == nil {
                             ContentUnavailableView(L("Nothing here yet"), systemImage: "film", description: Text(L("Try another category or refresh your server’s catalog.")))
                                 .frame(maxWidth: .infinity, minHeight: 500)
@@ -1297,6 +1297,24 @@ struct LoadingState: View {
     var minHeight: CGFloat = 400
     var body: some View {
         ProgressView(text).frame(maxWidth: .infinity, minHeight: minHeight)
+    }
+}
+
+/// A page whose titles could not load: centered, like the empty state, with
+/// a heading, an icon, the reason and Try again.
+struct ErrorState: View {
+    let message: String
+    let retry: () -> Void
+    var body: some View {
+        let failure = LoadFailure(message)
+        ContentUnavailableView {
+            Label(failure.title, systemImage: failure.symbol)
+        } description: {
+            Text(failure.message).frame(maxWidth: 900)
+        } actions: {
+            Button(L("Try again"), action: retry)
+        }
+        .frame(maxWidth: .infinity, minHeight: 500)
     }
 }
 

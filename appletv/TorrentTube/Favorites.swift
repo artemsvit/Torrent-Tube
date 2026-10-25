@@ -66,7 +66,7 @@ struct LibraryView: View {
                                 if items.isEmpty && catalog.libraryLoading {
                                     LoadingState(text: L("Loading titles…"), minHeight: 500)
                                 } else if let error = catalog.libraryError, items.isEmpty {
-                                    ErrorPanel(message: error) { Task { await catalog.loadLibrary(api: api) } }
+                                    ErrorState(message: error) { Task { await catalog.loadLibrary(api: api) } }
                                 } else if items.isEmpty {
                                     ContentUnavailableView(L("Nothing here yet"), systemImage: "externaldrive",
                                                            description: Text(L("Titles you download to the server appear here.")))

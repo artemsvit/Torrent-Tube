@@ -464,6 +464,24 @@ struct MobileError: View {
     }
 }
 
+/// A page whose titles could not load: centered, like the empty state, with
+/// a heading, an icon, the reason and Try again.
+struct MobileErrorState: View {
+    let message: String
+    let retry: () -> Void
+    var body: some View {
+        let failure = LoadFailure(message)
+        ContentUnavailableView {
+            Label(failure.title, systemImage: failure.symbol)
+        } description: {
+            Text(failure.message)
+        } actions: {
+            Button(L("Try again"), action: retry).hapticButtonStyle(BorderedButtonStyle()).frame(minHeight: 44)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
 /// A spinner in the middle of the space - never in a corner.
 struct MobileLoading: View {
     let text: String
@@ -792,7 +810,7 @@ struct MobileCategory: View {
                 if items.isEmpty && (catalog.loading.contains(selected) || (selected == "library" && catalog.libraryLoading)) {
                     MobileLoading(text: L("Loading titles…"))
                 } else if let error = selected == "library" ? catalog.libraryError : catalog.errors[selected] {
-                    MobileError(message: error) { Task { await load(refresh: true) } }
+                    MobileErrorState(message: error) { Task { await load(refresh: true) } }
                 } else if items.isEmpty {
                     ContentUnavailableView(L("Nothing here yet"), systemImage: "film", description: Text(L("Try another category or refresh your server’s catalog.")))
                         .frame(maxWidth: .infinity)
@@ -846,7 +864,7 @@ struct MobileLibrary: View {
                     if items.isEmpty && catalog.libraryLoading {
                         MobileLoading(text: L("Loading titles…"))
                     } else if let error = catalog.libraryError, items.isEmpty {
-                        MobileError(message: error) { Task { await catalog.loadLibrary(api: api) } }
+                        MobileErrorState(message: error) { Task { await catalog.loadLibrary(api: api) } }
                     } else if items.isEmpty {
                         ContentUnavailableView(L("Nothing here yet"), systemImage: "externaldrive",
                                                description: Text(L("Titles you download to the server appear here.")))

@@ -558,3 +558,8 @@ body[data-server-view="library"] #cataloguePanel, body[data-server-view="downloa
   .top-bar.header-search-open #searchToggleBtn { width: 44px; min-width: 44px; height: 44px; flex-basis: 44px; }
   .title-page .dt-actions .dt-download-meta { display: none; }
 }
+
+/* A catalog feed that failed to load: heading, reason, Try again. */
+.catalog-error { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.catalog-error strong { color: var(--text); font-size: 17px; }
+.catalog-error button { margin-top: 8px; }

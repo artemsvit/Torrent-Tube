@@ -38,8 +38,30 @@ class GenreFeedTests(unittest.TestCase):
         self.assertIn({"id": "thriller", "label": "Thriller"}, feeds["movie_filters"])
         self.assertIn({"id": "tv-mystery", "label": "Mystery"}, feeds["tv_filters"])
         self.assertNotIn("tv-mystery", [f["id"] for f in feeds["movie_filters"]])
-        self.assertEqual(feeds["cartoon_filters"][0], {"id": "cartoon-films", "label": "Animated films"})
-        self.assertNotIn("cartoon-comedy", [f["id"] for f in feeds["feeds"]])
+        self.assertEqual([f["id"] for f in feeds["cartoon_filters"]],
+                         ["cartoon-films", "cartoon-series", "cartoon-kids", "cartoon-disney", "cartoon-pixar",
+                          "cartoon-dreamworks", "cartoon-illumination", "cartoon-nickelodeon"])
+        self.assertNotIn("cartoon-pixar", [f["id"] for f in feeds["feeds"]])
+
+    def test_studio_chips_list_the_studios_cartoons_from_tmdb(self):
+        pages = {("/discover/movie", "3", 1): [{"id": 862, "title": "Історія іграшок", "release_date": "1995-11-22",
+                                                "poster_path": "/t.jpg", "vote_average": 8, "popularity": 50},
+                                               {"id": 9, "title": "No poster", "poster_path": None, "popularity": 99}],
+                 ("/discover/movie", "3", 2): [{"id": 354912, "title": "Коко", "release_date": "2017-10-27",
+                                                "poster_path": "/c.jpg", "vote_average": 8.2, "popularity": 80}]}
+        calls = []
+
+        def tmdb_get(path, **params):
+            calls.append((path, params))
+            return {"results": pages.get((path, params.get("with_companies"), params["page"]), [])}
+        with patch.object(server, "TMDB_API_KEY", "k"), patch.object(server, "_tmdb_get", side_effect=tmdb_get), \
+                patch.object(server, "JACKETT_URL", "http://j"), patch.object(server, "JACKETT_API_KEY", "k"), \
+                patch.object(server, "indexer_sections", side_effect=AssertionError("no tracker query")):
+            rows = server.app.test_client().get("/api/discover?feed=cartoon-pixar").json["results"]
+        self.assertEqual([(r["clean_title"], r["year"], r["media_type"]) for r in rows],
+                         [("Коко", "2017", "movie"), ("Історія іграшок", "1995", "movie")])
+        self.assertNotIn("magnet", rows[0])
+        self.assertTrue(all(p["with_genres"] == 16 and p["with_runtime.gte"] == 40 for _, p in calls))
 
     def test_cartoon_genres_keep_animated_films_and_shows(self):
         rows = [{"title": "Shrek (2001)", "seeders": 4}, {"title": "Bluey S01", "seeders": 8},
@@ -58,18 +80,11 @@ class GenreFeedTests(unittest.TestCase):
             hints[title] = kind
             return metas.get(title)
         with patch.object(server, "TMDB_API_KEY", "k"), patch.object(server, "tmdb_lookup", side_effect=lookup):
-            comedy = server.films_of_genre(rows, {"movie": 35, "tv": 35}, "cartoon")
+            films = server.films_of_genre(rows, {"movie": None}, "cartoon")
             series = server.films_of_genre(rows, {"tv": None}, "cartoon")
-        self.assertEqual(sorted(r["clean_title"] for r in comedy), ["Блуї", "Шрек"])
+        self.assertEqual(sorted(r["clean_title"] for r in films), ["Тачки", "Шрек"])
         self.assertEqual([r["clean_title"] for r in series], ["Блуї"])  # 9-1-1 is not animation
         self.assertEqual(hints, {"Shrek": None, "Bluey": "tv", "9-1-1": "tv", "Cars": None})
-        studios = {("movie", 808): {"c:521"}, ("tv", 82728): {"n:2739"}, ("movie", 920): {"c:3", "c:2"}}
-        with patch.object(server, "TMDB_API_KEY", "k"), patch.object(server, "tmdb_lookup", side_effect=lookup), \
-                patch.object(server, "tmdb_studios", side_effect=lambda media, id_: studios.get((media, id_), set())):
-            disney = server.films_of_genre(rows, server.DISCOVER_FEEDS_BY_ID["cartoon-disney"]["genre"], "cartoon")
-            dreamworks = server.films_of_genre(rows, server.DISCOVER_FEEDS_BY_ID["cartoon-dreamworks"]["genre"], "cartoon")
-        self.assertEqual(sorted(r["clean_title"] for r in disney), ["Блуї", "Тачки"])
-        self.assertEqual([r["clean_title"] for r in dreamworks], ["Шрек"])
 
     def test_tv_genres_keep_only_shows(self):
         rows = [{"title": "Sherlock S01", "seeders": 3}, {"title": "Knives Out (2019)", "seeders": 9}]

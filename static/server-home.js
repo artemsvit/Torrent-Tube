@@ -43,11 +43,11 @@ const MOVIE_FILTERS = [['movies','All'],['action','Action'],['comedy','Comedy'],
 const TV_FILTERS = [['tv','All'],['tv-action','Action & Adventure'],['tv-comedy','Comedy'],['tv-drama','Drama'],
   ['tv-crime','Crime'],['tv-mystery','Mystery'],['tv-scifi','Sci-Fi & Fantasy'],['tv-family','Family'],
   ['tv-reality','Reality'],['tv-war','War & Politics']];
-// Cartoons' chips: films or series, studios, then genres.
+// Cartoons' chips: films, series or for kids, then studios (each studio's
+// whole list from TMDB; opening one searches for a release).
 const CARTOON_FILTERS = [['cartoons','All'],['cartoon-films','Animated films'],['cartoon-series','Animated series'],
-  ['cartoon-disney','Disney'],['cartoon-pixar','Pixar'],['cartoon-dreamworks','DreamWorks'],['cartoon-illumination','Illumination'],
-  ['cartoon-nickelodeon','Nickelodeon'],['cartoon-comedy','Comedy'],['cartoon-adventure','Adventure'],['cartoon-fantasy','Fantasy'],
-  ['cartoon-family','Family'],['cartoon-kids','Kids']];
+  ['cartoon-kids','Kids'],['cartoon-disney','Disney'],['cartoon-pixar','Pixar'],['cartoon-dreamworks','DreamWorks'],
+  ['cartoon-illumination','Illumination'],['cartoon-nickelodeon','Nickelodeon']];
 const catalogFilters = { movie: 'movies', tv: 'tv', cartoon: 'cartoons' };
 function catalogFeedForView(view) { return catalogFilters[view]; }
 
@@ -62,7 +62,9 @@ function catalogEntries(feed) {
     const known = groups.get(key);
     if (known) { known.releases.push(row); continue; }
     groups.set(key,{...row,id:row.download_link || row.magnet || row.details_link || row.title,
-      display_title:title,kind,media_type:kind === 'tv' || row.media_type === 'tv' ? 'tv' : 'movie',releases:[row]});
+      // A studio chip's titles have no torrent yet: the title page searches for one.
+      display_title:title,kind,media_type:kind === 'tv' || row.media_type === 'tv' ? 'tv' : 'movie',
+      releases:row.download_link || row.magnet ? [row] : []});
   }
   return [...groups.values()];
 }
@@ -212,7 +214,11 @@ function renderCatalogPage() {
   const grid = document.getElementById('catalogueGrid'); grid.replaceChildren();
   const visible = items.slice(catalogPage*size,(catalogPage+1)*size);
   visible.forEach(item=>grid.appendChild(buildCatalogCard(item)));
-  if (!visible.length) grid.innerHTML = `<div class="library-empty" role="status">${catalogErrors.get(feed) || catalogError || (catalogLoaded ? 'Nothing here right now.' : 'Loading…')}</div>`;
+  // A failed feed: a heading, the reason and Try again, centered like the empty state.
+  const failed = catalogErrors.get(feed) || catalogError;
+  if (!visible.length) grid.innerHTML = failed
+    ? `<div class="library-empty catalog-error" role="alert"><strong>Couldn’t load titles</strong><span>${escapeHtml(failed)}</span><button type="button" class="btn-secondary" data-catalog-retry>Try again</button></div>`
+    : `<div class="library-empty" role="status">${catalogLoaded ? 'Nothing here right now.' : 'Loading…'}</div>`;
   const pagination = document.getElementById('cataloguePagination');
   pagination.innerHTML = items.length > size ? `<button type="button" class="btn-secondary" data-catalog-page="-1"${catalogPage ? '' : ' disabled'}>Prev</button><span>Page ${catalogPage+1} of ${Math.ceil(items.length/size)}</span><button type="button" class="btn-secondary" data-catalog-page="1"${(catalogPage+1)*size >= items.length ? ' disabled' : ''}>Next</button>` : '';
   enrichCatalogItems(visible);
@@ -431,6 +437,14 @@ document.addEventListener('visibilitychange',()=>{ if (!document.hidden) loadSer
 document.getElementById('cataloguePagination').addEventListener('click',e=>{
   const button = e.target.closest('[data-catalog-page]');
   if (button) { catalogPage += Number(button.dataset.catalogPage); renderCatalogPage(); window.scrollTo({top:0}); }
+});
+
+document.getElementById('catalogueGrid').addEventListener('click', e => {
+  if (!e.target.closest('[data-catalog-retry]')) return;
+  const feed = catalogFeedForView(document.body.dataset.serverView);
+  catalogErrors.delete(feed);
+  if (catalogError) { loadServerCatalog(true); return; }
+  renderCatalogPage();
 });
 
 document.getElementById('catalogueFilters').addEventListener('click', e => {

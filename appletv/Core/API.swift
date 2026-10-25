@@ -361,6 +361,24 @@ struct APIError: LocalizedError {
     /// The server's HTTP status, when the server answered with an error.
     var status: Int? = nil
     var errorDescription: String? { message }
+    /// A server older than the app does not know a newer chip's feed.
+    static var serverTooOld: String { L("This category needs a newer server. Update Torrent Tube on your server.") }
+}
+
+/// What a page shows when its titles could not load: a heading and an icon
+/// above the reason, the same on every device.
+struct LoadFailure {
+    let title: String
+    let symbol: String
+    let message: String
+    init(_ message: String) {
+        self.message = message
+        if message == APIError.serverTooOld {
+            title = L("Update your server"); symbol = "arrow.down.circle"
+        } else {
+            title = L("Couldn’t load titles"); symbol = "exclamationmark.triangle"
+        }
+    }
 }
 
 struct TorrentTubeAPI: Sendable {
@@ -435,6 +453,7 @@ struct TorrentTubeAPI: Sendable {
         }
         guard (200..<300).contains(http.statusCode) else {
             let message = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
+            if http.statusCode == 400 && message == "Unknown feed" { throw APIError(message: APIError.serverTooOld, status: 400) }
             // Server messages are English; show the app's translation when there is one.
             throw APIError(message: message.map { L($0) } ?? L("Server request failed (HTTP %ld).", http.statusCode), status: http.statusCode)
         }

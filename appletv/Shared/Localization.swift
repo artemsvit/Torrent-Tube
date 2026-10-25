@@ -63,6 +63,13 @@ private let ukrainian: [String: String] = [
     "Library path must be text": "Сервер повернув недійсний шлях до файлу в медіатеці.",
     "That title is no longer on the server": "Цього фільму або серіалу вже немає на сервері.",
     "Playback session expired. Start playback again.": "Сеанс перегляду завершився. Почніть перегляд ще раз.",
+    "Search isn't configured on this server": "Пошук на сервері не налаштовано. Увімкніть його в налаштуваннях сервера.",
+    "Couldn't reach the search service": "Не вдалося з’єднатися зі службою пошуку на сервері. Спробуйте трохи пізніше.",
+    "Couldn't reach TMDB": "Не вдалося з’єднатися з TMDB. Спробуйте трохи пізніше.",
+    "Unknown feed": "Сервер не знає цієї категорії. Оновіть Torrent Tube на сервері.",
+    "This category needs a newer server. Update Torrent Tube on your server.": "Для цієї категорії потрібна новіша версія сервера. Оновіть Torrent Tube на сервері.",
+    "Update your server": "Оновіть сервер",
+    "Couldn’t load titles": "Не вдалося завантажити добірку",
     // Touch interface
     "About": "Про застосунок",
     "Appearance": "Вигляд",

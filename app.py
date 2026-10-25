@@ -1048,24 +1048,28 @@ TV_GENRE_FEEDS = [("tv-action", "Action & Adventure", 10759), ("tv-comedy", "Com
                   ("tv-family", "Family", 10751), ("tv-reality", "Reality", 10764), ("tv-war", "War & Politics", 10768)]
 DISCOVER_FEEDS += [{"id": id_, "label": label, "groups": ["movies"], "genre": genre, "kind": "movie"} for id_, label, genre in GENRE_FEEDS]
 # Cartoons are films and shows: each chip names a genre per type (TMDB's TV
-# genres differ), or None for every title of that type - or a studio: its
-# TMDB companies ("c:") and TV networks ("n:"). Only titles TMDB files as
-# animation are kept - the trackers' cartoon sections are not clean.
+# genres differ), or None for every title of that type. Only titles TMDB
+# files as animation are kept - the trackers' cartoon sections are not clean.
 CARTOON_GENRE_FEEDS = [("cartoon-films", "Animated films", {"movie": None}),
                        ("cartoon-series", "Animated series", {"tv": None}),
-                       ("cartoon-disney", "Disney", frozenset({"c:2", "c:6125", "c:3475", "n:54", "n:281", "n:44", "n:2739"})),
-                       ("cartoon-pixar", "Pixar", frozenset({"c:3"})),
-                       ("cartoon-dreamworks", "DreamWorks", frozenset({"c:521", "c:42141"})),
-                       ("cartoon-illumination", "Illumination", frozenset({"c:6704"})),
-                       ("cartoon-nickelodeon", "Nickelodeon", frozenset({"c:4859", "n:13"})),
-                       ("cartoon-comedy", "Comedy", {"movie": 35, "tv": 35}),
-                       ("cartoon-adventure", "Adventure", {"movie": 12, "tv": 10759}),
-                       ("cartoon-fantasy", "Fantasy", {"movie": 14, "tv": 10765}),
-                       ("cartoon-family", "Family", {"movie": 10751, "tv": 10751}),
                        ("cartoon-kids", "Kids", {"tv": 10762})]
+# A studio's cartoons come from TMDB, not from the latest uploads: all of
+# them, most popular first. Opening one searches the trackers for it, as for
+# a recommendation. Each is TMDB discover queries: films by company, shows by
+# company or by TV network.
+CARTOON_STUDIO_FEEDS = [
+    ("cartoon-disney", "Disney", [("movie", {"with_companies": "2|6125"}), ("tv", {"with_companies": "3475"}),
+                                  ("tv", {"with_networks": "54|281|44|2739"})]),
+    ("cartoon-pixar", "Pixar", [("movie", {"with_companies": "3"})]),
+    ("cartoon-dreamworks", "DreamWorks", [("movie", {"with_companies": "521"}), ("tv", {"with_companies": "521|42141"})]),
+    ("cartoon-illumination", "Illumination", [("movie", {"with_companies": "6704"})]),
+    ("cartoon-nickelodeon", "Nickelodeon", [("movie", {"with_companies": "4859|2348"}), ("tv", {"with_networks": "13"})]),
+]
 DISCOVER_FEEDS += [{"id": id_, "label": label, "groups": ["tv"], "genre": genre, "kind": "tv"} for id_, label, genre in TV_GENRE_FEEDS]
 DISCOVER_FEEDS += [{"id": id_, "label": label, "groups": ["cartoons"], "genre": genre, "kind": "cartoon"}
                    for id_, label, genre in CARTOON_GENRE_FEEDS]
+DISCOVER_FEEDS += [{"id": id_, "label": label, "groups": [], "studio": queries, "kind": "cartoon"}
+                   for id_, label, queries in CARTOON_STUDIO_FEEDS]
 DISCOVER_FEEDS_BY_ID = {f["id"]: f for f in DISCOVER_FEEDS}
 
 # Matched as lowercase substrings of a section name. Ukrainian/Russian/
@@ -1182,9 +1186,9 @@ def cached_section_query(indexer: str, cat: str):
 @app.route("/api/discover/feeds")
 def discover_feeds():
     enabled = bool(JACKETT_URL and JACKETT_API_KEY)
-    # Genre feeds are filters of Movies - shown as chips there, not as tabs.
+    # Genre and studio feeds are filters of a page - shown as chips there, not as tabs.
     return jsonify({"enabled": enabled, "feeds": [{"id": f["id"], "label": f["label"]} for f in DISCOVER_FEEDS
-                                                  if not f.get("genre")] if enabled else [],
+                                                  if not f.get("kind")] if enabled else [],
                     "movie_filters": [{"id": f["id"], "label": f["label"]} for f in DISCOVER_FEEDS if f.get("kind") == "movie"],
                     "tv_filters": [{"id": f["id"], "label": f["label"]} for f in DISCOVER_FEEDS if f.get("kind") == "tv"],
                     "cartoon_filters": [{"id": f["id"], "label": f["label"]} for f in DISCOVER_FEEDS if f.get("kind") == "cartoon"]})
@@ -1197,6 +1201,12 @@ def discover_torrents():
     feed = DISCOVER_FEEDS_BY_ID.get(request.args.get("feed", "new"))
     if not feed:
         return jsonify({"error": "Unknown feed"}), 400
+
+    if feed.get("studio"):
+        try:
+            return make_etag_response({"results": studio_titles(feed)}, max_age=180, stale_revalidate=900)
+        except Exception:
+            return jsonify({"error": "Couldn't reach TMDB"}), 502
 
     try:
         sections = indexer_sections()
@@ -1278,33 +1288,51 @@ def discover_torrents():
     return make_etag_response({"results": results}, max_age=180, stale_revalidate=900)
 
 
-def tmdb_studios(media_type: str, tmdb_id: int) -> set:
-    """A title's TMDB companies ("c:<id>") and, for a show, its networks
-    ("n:<id>") - cached like the lookups, as studios rarely change."""
-    cache_key = f"studios:{media_type}:{tmdb_id}"
+def studio_titles(feed: dict) -> list:
+    """A studio chip's cartoons from TMDB: its feature films and shows that
+    TMDB files as animation and are already out, most popular first. Rows
+    have no torrent: opening one searches for it. Cached for a day."""
+    if not TMDB_API_KEY:
+        return []
+    cache_key = f"studio:{feed['id']}:{TMDB_LANGUAGE}"
     hit, val = TMDB_CACHE.get(cache_key)
     if hit:
-        return set(val)
-    try:
-        d = _tmdb_get(f"/{media_type}/{tmdb_id}")
-    except Exception:
-        return set()
-    studios = [f"c:{c['id']}" for c in d.get("production_companies") or []] + \
-              [f"n:{n['id']}" for n in d.get("networks") or []]
-    TMDB_CACHE.set(cache_key, studios, ttl=TMDB_CACHE_TTL, is_hit=True)
-    return set(studios)
+        return val
+    today = time.strftime("%Y-%m-%d")
+
+    def discover(job):
+        (media, query), page = job
+        dated = {"primary_release_date.lte": today, "with_runtime.gte": 40} if media == "movie" else {"first_air_date.lte": today}
+        data = _tmdb_get(f"/discover/{media}", language=TMDB_LANGUAGE, with_genres=TMDB_ANIMATION_GENRE_ID,
+                         sort_by="popularity.desc", include_adult="false", page=page, **dated, **query)
+        return [(media, r) for r in data.get("results", [])]
+
+    found = {}
+    for batch in TMDB_EXECUTOR.map(discover, [(q, page) for q in feed["studio"] for page in (1, 2, 3)]):
+        for media, r in batch:
+            if r.get("poster_path") and (media, r["id"]) not in found:
+                found[(media, r["id"])] = r | {"media_type": media}
+    rows = []
+    for r in sorted(found.values(), key=lambda r: r.get("popularity") or 0, reverse=True):
+        title = r.get("title") or r.get("name") or ""
+        year = (r.get("release_date") or r.get("first_air_date") or "")[:4]
+        rows.append({"title": f"{title} ({year})" if year else title, "clean_title": title, "year": year,
+                     "poster": _tmdb_image(r["poster_path"], "w200"), "rating": r.get("vote_average"),
+                     "overview": r.get("overview") or "", "tmdb_id": r["id"], "media_type": r["media_type"],
+                     "suggested_category": "Cartoon"})
+    TMDB_CACHE.set(cache_key, rows, ttl=86400, is_hit=True)
+    return rows
 
 
 def films_of_genre(results: list, genre, kind: str = "movie") -> list:
     """The rows TMDB files as films (or shows: kind "tv") of `genre`, with
     their poster and rating filled in. Every row is looked up (cached for a
     month), so only the first opening of a genre waits on TMDB.
-    Kind "cartoon": `genre` maps "movie" / "tv" to a genre (None: any), or
-    is a set of studios; only animation is kept."""
+    Kind "cartoon": `genre` maps "movie" / "tv" to a genre (None: any), and
+    only animation is kept."""
     if not TMDB_API_KEY:
         return []
-    studios = genre if isinstance(genre, frozenset) else None
-    wanted = {"movie": None, "tv": None} if studios else genre if kind == "cartoon" else {kind: genre}
+    wanted = genre if kind == "cartoon" else {kind: genre}
 
     def lookup(r):
         title, base, year = extract_title_and_year(r["title"])
@@ -1315,8 +1343,6 @@ def films_of_genre(results: list, genre, kind: str = "movie") -> list:
         if media not in wanted or (wanted[media] is not None and wanted[media] not in genres):
             return r, None
         if kind == "cartoon" and TMDB_ANIMATION_GENRE_ID not in genres:
-            return r, None
-        if studios and not studios & tmdb_studios(media, meta["id"]):
             return r, None
         return r, meta
 
@@ -1341,8 +1367,7 @@ def genre_warmup_loop():
     while True:
         try:
             if JACKETT_URL and JACKETT_API_KEY and TMDB_API_KEY:
-                # A studio chip looks every cartoon and its studios up.
-                for feed in (GENRE_FEEDS[0][0], TV_GENRE_FEEDS[0][0], "cartoon-disney"):
+                for feed in (GENRE_FEEDS[0][0], TV_GENRE_FEEDS[0][0], CARTOON_GENRE_FEEDS[0][0]):
                     app.test_client().get(f"/api/discover?feed={feed}").close()
         except Exception:
             pass
