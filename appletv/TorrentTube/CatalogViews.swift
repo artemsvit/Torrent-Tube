@@ -159,7 +159,11 @@ struct MainView: View {
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity)
         .focusSection()
-        .defaultFocus($navigationFocus, tab)
+        // Up from the page lands on the open tab directly. The default
+        // priority applies only when the screen appears; Up from a page went
+        // to the nearest tab first, and the onChange below then moved it -
+        // a visible jump across the bar.
+        .defaultFocus($navigationFocus, tab, priority: .userInitiated)
         .background(HomeBannerSwipe(enabled: tab == .home && (paths[.home]?.isEmpty ?? true) && navigationFocus != nil && homePlayAvailable) {
             homePlayFocusRequest = UUID()
         })
@@ -168,8 +172,8 @@ struct MainView: View {
                 homePlayFocusRequest = UUID()
             }
         }
-        // Up from the page lands on the nearest item (often Home); coming
-        // into the bar should land on the open tab instead.
+        // Should the focus engine still pick another tab coming into the bar,
+        // the open tab takes it.
         .onChange(of: navigationFocus) { old, new in
             if old == nil, let new, new != tab { navigationFocus = tab }
         }
