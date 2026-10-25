@@ -85,9 +85,9 @@ struct MainView: View {
         Group {
             switch tab {
             case .home: stack(.home) { HomeView(api: api, config: config, playFocusRequest: homePlayFocusRequest) }
-            case .movies: stack(.movies) { CategoryView(feed: "movies", title: "Movies", api: api, config: config) }
-            case .tv: stack(.tv) { CategoryView(feed: "tv", title: "TV Shows", api: api, config: config) }
-            case .cartoons: stack(.cartoons) { CategoryView(feed: "cartoons", title: "Cartoons", api: api, config: config) }
+            case .movies: stack(.movies) { CategoryView(feed: "movies", api: api, config: config) }
+            case .tv: stack(.tv) { CategoryView(feed: "tv", api: api, config: config) }
+            case .cartoons: stack(.cartoons) { CategoryView(feed: "cartoons", api: api, config: config) }
             case .library: stack(.library) { LibraryView(api: api, config: config, section: $librarySection, chipFocus: $libraryChip, scrollRequest: libraryScrollRequest).id(libraryReturnID) }
             case .search: stack(.search) { SearchView(api: api, config: config) }
             case .settings: NavigationStack { SettingsView(store: store, api: api, config: config).padding(.top, 118) }.id(settingsReset)
@@ -946,7 +946,6 @@ struct FilmCard: View {
 
 struct CategoryView: View {
     let feed: String
-    let title: String
     let api: TorrentTubeAPI
     let config: ServerConfig
     @Environment(CatalogStore.self) private var catalog
@@ -955,16 +954,12 @@ struct CategoryView: View {
     private static let top = "category-top"
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Heading and chips stay put; only the posters below scroll, so a
-            // chip switch never pushes the page down.
-            VStack(alignment: .leading, spacing: 35) {
-                Text(L(MovieFilters.heading(activeFeed) ?? (activeFeed == "cartoons" ? "Cartoons" : title))).font(.system(size: 50, weight: .bold))
-                // Movies has sub-categories; the catalog refreshes itself when the app opens.
-                if feed == "movies" || feed == "tv" {
-                    ChipRow(options: feed == "tv" ? TVFilters.options : MovieFilters.options, selected: activeFeed) { selected = $0 }
-                }
-            }
-            .padding(.horizontal, TVLayout.edge).padding(.top, 158 + ScreenLayout.top).padding(.bottom, 14)
+            // No heading: the tab bar names the page. The chips stay put; only
+            // the posters below scroll, so a chip switch never pushes the page down.
+            // Each page has sub-categories; the catalog refreshes itself when the app opens.
+            ChipRow(options: feed == "tv" ? TVFilters.options : feed == "cartoons" ? CartoonFilters.options : MovieFilters.options,
+                    selected: activeFeed) { selected = $0 }
+            .padding(.horizontal, TVLayout.edge).padding(.top, ScreenLayout.chips).padding(.bottom, 14)
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 35) {
@@ -995,6 +990,8 @@ struct CategoryView: View {
 /// Space between the tab bar and a screen's title - half of what it was.
 enum ScreenLayout {
     static let top: CGFloat = 0
+    /// Where a page's chips start, just under the tab bar.
+    static let chips: CGFloat = 116
 }
 
 /// Tabs inside a screen (Movies, Favorites): one chip each, the current one filled.

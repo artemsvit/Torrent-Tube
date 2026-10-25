@@ -45,15 +45,13 @@ struct LibraryView: View {
     var body: some View {
         let active = section.isEmpty ? LibrarySections.defaultSection(catalog.library) : section
         VStack(alignment: .leading, spacing: 0) {
-            // Heading and chips stay put; only the posters below scroll. In one
-            // scroll view with the posters, a chip switch could push the page down.
-            VStack(alignment: .leading, spacing: 35) {
-                Text(L("Library")).font(.system(size: 50, weight: .bold)).accessibilityIdentifier("library-heading")
-                // The Library syncs itself (new titles only); Settings has "Sync now".
-                ChipRow(options: LibrarySections.chips(catalog.library, favorites: favorites.entries(server: api.baseURL).count),
-                        selected: active, select: { section = $0 }, externalFocus: chipFocus)
-            }
-            .padding(.horizontal, TVLayout.edge).padding(.top, 158 + ScreenLayout.top).padding(.bottom, 14)
+            // No heading: the tab bar names the page. The chips stay put; only the
+            // posters below scroll. In one scroll view with the posters, a chip
+            // switch could push the page down.
+            // The Library syncs itself (new titles only); Settings has "Sync now".
+            ChipRow(options: LibrarySections.chips(catalog.library, favorites: favorites.entries(server: api.baseURL).count),
+                    selected: active, select: { section = $0 }, externalFocus: chipFocus)
+                .padding(.horizontal, TVLayout.edge).padding(.top, ScreenLayout.chips).padding(.bottom, 14)
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {

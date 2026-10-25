@@ -54,7 +54,7 @@ const UI_UK = {
   'The audio track players start with, on every device. If a file does not have it, English is used. New episodes are downloaded in this language too':'Доріжка, з якої плеєри починають на всіх пристроях. Якщо у файлі її немає, вмикається англійська. Нові серії теж завантажуються цією мовою',
   'Collections':'Колекції',
   'Action':'Бойовики', 'Comedy':'Комедії', 'Thriller':'Трилери', 'Drama':'Драми', 'Horror':'Жахи', 'Sci-Fi':'Фантастика',
-  'Adventure':'Пригоди', 'Crime':'Кримінал', 'Fantasy':'Фентезі', 'Family':'Сімейні', 'Romance':'Мелодрами', 'Genres':'Жанри', 'Action & Adventure':'Бойовики та пригоди', 'Mystery':'Детективи', 'Sci-Fi & Fantasy':'Фантастика та фентезі',
+  'Adventure':'Пригоди', 'Crime':'Кримінал', 'Fantasy':'Фентезі', 'Family':'Сімейні', 'Romance':'Мелодрами', 'Genres':'Жанри', 'Action & Adventure':'Бойовики та пригоди', 'Mystery':'Детективи', 'Animated films':'Мультфільми', 'Animated series':'Мультсеріали', 'Kids':'Для малят', 'Sci-Fi & Fantasy':'Фантастика та фентезі',
   'Reality':'Реаліті', 'War & Politics':'Війна та політика',
   'Fix match':'Виправити дані', 'Files':'Файли', 'Now:':'Зараз:', 'Now':'Зараз', 'Title':'Назва', 'Year':'Рік',
   'Metadata language':'Мова даних', 'Use this match':'Використати ці дані',

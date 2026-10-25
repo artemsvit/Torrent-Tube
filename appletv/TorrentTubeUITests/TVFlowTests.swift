@@ -319,8 +319,8 @@ final class TVFlowTests: XCTestCase {
         let chips = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "library-chip-"))
         let categoryFocused = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in chips.allElementsBoundByIndex.contains { $0.hasFocus } }, object: app)
         XCTAssertEqual(XCTWaiter.wait(for: [categoryFocused], timeout: 5), .completed)
-        let heading = app.staticTexts["library-heading"]
-        expectation(for: NSPredicate { _, _ in heading.frame.minY > 100 && heading.frame.minY < 300 }, evaluatedWith: app)
+        let firstChip = chips.firstMatch
+        expectation(for: NSPredicate { _, _ in firstChip.frame.minY > 50 && firstChip.frame.minY < 300 }, evaluatedWith: app)
         waitForExpectations(timeout: 5)
         add(keep(app, "Back returns Library to top"))
         XCUIRemote.shared.press(.menu)
@@ -1127,9 +1127,9 @@ final class TVFlowTests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["hero-play"].waitForExistence(timeout: 30))
         openTab(app, "Library")
-        let heading = app.staticTexts["library-heading"]
-        XCTAssertTrue(heading.waitForExistence(timeout: 15))
-        let top = heading.frame.minY
+        let firstChip = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "library-chip-")).firstMatch
+        XCTAssertTrue(firstChip.waitForExistence(timeout: 15))
+        let top = firstChip.frame.minY
         let chips = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", " · "))
         for _ in 0..<4 { XCUIRemote.shared.press(.down); usleep(500_000) }
         for _ in 0..<8 where !chips.allElementsBoundByIndex.contains(where: { $0.hasFocus }) { XCUIRemote.shared.press(.up); usleep(500_000) }
@@ -1138,12 +1138,12 @@ final class TVFlowTests: XCTestCase {
             // Over to Favorites and pick it, then back to the first chip and pick it.
             for _ in 0..<5 where !favorites.hasFocus { XCUIRemote.shared.press(.right); usleep(350_000) }
             XCUIRemote.shared.press(.select); usleep(900_000)
-            print("PROBE round \(round) favorites heading=\(heading.frame.minY) top=\(top)")
-            XCTAssertLessThan(abs(heading.frame.minY - top), 80, "Favorites moved the page")
+            print("PROBE round \(round) favorites chip=\(firstChip.frame.minY) top=\(top)")
+            XCTAssertLessThan(abs(firstChip.frame.minY - top), 80, "Favorites moved the page")
             for _ in 0..<5 { XCUIRemote.shared.press(.left); usleep(350_000) }
             XCUIRemote.shared.press(.select); usleep(900_000)
-            print("PROBE round \(round) movies heading=\(heading.frame.minY)")
-            XCTAssertLessThan(abs(heading.frame.minY - top), 80, "Movies moved the page")
+            print("PROBE round \(round) movies chip=\(firstChip.frame.minY)")
+            XCTAssertLessThan(abs(firstChip.frame.minY - top), 80, "Movies moved the page")
         }
         add(keep(app, "Library after chip switches"))
     }

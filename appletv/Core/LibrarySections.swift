@@ -28,10 +28,6 @@ enum MovieFilters {
         ("horror", "Horror"), ("scifi", "Sci-Fi"), ("adventure", "Adventure"), ("crime", "Crime"), ("fantasy", "Fantasy"),
         ("family", "Family"), ("romance", "Romance"), ("docs", "Documentaries"), ("ukrainian", "Ukrainian"),
     ]
-    /// The page heading for a chip: "Thriller" for thrillers, "Movies" for all.
-    static func heading(_ feed: String) -> String? {
-        feed == "movies" || feed == "tv" ? nil : (options + TVFilters.options).first { $0.0 == feed }?.1
-    }
 }
 
 /// The TV Shows page's chips: all shows, then TMDB's TV genres (they differ
@@ -41,6 +37,16 @@ enum TVFilters {
         ("tv", "All"), ("tv-action", "Action & Adventure"), ("tv-comedy", "Comedy"), ("tv-drama", "Drama"),
         ("tv-crime", "Crime"), ("tv-mystery", "Mystery"), ("tv-scifi", "Sci-Fi & Fantasy"), ("tv-family", "Family"),
         ("tv-reality", "Reality"), ("tv-war", "War & Politics"),
+    ]
+}
+
+/// The Cartoons page's chips: all cartoons, films or series, studios, then genres.
+enum CartoonFilters {
+    static let options: [(String, String)] = [
+        ("cartoons", "All"), ("cartoon-films", "Animated films"), ("cartoon-series", "Animated series"),
+        ("cartoon-disney", "Disney"), ("cartoon-pixar", "Pixar"), ("cartoon-dreamworks", "DreamWorks"),
+        ("cartoon-illumination", "Illumination"), ("cartoon-nickelodeon", "Nickelodeon"), ("cartoon-comedy", "Comedy"),
+        ("cartoon-adventure", "Adventure"), ("cartoon-fantasy", "Fantasy"), ("cartoon-family", "Family"), ("cartoon-kids", "Kids"),
     ]
 }
 

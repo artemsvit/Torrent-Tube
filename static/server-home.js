@@ -43,13 +43,18 @@ const MOVIE_FILTERS = [['movies','All'],['action','Action'],['comedy','Comedy'],
 const TV_FILTERS = [['tv','All'],['tv-action','Action & Adventure'],['tv-comedy','Comedy'],['tv-drama','Drama'],
   ['tv-crime','Crime'],['tv-mystery','Mystery'],['tv-scifi','Sci-Fi & Fantasy'],['tv-family','Family'],
   ['tv-reality','Reality'],['tv-war','War & Politics']];
-const catalogFilters = { movie: 'movies', tv: 'tv' };
-function catalogFeedForView(view) { return view in catalogFilters ? catalogFilters[view] : {cartoon:'cartoons'}[view]; }
+// Cartoons' chips: films or series, studios, then genres.
+const CARTOON_FILTERS = [['cartoons','All'],['cartoon-films','Animated films'],['cartoon-series','Animated series'],
+  ['cartoon-disney','Disney'],['cartoon-pixar','Pixar'],['cartoon-dreamworks','DreamWorks'],['cartoon-illumination','Illumination'],
+  ['cartoon-nickelodeon','Nickelodeon'],['cartoon-comedy','Comedy'],['cartoon-adventure','Adventure'],['cartoon-fantasy','Fantasy'],
+  ['cartoon-family','Family'],['cartoon-kids','Kids']];
+const catalogFilters = { movie: 'movies', tv: 'tv', cartoon: 'cartoons' };
+function catalogFeedForView(view) { return catalogFilters[view]; }
 
 function catalogEntries(feed) {
   const groups = new Map();
   for (const row of catalogFeeds.get(feed) || []) {
-    const kind = feed === 'tv' || feed.startsWith('tv-') ? 'tv' : feed === 'cartoons' ? 'cartoon'
+    const kind = feed === 'tv' || feed.startsWith('tv-') ? 'tv' : feed === 'cartoons' || feed.startsWith('cartoon-') ? 'cartoon'
       : /cartoon|animation|мульт/i.test(row.suggested_category || '') ? 'cartoon'
       : /\bS\d+E?\d*|season|сезон/i.test(row.title || '') || /tv|series|серіал/i.test(row.suggested_category || '') ? 'tv' : 'movie';
     const title = row.clean_title || roughTitle(row.title);
@@ -57,7 +62,7 @@ function catalogEntries(feed) {
     const known = groups.get(key);
     if (known) { known.releases.push(row); continue; }
     groups.set(key,{...row,id:row.download_link || row.magnet || row.details_link || row.title,
-      display_title:title,kind,media_type:kind === 'tv' ? 'tv' : 'movie',releases:[row]});
+      display_title:title,kind,media_type:kind === 'tv' || row.media_type === 'tv' ? 'tv' : 'movie',releases:[row]});
   }
   return [...groups.values()];
 }
@@ -195,7 +200,7 @@ function renderCatalogPage() {
   const items = catalogEntries(feed), size = 36;
   catalogPage = Math.min(catalogPage,Math.max(0,Math.ceil(items.length/size)-1));
   const view = document.body.dataset.serverView;
-  const options = view === 'tv' ? TV_FILTERS : view === 'movie' ? MOVIE_FILTERS : null;
+  const options = {tv: TV_FILTERS, movie: MOVIE_FILTERS, cartoon: CARTOON_FILTERS}[view] || null;
   const filter = options && options.find(([id])=>id === feed && id !== options[0][0]);
   document.getElementById('catalogueTitle').textContent = filter ? filter[1] : (CATALOG_SECTIONS.find(([id])=>id === feed) || [feed,'Movies'])[1];
   const filters = document.getElementById('catalogueFilters');

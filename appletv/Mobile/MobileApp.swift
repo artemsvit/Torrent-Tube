@@ -400,7 +400,7 @@ struct MobileRoot: View {
                 MobileCategory(options: MovieFilters.options, api: api, config: config)
             }
         case "tv": destination("tv", title: "TV Shows") { MobileCategory(options: TVFilters.options, api: api, config: config) }
-        case "cartoons": destination("cartoons", title: "Cartoons") { MobileCategory(options: [("cartoons", "Cartoons")], api: api, config: config) }
+        case "cartoons": destination("cartoons", title: "Cartoons") { MobileCategory(options: CartoonFilters.options, api: api, config: config) }
         case "library": destination("library", title: "Library") { MobileLibrary(api: api) }
         default: destination("home", title: nil) { MobileHome(api: api, config: config).sidesUnderInsets() }
         }
@@ -438,7 +438,7 @@ struct MobileRoot: View {
                 MobileCategory(options: MovieFilters.options, api: api, config: config)
             }
         case "tv": destination("tv", title: "TV Shows") { MobileCategory(options: TVFilters.options, api: api, config: config) }
-        case "cartoons": destination("cartoons", title: "Cartoons") { MobileCategory(options: [("cartoons", "Cartoons")], api: api, config: config) }
+        case "cartoons": destination("cartoons", title: "Cartoons") { MobileCategory(options: CartoonFilters.options, api: api, config: config) }
         case "library": destination("library", title: "Library") { MobileLibrary(api: api) }
         default: destination("home", title: nil) { MobileHome(api: api, config: config).sidesUnderInsets() }
         }
@@ -460,7 +460,7 @@ struct MobileRoot: View {
                     destination("tv", title: "TV Shows") { MobileCategory(options: TVFilters.options, api: api, config: config) }
                 } label: { TabIcon(title: "TV Shows", symbol: "tv") }
                 Tab(value: "cartoons") {
-                    destination("cartoons", title: "Cartoons") { MobileCategory(options: [("cartoons", "Cartoons")], api: api, config: config) }
+                    destination("cartoons", title: "Cartoons") { MobileCategory(options: CartoonFilters.options, api: api, config: config) }
                 } label: { TabIcon(title: "Cartoons", symbol: "face.smiling.fill") }  // in current SF Symbols the ".fill" face is the outlined one
             }
             Tab(value: "library") {
