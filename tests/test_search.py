@@ -29,6 +29,25 @@ class SearchTests(unittest.TestCase):
         self.assertEqual(results[0]["magnet"], "magnet:?xt=urn:btih:abc")
 
 
+class SectionCacheTests(unittest.TestCase):
+    def test_a_section_that_is_down_is_skipped_for_a_while_with_its_last_rows(self):
+        calls = []
+
+        def query(cat=None, indexer=None, timeout=None):
+            calls.append(timeout)
+            if len(calls) > 1:
+                raise TimeoutError("tracker down")
+            return [{"title": "Bluey S01"}]
+        server.DISCOVER_QUERY_CACHE.clear()
+        with patch.object(server, "jackett_query", side_effect=query), patch.object(server.time, "time", return_value=1000.0):
+            self.assertEqual(server.cached_section_query("toloka", "139"), [{"title": "Bluey S01"}])
+        with patch.object(server, "jackett_query", side_effect=query), patch.object(server.time, "time", return_value=1400.0):
+            self.assertEqual(server.cached_section_query("toloka", "139"), [{"title": "Bluey S01"}])  # failed: last rows
+            self.assertEqual(server.cached_section_query("toloka", "139"), [{"title": "Bluey S01"}])  # not asked again
+        self.assertEqual(calls, [server.DISCOVER_SECTION_TIMEOUT] * 2)
+        server.DISCOVER_QUERY_CACHE.clear()
+
+
 class GenreFeedTests(unittest.TestCase):
     def test_genre_feeds_are_movie_filters_not_tabs(self):
         with patch.object(server, "JACKETT_URL", "http://j"), patch.object(server, "JACKETT_API_KEY", "k"):

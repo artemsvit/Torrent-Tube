@@ -899,7 +899,7 @@ def format_size(num_bytes: int) -> str:
     return f"{size:.1f} TB"
 
 
-def jackett_query(q: str = None, cat: str = None, indexer: str = None):
+def jackett_query(q: str = None, cat: str = None, indexer: str = None, timeout: float = 25):
     """Hits Jackett's Torznab proxy for the configured indexer (or the one
     given) and returns parsed (but not yet TMDB-enriched) result dicts. A
     blank `q` isn't a no-op search - most trackers treat it as "give me the
@@ -911,7 +911,7 @@ def jackett_query(q: str = None, cat: str = None, indexer: str = None):
         params["cat"] = cat
     url = f"{JACKETT_URL}/api/v2.0/indexers/{indexer or JACKETT_INDEXER}/results/torznab/api?{urllib.parse.urlencode(params)}"
     req = urllib.request.Request(url, headers={"User-Agent": "TorrentTube"})
-    with urllib.request.urlopen(req, timeout=25) as resp:
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
         data = resp.read()
     root = ET.fromstring(data)
 
@@ -1171,15 +1171,26 @@ def indexer_sections():
 # minutes - so a section's rows are reused for 5 min instead of re-scraped.
 DISCOVER_QUERY_CACHE = {}
 DISCOVER_QUERY_TTL = 300
+# A section that is down (Jackett answers a dead tracker page only after its
+# own ~25 s timeout) would hold up every feed that includes it, on every
+# open. So a feed waits at most 10 s for one section, and a failed section is
+# not asked again for 15 min; its last rows, if any, are shown meanwhile.
+DISCOVER_SECTION_TIMEOUT = 10
+DISCOVER_FAILED_TTL = 900
 
 
 def cached_section_query(indexer: str, cat: str):
     key = (JACKETT_URL, indexer, cat)
     hit = DISCOVER_QUERY_CACHE.get(key)
-    if hit and time.time() - hit[0] < DISCOVER_QUERY_TTL:
+    if hit and time.time() - hit[0] < (DISCOVER_QUERY_TTL if hit[2] else DISCOVER_FAILED_TTL):
         return [dict(r) for r in hit[1]]
-    rows = jackett_query(cat=cat, indexer=indexer)
-    DISCOVER_QUERY_CACHE[key] = (time.time(), rows)
+    try:
+        rows = jackett_query(cat=cat, indexer=indexer, timeout=DISCOVER_SECTION_TIMEOUT)
+    except Exception:
+        rows = hit[1] if hit else []
+        DISCOVER_QUERY_CACHE[key] = (time.time(), rows, False)
+        return [dict(r) for r in rows]
+    DISCOVER_QUERY_CACHE[key] = (time.time(), rows, True)
     return [dict(r) for r in rows]
 
 
