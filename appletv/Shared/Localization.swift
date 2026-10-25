@@ -359,6 +359,8 @@ private let ukrainian: [String: String] = [
     "Match all titles again on the server and update details.": "Перевірити всі фільми на сервері та оновити дані.",
     "Skip": "Перемотування",
     "Skip Intro": "Пропустити заставку",
+    "Skip intros automatically": "Пропускати заставки автоматично",
+    "Jump past an episode’s intro when the server has found it.": "Плеєр сам перемотує заставку серії, якщо сервер її знайшов.",
     "Full Screen": "На весь екран",
     "The tracker didn't hand over this release: it was probably removed or replaced. Choose another version. If no release opens at all, log this tracker in again in Jackett (port 9117).": "Трекер не віддав цей реліз: імовірно, його видалили або замінили. Виберіть іншу версію. Якщо не відкривається жоден реліз, увійдіть у цей трекер у Jackett ще раз (порт 9117).",
     "Connecting to %@…": "Підключення до %@…",

@@ -189,13 +189,27 @@ struct CollectionView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, TVLayout.edge).padding(.top, 158).padding(.bottom, 14)
             ScrollView {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 36, alignment: .top), count: Self.columns),
-                          alignment: .leading, spacing: 44) {
-                    ForEach(collection.titles) { CollectionFilmCard(title: $0) }
+                // Each row is its own full-width section: Down from a film with
+                // nothing right below it (a shorter last row) still goes to the
+                // nearest film of the next row.
+                let titles = collection.titles
+                VStack(alignment: .leading, spacing: 44) {
+                    ForEach(Array(stride(from: 0, to: titles.count, by: Self.columns)), id: \.self) { start in
+                        HStack(alignment: .top, spacing: 36) {
+                            ForEach(titles[start..<min(start + Self.columns, titles.count)]) {
+                                CollectionFilmCard(title: $0).frame(maxWidth: .infinity)
+                            }
+                            // Empty columns keep a short row's posters the size of the others.
+                            ForEach(titles.count..<max(titles.count, start + Self.columns), id: \.self) { _ in
+                                Color.clear.frame(maxWidth: .infinity, maxHeight: 0)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .focusSection()
+                    }
                 }
                 // Room above the first row for a focused poster to grow.
                 .padding(.horizontal, TVLayout.edge).padding(.top, 26).padding(.bottom, 70)
-                .focusSection()
             }
             .tvScrollEdge(40)
         }

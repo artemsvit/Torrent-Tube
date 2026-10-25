@@ -133,6 +133,11 @@ struct TitleView: View {
                                                     }
                                                 }
                                                 .clipShape(RoundedRectangle(cornerRadius: 12))
+                                                // The white frame of a focused poster, so the focused episode is as clear.
+                                                .overlay {
+                                                    let focused = focusedEpisode == episode.number
+                                                    RoundedRectangle(cornerRadius: 12).strokeBorder(.white.opacity(focused ? 0.9 : 0.08), lineWidth: focused ? 3 : 1)
+                                                }
                                             Text("\(episode.number). \(episode.name)").font(.system(size: 25, weight: .semibold))
                                                 .fixedSize(horizontal: false, vertical: true)  // the whole name, on as many lines as it needs
                                         }.frame(width: 380, alignment: .topLeading)

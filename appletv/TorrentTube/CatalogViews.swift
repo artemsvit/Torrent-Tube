@@ -337,6 +337,7 @@ struct HomeView: View {
     @Environment(\.scenePhase) private var scenePhase
     private enum HeroAction: Hashable { case play, details, trailer, mute, pages }
     @FocusState private var heroAction: HeroAction?
+    @FocusState private var focusedResume: String?
     @State private var featuredIndex = 0
     @State private var heroVisible = true
     @State private var preview = HomeTrailerPreview()
@@ -358,7 +359,7 @@ struct HomeView: View {
             } catch { trailerError = error.localizedDescription }
         }
     }
-    private let shelves = [("new", "New to Explore"), ("popular", "Popular Now"), ("movies", "Movies"), ("tv", "TV Shows"), ("cartoons", "Cartoons"), ("ukrainian", "Ukrainian")]
+    private let shelves = [("new", "New to Explore"), ("popular", "Popular Now"), ("movies", "Movies"), ("tv", "TV Shows"), ("cartoons", "Cartoons")]
     private var recent: [ResumeEntry] { history.entries.filter { $0.server == api.baseURL.absoluteString } }
     private var featured: [MediaItem] {
         let selected = catalog.homeFeatured
@@ -443,6 +444,12 @@ struct HomeView: View {
                                                         .padding(.horizontal, 18).padding(.bottom, 16)
                                                 }
                                                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                                // The white frame of a focused poster.
+                                                .overlay {
+                                                    let focused = focusedResume == entry.id
+                                                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                                        .strokeBorder(.white.opacity(focused ? 0.9 : 0.08), lineWidth: focused ? 3 : 1)
+                                                }
                                                 .overlay(alignment: .topTrailing) {
                                                     FavoritePosterBadge(item: catalog.resolved(resumeItem), server: api.baseURL)
                                                 }
@@ -452,6 +459,7 @@ struct HomeView: View {
                                             }.padding(.horizontal, 4)
                                         }.frame(width: 400)
                                     }.buttonStyle(CinemaCardStyle())
+                                        .focused($focusedResume, equals: entry.id)
                                 }
                             }.padding(.horizontal, TVLayout.edge).padding(.vertical, 18)
                         }.scrollIndicators(.hidden).focusSection()
@@ -471,6 +479,18 @@ struct HomeView: View {
                 }
                 if !catalog.library.isEmpty {
                     MediaShelf(title: L("New on your server"), items: catalog.library.prefix(24).map(libraryItem), api: api, config: config) { if previewFocusedTitle { highlighted = $0 } }
+                }
+                // The Library's collections (Harry Potter, Shrek...), last on Home.
+                let collections = LibrarySections.collections(catalog.library)
+                if !collections.isEmpty {
+                    VStack(alignment: .leading, spacing: 16) {
+                        ShelfHeader(text: L("Collections"))
+                        ScrollView(.horizontal) {
+                            LazyHStack(alignment: .top, spacing: 36) {
+                                ForEach(collections) { CollectionCard(collection: $0).frame(width: 236) }
+                            }.padding(.horizontal, TVLayout.edge).padding(.vertical, 24)
+                        }.scrollIndicators(.hidden).scrollClipDisabled().focusSection()
+                    }
                 }
                 if !config.searchEnabled && catalog.library.isEmpty && recent.isEmpty {
                     if let error = catalog.libraryError {

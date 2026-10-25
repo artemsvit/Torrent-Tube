@@ -269,7 +269,12 @@ private struct CountdownRing: View {
 }
 
 struct PlayerView: View {
+    /// Settings: jump past an intro the server found, instead of offering Skip Intro. Off by default.
+    static let autoSkipIntroKey = "skipIntroAutomatically"
     @AppStorage("seekInterval") private var seekInterval = 10
+    @AppStorage(Self.autoSkipIntroKey) private var autoSkipIntro = false
+    /// Each intro is skipped once: going back into it leaves it playing, with Skip Intro.
+    @State private var introSkipped = false
     let controller: EmbeddedPlayer
     let title: String
     let streamStatus: StreamStatus?
@@ -393,7 +398,14 @@ struct PlayerView: View {
             }
         }
         .animation(.easeOut(duration: 0.25), value: inIntro)
+        .onChange(of: intro) { _, _ in introSkipped = false }
         .onChange(of: inIntro) { _, now in
+            if now && autoSkipIntro && !introSkipped, let intro {
+                introSkipped = true
+                pausedSeekPosition = nil; scrubTarget = nil
+                controller.seek(to: intro.upperBound)
+                return
+            }
             if now && !showControls { focusedControl = .skipIntro }
             else if !now && focusedControl == .skipIntro { focusedControl = showControls ? .play : .surface }
         }

@@ -11,6 +11,7 @@ struct SettingsView: View {
     @AppStorage("showContinueWatching") private var showContinue = true
     @AppStorage("previewFocusedTitle") private var previewTitle = true
     @AppStorage("seekInterval") private var seekInterval = 10
+    @AppStorage(PlayerView.autoSkipIntroKey) private var autoSkipIntro = false
     @AppStorage(SubtitleSettings.filmsKey) private var subtitlesInFilms = true
     @AppStorage(SubtitleSettings.trailersKey) private var subtitlesInTrailers = false
     @AppStorage(SubtitleSettings.sizeKey) private var subtitleSize = SubtitleSize.medium.rawValue
@@ -86,6 +87,8 @@ struct SettingsView: View {
                             let intervals = [10, 15, 30]
                             seekInterval = intervals[((intervals.firstIndex(of: seekInterval) ?? 0) + 1) % intervals.count]
                         }
+                        setting("Skip intros automatically", value: autoSkipIntro ? L("On") : L("Off"),
+                                subtitle: "Jump past an episode’s intro when the server has found it.") { autoSkipIntro.toggle() }
                         setting("Subtitles in films and shows", value: subtitlesInFilms ? L("On") : L("Off"), subtitle: "Show subtitles when a film or episode starts.") { subtitlesInFilms.toggle() }
                         setting("Subtitles in trailers", value: subtitlesInTrailers ? L("On") : L("Off"), subtitle: "Show subtitles when a trailer starts.") { subtitlesInTrailers.toggle() }
                         setting("Subtitle size", value: (SubtitleSize(rawValue: subtitleSize) ?? .medium).name, subtitle: "Make subtitles smaller or larger.") {
