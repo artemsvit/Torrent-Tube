@@ -468,7 +468,16 @@
   /* The collection's artwork fills the whole panel, behind the chips too;
      shades on the left and bottom keep the text and posters readable.
      overflow: clip (not hidden) keeps the sticky chips row working. */
-  .library-panel.has-collection-backdrop { position: relative; overflow: clip; isolation: isolate; min-height: calc(100dvh - var(--topbar-h, 60px) - 40px); background: #0c0d10; color: #fff; }
+  /* One screen, no vertical scroll: the panel is the window's height, the
+     films row keeps its size at the bottom, and the artwork area above it
+     takes what is left. Posters follow the window's height too. */
+  /* #libraryPanel: server-home.css sets its position and height by id. */
+  body #libraryPanel.has-collection-backdrop { position: relative; overflow: clip; isolation: isolate; background: #0c0d10; color: #fff;
+    display: flex; flex-direction: column; height: calc(100dvh - var(--topbar-h, 60px) - 32px); min-height: 380px; }
+  @media (min-width: 641px) {
+    body #libraryPanel.has-collection-backdrop { height: calc(100dvh / var(--ui-zoom) - var(--topbar-h, 60px) - 44px); }
+  }
+  .library-panel.has-collection-backdrop .library-grid.is-collection { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
   .library-panel.has-collection-backdrop > .library-note, .library-panel.has-collection-backdrop > .library-grid { position: relative; z-index: 1; }
   .collection-stage { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
   .collection-backdrop { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 25%; }
@@ -482,7 +491,10 @@
   .library-panel.has-collection-backdrop .lib-sub { color: rgba(255,255,255,.7); }
 
   .library-grid.is-collection { display: block; }
+  @media (max-height: 760px) { .collection-overview { -webkit-line-clamp: 2; } }
   .collection-head { position: relative; min-height: clamp(320px, 44vh, 480px); display: flex; align-items: flex-end; padding: 56px 8px 28px; }
+  .is-collection > .collection-head { flex: 1 1 auto; min-height: 0; overflow: hidden; padding-bottom: clamp(12px, 3vh, 28px); }
+  .is-collection > .collection-track { flex: none; }
   .collection-head-body { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; max-width: 720px; }
   .collection-back { position: absolute; top: 6px; left: 8px; display: inline-flex; align-items: center; gap: 4px; padding: 6px 14px 6px 10px; font-size: 13px; line-height: 1; }
   .collection-back svg { flex: none; display: block; }
@@ -491,11 +503,11 @@
   .collection-count { font-size: 14px; font-weight: 600; opacity: .85; }
   .collection-overview { margin: 4px 0 0; font-size: 14.5px; line-height: 1.5; opacity: .92; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
   .collection-track { padding: 6px 8px 18px; margin: 0; }
-  .collection-track > .lib-card { flex: 0 0 clamp(140px, 13vw, 190px); }
+  .collection-track > .lib-card { flex: 0 0 clamp(108px, min(13vw, 21vh), 190px); }
   @media (max-width: 640px) {
-    .collection-head { min-height: 260px; padding: 8px 4px 20px; }
+    .collection-head { min-height: 260px; padding: 52px 4px 20px; }
     .collection-track { padding: 6px 4px 14px; }
-    .collection-track > .lib-card { flex-basis: 128px; }
+    .collection-track > .lib-card { flex-basis: clamp(100px, min(34vw, 20vh), 140px); }
   }
   .search-section-head { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-secondary); padding: 12px 16px 4px; }
   .dt-files { display: flex; flex-direction: column; gap: 6px; }

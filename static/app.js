@@ -3208,8 +3208,15 @@ function buildCollectionCard(c) {
       ? `<img src="${escapeHtml(cover(poster.replace("/w500/", "/w342/").replace("/w200/", "/w342/")))}" alt="" loading="lazy">`
       : brandArt(c.name)}<span class="lib-badge">${c.items.length}</span></div>
     <div class="lib-title">${escapeHtml(c.name)}</div><div class="lib-sub">${collectionCount(c)}</div>`;
-  card.addEventListener("click", () => { openCollectionId = c.id; renderLibrary(); libraryGrid.scrollTop = 0; });
+  card.addEventListener("click", () => { openCollectionId = c.id; renderLibrary(); showCollectionTop(); });
   return card;
+}
+
+// Opening or leaving a collection starts at the top: the page kept the
+// scroll of the long list, which left a collection's page out of view.
+function showCollectionTop() {
+  libraryGrid.scrollTop = 0;
+  window.scrollTo({ top: 0, behavior: "instant" });
 }
 
 // A collection's own page: its artwork fills the whole Library panel
@@ -3228,7 +3235,7 @@ function renderCollection(c) {
       <div class="collection-count">${collectionCount(c)}</div>
       ${c.overview ? `<p class="collection-overview">${escapeHtml(c.overview)}</p>` : ""}
     </div>`;
-  head.querySelector(".collection-back").addEventListener("click", () => { openCollectionId = null; renderLibrary(); libraryGrid.scrollTop = 0; });
+  head.querySelector(".collection-back").addEventListener("click", () => { openCollectionId = null; renderLibrary(); showCollectionTop(); });
   libraryGrid.appendChild(head);
   const track = document.createElement("div");
   track.className = "home-shelf-track collection-track";

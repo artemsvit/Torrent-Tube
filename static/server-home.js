@@ -318,7 +318,7 @@ function buildHomeCollectionCard(c) {
     setServerView('collections');
     openCollectionId = c.id;
     renderLibrary();
-    libraryGrid.scrollTop = 0;
+    showCollectionTop();
   };
   return card;
 }
