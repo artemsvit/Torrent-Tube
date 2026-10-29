@@ -26,6 +26,7 @@ from intro_detection import IntroDetector
 from playback_sessions import PlaybackSessions
 from favorites import Favorites
 from continue_watching import ContinueWatching
+from cover_cache import CoverCache, CoverError
 from trailer_streams import TrailerError, TrailerStreams
 from flask import Flask, Response, jsonify, redirect, render_template, request, send_file, url_for
 
@@ -462,6 +463,7 @@ def config():
         "tmdb_language": TMDB_LANGUAGE if TMDB_API_KEY else None,
         "default_player": SETTINGS["default_player"] if SETTINGS["default_player"] in PLAYERS else "infuse",
         "audio_language": SETTINGS["audio_language"],
+        "cover_generation": COVERS.generation,
     })
 
 
@@ -2205,6 +2207,7 @@ def resolve_play_link(token: str) -> tuple:
             if gone and link.get("magnet"):
                 source = {"magnet": link["magnet"]}  # removed from Downloads since - stream it again
         tid, index = begin_stream(source)
+        link["index"] = index  # for the page's status, see play_link_status
         if link.get("tid") != tid:
             link["tid"] = tid  # for /played/<token>, after a restart too
             save_play_links()
@@ -2255,10 +2258,19 @@ def note_play_error(token: str, error: "StreamError"):
 
 @app.route("/api/play/<token>")
 def play_link_status(token):
-    """For the page after Play: did the stream start, or why not."""
+    """For the page after Play: did the stream start, or why not - and,
+    while the player waits for the start of the file, how it's going
+    (peers, speed, how much of the start is in)."""
     link = PLAY_LINKS.get(token) or {}
-    tid = link.get("tid")
-    return jsonify({"error": PLAY_ERRORS.get(token), "started": bool(tid and (tid in STREAM_CACHE_IDS or tid in HANDLES))})
+    tid, index = link.get("tid"), link.get("index")
+    started = bool(tid and (tid in STREAM_CACHE_IDS or tid in HANDLES))
+    out = {"error": PLAY_ERRORS.get(token), "started": started}
+    if started and index is not None:
+        try:
+            out["stream"] = stream_status(tid, index)
+        except RuntimeError:  # removed between the check and the status
+            pass
+    return jsonify(out)
 
 
 @app.route("/played/<token>")
@@ -3119,6 +3131,29 @@ def library_playlist(token):
         lines.append(f"{base}/media/{urllib.parse.quote(path)}")
     return Response("\n".join(lines) + "\n", mimetype="audio/x-mpegurl",
                     headers={"Content-Disposition": f'inline; filename="{token}.m3u"', "Cache-Control": "no-store"})
+
+
+COVERS = CoverCache(STATE_DIR / "covers")
+
+
+@app.route("/img/<size>/<name>")
+def cover_image(size, name):
+    """A TMDB image through this server - see cover_cache.py. A failure
+    isn't cached anywhere, so the next try fetches again."""
+    try:
+        path = COVERS.get(size, name)
+    except CoverError as e:
+        return Response(status=e.status, headers={"Cache-Control": "no-store"})
+    response = send_file(path, mimetype=COVERS.content_type(name), conditional=True)
+    response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    return response
+
+
+@app.route("/api/covers", methods=["GET", "DELETE"])
+def cover_cache():
+    """GET: how many covers the server keeps and their size. DELETE: delete
+    them all; the new generation makes browsers fetch them again too."""
+    return jsonify(COVERS.clear() if request.method == "DELETE" else COVERS.stats())
 
 
 @app.route("/media/<path:relative>")

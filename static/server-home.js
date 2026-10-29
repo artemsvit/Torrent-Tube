@@ -8,7 +8,7 @@ const CATALOG_SECTIONS = [['new','New releases'],['popular','Popular'],['movies'
 let catalogLoaded = false, catalogError = '', catalogPage = 0, catalogLoading = false, catalogUpdatedAt = 0;
 
 function updateServerNavigation(view) {
-  const navigationView = view === 'favorites' ? 'library' : view;
+  const navigationView = view === 'favorites' || view === 'collections' ? 'library' : view;
   document.querySelectorAll('#serverNavigation [data-view]').forEach(button => {
     if (button.dataset.view === navigationView) button.setAttribute('aria-current', 'page');
     else button.removeAttribute('aria-current');
@@ -20,6 +20,7 @@ function setServerView(view) {
   if (detailsState || personState) closeDetails();
   if (view === 'discover') view = 'home';
   if (view === 'favorites') { librarySection = 'favorites'; view = 'library'; }
+  if (view === 'collections') { librarySection = 'collections'; openCollectionId = null; view = 'library'; }
   if (discoverMode) exitDiscover();
   document.body.dataset.serverView = view;
   updateServerNavigation(view);
@@ -190,7 +191,7 @@ async function enrichCatalogItems(items) {
 function buildCatalogCard(item) {
   const card = document.createElement('button');
   card.type = 'button'; card.className = 'lib-card catalog-card';
-  card.innerHTML = `<div class="lib-poster">${item.poster ? `<img src="${escapeHtml(item.poster.replace('/w200/','/w342/'))}" alt="" loading="lazy">` : brandArt(libraryTitle(item))}</div><div class="lib-title" data-no-i18n>${escapeHtml(libraryTitle(item))}</div><div class="lib-sub">${item.rating ? `★ ${item.rating.toFixed(1)} · ` : ''}${escapeHtml(item.size_label || '')}</div>`;
+  card.innerHTML = `<div class="lib-poster">${item.poster ? `<img src="${escapeHtml(cover(item.poster.replace('/w200/','/w342/')))}" alt="" loading="lazy">` : brandArt(libraryTitle(item))}</div><div class="lib-title" data-no-i18n>${escapeHtml(libraryTitle(item))}</div><div class="lib-sub">${item.rating ? `★ ${item.rating.toFixed(1)} · ` : ''}${escapeHtml(item.size_label || '')}</div>`;
   card.onclick = ()=>openDetails(item);
   return card;
 }
@@ -256,7 +257,7 @@ function renderHomeHero() {
   homeFeaturedIndex %= items.length;
   const item = items[homeFeaturedIndex], data = homeMetadata.get(item.id) || item;
   const title = libraryTitle(item), art = data.backdrop || data.banner;
-  hero.innerHTML = `${art ? `<img class="home-hero-art" src="${escapeHtml(art)}" alt="">` : `<div class="home-hero-placeholder">${brandArt(title, true)}</div>`}
+  hero.innerHTML = `${art ? `<img class="home-hero-art" src="${escapeHtml(cover(art))}" alt="">` : `<div class="home-hero-placeholder">${brandArt(title, true)}</div>`}
     <div class="home-hero-shade"></div><div class="home-hero-copy"><span class="home-eyebrow">New releases</span>
     <h2 data-no-i18n>${escapeHtml(title)}</h2><div class="home-hero-meta"><span>${{movie:'Movie',tv:'TV show',cartoon:'Cartoon'}[item.kind] || 'Movie'}</span>${data.year || item.year ? `<span>${escapeHtml(String(data.year || item.year))}</span>` : ''}${item.rating ? `<span class="home-rating">★ ${item.rating.toFixed(1)}</span>` : ''}${item.seasons ? `<span>${item.seasons} seasons</span>` : ''}</div>
     <p data-no-i18n>${escapeHtml(data.overview || item.overview || '')}</p>
@@ -291,7 +292,7 @@ function appendHomeShelf(root, title, view, items, buildCard) {
 function buildContinueCard(entry) {
   const card = document.createElement('button');
   card.type = 'button'; card.className = 'home-continue-card';
-  card.innerHTML = `<div class="home-continue-art">${entry.artwork ? `<img src="${escapeHtml(entry.artwork)}" alt="" loading="lazy">` : brandArt(entry.title,true)}<progress max="${entry.duration}" value="${entry.seconds}" aria-label="Playback progress"></progress><span class="home-resume-icon">${ICONS.play}</span></div><strong data-no-i18n>${escapeHtml(entry.title)}</strong><span>Resume at ${homeTime(entry.seconds)}</span>`;
+  card.innerHTML = `<div class="home-continue-art">${entry.artwork ? `<img src="${escapeHtml(cover(entry.artwork))}" alt="" loading="lazy">` : brandArt(entry.title,true)}<progress max="${entry.duration}" value="${entry.seconds}" aria-label="Playback progress"></progress><span class="home-resume-icon">${ICONS.play}</span></div><strong data-no-i18n>${escapeHtml(entry.title)}</strong><span>Resume at ${homeTime(entry.seconds)}</span>`;
   card.onclick = () => resumeServerEntry(entry);
   return card;
 }
@@ -299,12 +300,25 @@ function buildContinueCard(entry) {
 function buildHomeLibraryCard(item) {
   const card = document.createElement('button');
   card.type = 'button'; card.className = 'lib-card catalog-card';
-  const poster = item.poster ? `<img src="${escapeHtml(item.poster.replace('/w200/','/w342/'))}" alt="" loading="lazy">` : brandArt(libraryTitle(item));
+  const poster = item.poster ? `<img src="${escapeHtml(cover(item.poster.replace('/w200/','/w342/')))}" alt="" loading="lazy">` : brandArt(libraryTitle(item));
   const sub = [item.year, item.rating > 0 ? `★ ${item.rating.toFixed(1)}` : ''].filter(Boolean).join(' · ');
   card.innerHTML = `<div class="lib-poster">${poster}</div><div class="lib-title" data-no-i18n>${escapeHtml(libraryTitle(item))}</div>${sub ? `<div class="lib-sub">${escapeHtml(sub)}</div>` : ''}`;
   card.onclick = () => {
     if (typeof openLibraryTitle === 'function') openLibraryTitle(item);
     else openDetails(item);
+  };
+  return card;
+}
+
+// A collection on Home opens its own page in the Library.
+function buildHomeCollectionCard(c) {
+  const card = buildCollectionCard(c).cloneNode(true);  // the copy drops the Library's own click
+  card.classList.add('catalog-card');
+  card.onclick = () => {
+    setServerView('collections');
+    openCollectionId = c.id;
+    renderLibrary();
+    libraryGrid.scrollTop = 0;
   };
   return card;
 }
@@ -321,6 +335,9 @@ function renderServerHome() {
   for (const [feed,label] of CATALOG_SECTIONS) appendHomeShelf(root,label,{movies:'movie',tv:'tv',cartoons:'cartoon'}[feed] || null,catalogEntries(feed),buildCatalogCard);
   if (libItems.length) {
     appendHomeShelf(root,'New on your server','library',libItems,buildHomeLibraryCard);
+    // The library's collections (Harry Potter, Shrek...), last - as in the
+    // apps. None on the server: no shelf.
+    appendHomeShelf(root,'Collections','collections',libraryCollections(libItems),buildHomeCollectionCard);
   }
 }
 

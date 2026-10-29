@@ -118,6 +118,19 @@ class PlaybackAPITests(unittest.TestCase):
         response = self.client.get(result["url"], headers={"Range": f"bytes={len(self.first)}-"})
         self.assertEqual(response.status_code, 416)
 
+    def test_play_link_status_reports_the_stream(self):
+        token = "t-0123456789abcdef"
+        with patch.object(server, "save_play_links"):
+            self.assertEqual(self.client.post("/api/play", json={"token": token, "id": self.tid, "start": False}).status_code, 200)
+            self.assertEqual(self.client.get(f"/api/play/{token}").json, {"error": None, "started": False})
+            self.client.get(f"/play/{token}/episode2.mp4", headers={"Range": "bytes=0-9"}).close()
+        status = self.client.get(f"/api/play/{token}").json
+        self.assertTrue(status["started"])
+        self.assertTrue(status["stream"]["ready"])
+        self.assertEqual(status["stream"]["head_progress"], 100)
+        self.assertIn("num_peers", status["stream"])
+        server.PLAY_LINKS.pop(token, None)
+
     def test_invalid_file_and_payload(self):
         for file in (-1, 3, True, "0", 2):
             response = self.client.post("/api/playback/sessions", json={"id": self.tid, "file": file})

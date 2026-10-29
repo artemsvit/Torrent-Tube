@@ -137,6 +137,31 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+// TMDB images come through this server (/img/<size>/<file>, see
+// cover_cache.py): it keeps a copy, so a browser that can't reach TMDB
+// still shows every cover. The generation changes when Settings clears the
+// covers, so browsers fetch them again too. Other links pass through.
+const TMDB_IMAGES = "https://image.tmdb.org/t/p/";
+let coverGeneration = 0;
+try { coverGeneration = Number(localStorage.getItem("torrenttube-cover-generation")) || 0; } catch (e) {}
+function cover(url) {
+  if (!url || !url.startsWith(TMDB_IMAGES)) return url || "";
+  return `/img/${url.slice(TMDB_IMAGES.length)}${coverGeneration ? `?g=${coverGeneration}` : ""}`;
+}
+function setCoverGeneration(generation) {
+  coverGeneration = Number(generation) || 0;
+  try { localStorage.setItem("torrenttube-cover-generation", String(coverGeneration)); } catch (e) {}
+}
+// A cover the server couldn't get: try TMDB itself once, then leave the
+// poster's own empty tile instead of a broken image.
+document.addEventListener("error", e => {
+  const img = e.target;
+  if (!(img instanceof HTMLImageElement)) return;
+  const proxied = (img.getAttribute("src") || "").match(/^\/img\/([^?]+)/);
+  if (proxied && !img.dataset.direct) { img.dataset.direct = "1"; img.src = TMDB_IMAGES + proxied[1]; return; }
+  if (img.dataset.direct || img.src.startsWith(TMDB_IMAGES)) img.classList.add("is-broken");
+}, true);
+
 function formatBytes(n) {
   if (!n || n <= 0) return "0 B";
   const units = ["B", "KB", "MB", "GB", "TB"];
@@ -187,6 +212,32 @@ function showToast(message, isError) {
   toastStack.appendChild(el);
   // Long enough to read: about 60ms a character, at least 3.5s (6s for errors).
   setTimeout(dismiss, Math.max(isError ? 6000 : 3500, message.length * 60));
+}
+
+// A toast that stays, with a spinner, while something runs: update() its
+// text (warn: the orange look), close() it. A click closes it too, and
+// onClose says so - the caller stops watching.
+function showStatusToast(message, onClose) {
+  const el = document.createElement("div");
+  el.className = "toast is-status";
+  el.setAttribute("role", "status");
+  el.innerHTML = `<span class="toast-icon"><span class="spinner-ring"></span></span><span class="toast-text"></span>`;
+  const text = el.querySelector(".toast-text");
+  text.textContent = message;
+  let closed = false;
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    el.classList.add("is-leaving");
+    setTimeout(() => el.remove(), 200);
+  };
+  el.addEventListener("click", () => { close(); if (onClose) onClose(); });
+  toastStack.appendChild(el);
+  return {
+    update(message, warn) { text.textContent = message; el.classList.toggle("is-error", !!warn); },
+    close,
+    get closed() { return closed; },
+  };
 }
 
 // ---------- Adding torrents ----------
@@ -317,7 +368,7 @@ async function openUploadModal(file) {
     }
     uploadModalFilename.textContent = data.clean_title || data.name || file.name;
     uploadModalPoster.innerHTML = data.poster
-      ? `<img class="result-poster" src="${escapeHtml(data.poster)}" alt="" loading="lazy">`
+      ? `<img class="result-poster" src="${escapeHtml(cover(data.poster))}" alt="" loading="lazy">`
       : `<div class="result-poster-fallback">${ICONS.download}</div>`;
     const rating = (data.rating && data.rating > 0) ? `<span class="rating-badge">${ICONS.star}${data.rating.toFixed(1)}</span>` : "";
     uploadModalSub.innerHTML = (rating ? `<div>${rating}</div>` : "") +
@@ -770,6 +821,7 @@ async function loadConfig() {
     searchEnabled = !!data.search_enabled;
     lastConfig = data;
     if (data.default_player) defaultPlayerId = data.default_player;
+    if (data.cover_generation !== undefined && data.cover_generation !== coverGeneration) setCoverGeneration(data.cover_generation);
   } catch (e) {}
 }
 
@@ -951,7 +1003,12 @@ function switchSettingsTab(tabId) {
     btn.classList.toggle("is-active", btn.dataset.tab === tabId));
   settingsModal.querySelectorAll(".settings-tab-panel").forEach(panel =>
     panel.hidden = panel.dataset.panel !== tabId);
+  settingsModal.querySelectorAll(".settings-panel-title").forEach(title =>
+    title.hidden = title.dataset.title !== tabId);
+  settingsModal.querySelector(".settings-scroll").scrollTop = 0;
+  settingsTabs.querySelector(".is-active")?.scrollIntoView({ block: "nearest", inline: "nearest" });
   if (tabId === "players") watchPlayersTab();
+  if (tabId === "library") loadCoverStats();
 }
 
 async function openSettings() {
@@ -969,7 +1026,8 @@ function closeSettings() {
 }
 
 settingsBtn.addEventListener("click", openSettings);
-document.getElementById("settingsClose")?.addEventListener("click", closeSettings);
+// One close button per layout: in the content pane on a computer, beside the title on a phone.
+settingsModal.querySelectorAll("#settingsClose, [data-settings-close]").forEach(btn => btn.addEventListener("click", closeSettings));
 settingsModal.addEventListener("click", e => { if (e.target === settingsModal) closeSettings(); });
 settingsTabs.addEventListener("click", e => {
   const btn = e.target.closest(".settings-tab");
@@ -1074,7 +1132,7 @@ function buildResultCard(r, container, allResults, emptyMessage) {
   const div = document.createElement("div");
   div.className = "item";
   const poster = `<div class="poster-wrap">${r.poster
-    ? `<img class="result-poster" src="${escapeHtml(r.poster)}" alt="" loading="lazy">`
+    ? `<img class="result-poster" src="${escapeHtml(cover(r.poster))}" alt="" loading="lazy">`
     : `<div class="result-poster-fallback brand-host">${brandArt(r.clean_title || r.title)}</div>`}${FAVORITE_BADGE}</div>`;
   div.dataset.favId = r.download_link ?? r.magnet ?? r.title;
   if (isFavorite(div.dataset.favId)) div.classList.add("is-favorite");
@@ -1674,17 +1732,51 @@ getAppModal.addEventListener("click", e => { if (e.target === getAppModal) close
 // The app opened after all (a slow "Open in …?" prompt) - nothing to say.
 document.addEventListener("visibilitychange", () => { if (document.hidden) closeGetApp(); });
 
-// The player only says "can't open" if the stream fails to start (a dead
-// tracker link, no peers) - ask the server why for up to a minute and say it.
+// The player only shows the title while it waits for the start of the
+// file, and says "can't open" at most - so the page says how the torrent
+// is going (peers, speed, how much of the start is in) until the start is
+// in, and why it failed if it did (a dead tracker link, no peers).
+const PLAY_WATCH_FOR = 180000;   // give up watching after 3 minutes
+const PLAY_NO_PEERS_AFTER = 45000;  // no peers this long: say the release may be dead
 function watchPlayStart(token) {
-  const until = Date.now() + 60000;
+  const began = Date.now();
+  let status = null;
+  let stopped = false;
+  let everPeers = false;
+  const say = (message, warn) => {
+    if (!status) status = showStatusToast(message, () => { stopped = true; });
+    status.update(message, warn);
+  };
+  const end = () => { stopped = true; if (status) status.close(); };
   const check = async () => {
-    try {
-      const d = await fetch(`/api/play/${encodeURIComponent(token)}`).then(r => r.json());
-      if (d.error) { showToast(`Couldn't play: ${d.error}`, true); return; }
-      if (d.started) return;
-    } catch (e) {}
-    if (Date.now() < until) setTimeout(check, 2000);
+    if (stopped) return;
+    let d = null;
+    try { d = await fetch(`/api/play/${encodeURIComponent(token)}`).then(r => r.json()); } catch (e) {}
+    if (stopped) return;
+    const waited = Date.now() - began;
+    if (d && d.error) { end(); showToast(`Couldn't play: ${d.error}`, true); return; }
+    const st = d && d.stream;
+    if (st && (st.ready || st.done || st.gone)) { end(); return; }
+    if (waited > PLAY_WATCH_FOR) {
+      end();
+      if (!everPeers) showToast("No one is sharing this release right now. Try another release.", true);
+      return;
+    }
+    if (st) {
+      if (st.num_peers > 0) {
+        everPeers = true;
+        const peers = `${st.num_peers} ${st.num_peers === 1 ? "peer" : "peers"}`;
+        const rate = formatRate(st.download_rate);
+        say(`Loading the start: ${st.head_progress || 0}% · ${peers}${rate ? ` · ${rate}` : ""}`);
+      } else if (waited > PLAY_NO_PEERS_AFTER) {
+        say("No peers yet - this release may have no seeders. Still looking…", true);
+      } else {
+        say("Looking for peers…");
+      }
+    } else if (d && !d.started && waited > 3000) {
+      say("Starting the torrent…");
+    }
+    setTimeout(check, 2000);
   };
   setTimeout(check, 1500);
 }
@@ -2325,10 +2417,10 @@ function renderDetailsHero() {
       <span class="dt-hero-play-icon">${PLAY_ICON}</span>Trailer</button>`;
   }
   const showBackdrop = !!d.backdrop && !playing;
-  media.style.backgroundImage = showBackdrop ? `url('${d.backdrop.replace(/'/g, "%27")}')` : "";
+  media.style.backgroundImage = showBackdrop ? `url('${cover(d.backdrop).replace(/'/g, "%27")}')` : "";
   hero.querySelector(".dt-media-overlay").innerHTML = overlay;
   hero.querySelector(".dt-hero-rest").innerHTML = `
-    ${d.poster ? `<img class="dt-poster" src="${escapeHtml(d.poster)}" alt="">` : `<div class="dt-poster result-poster-fallback brand-host">${brandArt(d.title)}</div>`}
+    ${d.poster ? `<img class="dt-poster" src="${escapeHtml(cover(d.poster))}" alt="">` : `<div class="dt-poster result-poster-fallback brand-host">${brandArt(d.title)}</div>`}
     <div class="dt-info">
       <h2 class="dt-title">${escapeHtml(d.title)}</h2>
       ${d.original_title && d.original_title !== d.title ? `<div class="dt-sub">${escapeHtml(d.original_title)}</div>` : ""}
@@ -2365,7 +2457,7 @@ function renderTitleEpisodes(s) {
     const combined = source && source.last > source.episode ? ` · Episodes ${source.episode}–${source.last} in one file` : "";
     return `<article class="title-episode-card">
       <button type="button" class="title-episode-action" data-act="browse-episode" data-number="${number}"${!available && !searchEnabled ? " disabled" : ""} aria-label="${escapeHtml(`${action}: ${number}. ${info.name || `Episode ${number}`}`)}">
-        <div class="title-episode-art">${info.still ? `<img src="${escapeHtml(info.still)}" alt="" loading="lazy">` : `<span class="title-episode-placeholder">${PLAY_ICON}</span>`}
+        <div class="title-episode-art">${info.still ? `<img src="${escapeHtml(cover(info.still))}" alt="" loading="lazy">` : `<span class="title-episode-placeholder">${PLAY_ICON}</span>`}
           <span class="title-episode-play-icon" aria-hidden="true">${PLAY_ICON}</span>
           <span class="title-episode-badge${available ? " is-available" : ""}">${available ? "In your library" : searchEnabled ? "Search torrents" : "Not in your library"}</span>
           ${info.runtime ? `<span class="title-episode-runtime">${info.runtime} min</span>` : ""}
@@ -2491,13 +2583,13 @@ function renderPersonPage() {
     const local = libraryItems.some(t => t.tmdb_id === item.tmdbId && t.media_type === item.mediaType);
     const saved = favorites.some(t => t.tmdb_id === item.tmdbId && t.media_type === item.mediaType);
     return `<a class="person-title-card" href="${escapeHtml(titlePageURL(title, null, null))}" data-act="person-title" data-index="${index}">
-      <div class="person-title-art"><span class="person-poster-fallback" aria-hidden="true">${ICONS.play}</span>${item.poster ? `<img src="${escapeHtml(item.poster)}" alt="" loading="lazy">` : ''}${saved ? `<span class="person-favorite" aria-label="In Favorites">${ICONS.heart}</span>` : ''}${local ? '<span class="person-library-badge">In your library</span>' : ''}</div>
+      <div class="person-title-art"><span class="person-poster-fallback" aria-hidden="true">${ICONS.play}</span>${item.poster ? `<img src="${escapeHtml(cover(item.poster))}" alt="" loading="lazy">` : ''}${saved ? `<span class="person-favorite" aria-label="In Favorites">${ICONS.heart}</span>` : ''}${local ? '<span class="person-library-badge">In your library</span>' : ''}</div>
       <h3>${escapeHtml(item.title)}</h3><p>${escapeHtml([item.year, item.mediaType === 'tv' ? 'TV show' : 'Movie', item.rating ? `★ ${item.rating}` : null].filter(Boolean).join(' · '))}</p>
     </a>`;
   }).join('');
   detailsBody.innerHTML = `<div class="dt-body person-page">
     <div class="person-top-bar">
-      <header class="person-header"><div class="person-photo">${p.photo ? `<img src="${escapeHtml(p.photo)}" alt="">` : ''}<span aria-hidden="true">${escapeHtml((p.name || '?').charAt(0))}</span></div>
+      <header class="person-header"><div class="person-photo">${p.photo ? `<img src="${escapeHtml(cover(p.photo))}" alt="">` : ''}<span aria-hidden="true">${escapeHtml((p.name || '?').charAt(0))}</span></div>
         <div><p class="person-eyebrow">Cast &amp; crew</p><h1>${escapeHtml(p.name || 'Cast & crew')}</h1>${s.data ? `<p>${s.data.titles.length} films and TV shows</p>` : ''}</div></header>
       <div class="person-filters" role="group" aria-label="Filter titles">${filters.map(([value, label]) => `<button type="button" class="library-chip${s.filter === value ? ' is-active' : ''}" data-act="person-filter" data-filter="${value}" aria-pressed="${s.filter === value}">${label}</button>`).join('')}</div>
     </div>
@@ -2691,7 +2783,7 @@ function renderDetailsBody() {
   // --- cast & crew ---
   const people = (d.people || []).map(p => `
     <a class="dt-person" href="${escapeHtml(personPageURL(p))}" data-act="person" data-person-id="${escapeHtml(p.id)}" title="${escapeHtml(p.name)}">
-      ${p.photo ? `<img class="dt-avatar" src="${escapeHtml(p.photo)}" alt="" loading="lazy">` : `<div class="dt-avatar">${escapeHtml((p.name || "?").charAt(0))}</div>`}
+      ${p.photo ? `<img class="dt-avatar" src="${escapeHtml(cover(p.photo))}" alt="" loading="lazy">` : `<div class="dt-avatar">${escapeHtml((p.name || "?").charAt(0))}</div>`}
       <div class="dt-person-name">${escapeHtml(p.name)}</div>
       ${p.role ? `<div class="dt-person-role">${escapeHtml(p.role)}</div>` : ""}
     </a>`).join("");
@@ -2746,7 +2838,7 @@ function renderDetailsBody() {
   // --- more like this ---
   const recs = (d.recommendations || []).map((r, i) => `
     <button type="button" class="dt-rec" data-act="rec" data-index="${i}" title="${escapeHtml(r.title)}">
-      <img src="${escapeHtml(r.poster)}" alt="" loading="lazy">
+      <img src="${escapeHtml(cover(r.poster))}" alt="" loading="lazy">
       <div class="dt-rec-title">${escapeHtml(r.title)}</div>
       <div class="dt-rec-year">${escapeHtml(r.year || "")}${r.rating > 0 ? ` · ★ ${r.rating.toFixed(1)}` : ""}</div>
     </button>`).join("");
@@ -3113,19 +3205,24 @@ function buildCollectionCard(c) {
   card.className = "lib-card collection-card";
   const poster = c.poster || c.items[0].poster;
   card.innerHTML = `<div class="lib-poster">${poster
-      ? `<img src="${escapeHtml(poster.replace("/w500/", "/w342/").replace("/w200/", "/w342/"))}" alt="" loading="lazy">`
+      ? `<img src="${escapeHtml(cover(poster.replace("/w500/", "/w342/").replace("/w200/", "/w342/")))}" alt="" loading="lazy">`
       : brandArt(c.name)}<span class="lib-badge">${c.items.length}</span></div>
     <div class="lib-title">${escapeHtml(c.name)}</div><div class="lib-sub">${collectionCount(c)}</div>`;
   card.addEventListener("click", () => { openCollectionId = c.id; renderLibrary(); libraryGrid.scrollTop = 0; });
   return card;
 }
 
-// A collection's own page: artwork, name, overview, then its films in order.
+// A collection's own page: its artwork fills the whole Library panel
+// behind the name and overview, and its films are one row that scrolls
+// sideways, like a Home shelf, in release order.
 function renderCollection(c) {
+  if (c.backdrop) {
+    libraryPanel.insertAdjacentHTML("afterbegin", `<div class="collection-stage" aria-hidden="true">
+      <img class="collection-backdrop" src="${escapeHtml(cover(c.backdrop))}" alt=""><span class="collection-shade"></span></div>`);
+  }
   const head = document.createElement("div");
   head.className = "collection-head";
-  head.innerHTML = `${c.backdrop ? `<img class="collection-backdrop" src="${escapeHtml(c.backdrop)}" alt="">` : ""}
-    <button type="button" class="btn-secondary collection-back"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg><span>Collections</span></button>
+  head.innerHTML = `<button type="button" class="btn-secondary collection-back"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg><span>Collections</span></button>
     <div class="collection-head-body">
       <h2 class="collection-name">${escapeHtml(c.name)}</h2>
       <div class="collection-count">${collectionCount(c)}</div>
@@ -3133,14 +3230,17 @@ function renderCollection(c) {
     </div>`;
   head.querySelector(".collection-back").addEventListener("click", () => { openCollectionId = null; renderLibrary(); libraryGrid.scrollTop = 0; });
   libraryGrid.appendChild(head);
+  const track = document.createElement("div");
+  track.className = "home-shelf-track collection-track";
   c.items.forEach(item => {
     const card = buildLibraryCard(item);
     const sub = card.querySelector(".lib-sub");
     const line = [item.collection.part ? `Part ${item.collection.part}` : "", item.year].filter(Boolean).join(" · ");
     if (sub) sub.textContent = line;
     else if (line) card.insertAdjacentHTML("beforeend", `<div class="lib-sub">${escapeHtml(line)}</div>`);
-    libraryGrid.appendChild(card);
+    track.appendChild(card);
   });
+  libraryGrid.appendChild(track);
 }
 
 function renderLibrary() {
@@ -3165,7 +3265,8 @@ function renderLibrary() {
   counts.collections = collections.length;
   // Collections, then Favorites, after Cartoons - as in the apps.
   const tabs = [...LIBRARY_KINDS, ["collections", "Collections"], ["favorites", "Favorites"]];
-  if (!librarySection) librarySection = "movie";
+  // No collections on the server (or none matching the filter): no tab.
+  if (!librarySection || (librarySection === "collections" && !counts.collections && !libraryFilter.value.trim())) librarySection = "movie";
   const availableTabs = tabs.filter(([k]) => counts[k] || k === librarySection || k === "movie");
   libraryKinds.innerHTML = availableTabs.map(([k, label]) =>
     `<button type="button" class="library-chip${k === librarySection ? " is-active" : ""}" data-kind="${k}">${label} · ${counts[k]}</button>`).join("");
@@ -3179,6 +3280,8 @@ function renderLibrary() {
   libraryGrid.innerHTML = "";
   const collection = librarySection === "collections" && collections.find(c => c.id === openCollectionId);
   libraryGrid.classList.toggle("is-collection", !!collection);
+  libraryPanel.querySelector(".collection-stage")?.remove();
+  libraryPanel.classList.toggle("has-collection-backdrop", !!(collection && collection.backdrop));
   if (librarySection === "favorites") saved.forEach(f => libraryGrid.appendChild(buildFavoriteCard(f)));
   else if (collection) renderCollection(collection);
   else if (librarySection === "collections") collections.forEach(c => libraryGrid.appendChild(buildCollectionCard(c)));
@@ -3200,7 +3303,7 @@ function buildLibraryCard(item) {
   const badge = item.seasons > 0 ? `${item.seasons} season${item.seasons === 1 ? "" : "s"}` : versions > 1 ? `${versions} versions` : "";
   const sub = [item.year, item.rating > 0 ? `★ ${item.rating.toFixed(1)}` : ""].filter(Boolean).join(" · ");
   card.innerHTML = `<div class="lib-poster">${item.poster
-      ? `<img src="${escapeHtml(item.poster.replace("/w200/", "/w342/"))}" alt="" loading="lazy">`
+      ? `<img src="${escapeHtml(cover(item.poster.replace("/w200/", "/w342/")))}" alt="" loading="lazy">`
       : brandArt(libraryTitle(item))}${badge ? `<span class="lib-badge">${badge}</span>` : ""}${FAVORITE_BADGE}</div>
     <div class="lib-title">${escapeHtml(libraryTitle(item))}</div>${sub ? `<div class="lib-sub">${escapeHtml(sub)}</div>` : ""}`;
   card.addEventListener("click", () => openLibraryTitle(item));
@@ -3214,7 +3317,7 @@ function buildFavoriteCard(f) {
   const title = f.clean_title || f.title;
   const kind = { movie: "Movie", tv: "TV show", cartoon: "Cartoon" }[f.kind] || "";
   card.innerHTML = `<div class="lib-poster">${f.poster
-      ? `<img src="${escapeHtml(f.poster.replace("/w200/", "/w342/"))}" alt="" loading="lazy">`
+      ? `<img src="${escapeHtml(cover(f.poster.replace("/w200/", "/w342/")))}" alt="" loading="lazy">`
       : brandArt(title)}${FAVORITE_BADGE}</div>
     <div class="lib-title">${escapeHtml(title)}</div>${kind ? `<div class="lib-sub">${kind}</div>` : ""}`;
   card.addEventListener("click", () => openFavorite(f));
@@ -3353,7 +3456,7 @@ function renderMatchResults() {
     const id = `${r.media_type}:${r.tmdb_id}`;
     const sub = [r.original_title && r.original_title !== r.title ? r.original_title : "", r.year, r.media_type === "tv" ? "TV show" : "Movie"].filter(Boolean);
     return `<button type="button" class="match-row${chosen === i ? " is-chosen" : ""}" role="option" aria-selected="${chosen === i}" data-index="${i}">
-      <span class="match-poster">${r.poster ? `<img src="${escapeHtml(r.poster)}" alt="" loading="lazy">` : brandArt(r.title)}</span>
+      <span class="match-poster">${r.poster ? `<img src="${escapeHtml(cover(r.poster))}" alt="" loading="lazy">` : brandArt(r.title)}</span>
       <span class="match-text">
         <span class="match-title">${escapeHtml(r.title)}${id === currentId ? ' <span class="match-badge">Now</span>' : ""}</span>
         <span class="match-sub">${sub.map(escapeHtml).join(" · ")}</span>
@@ -3540,7 +3643,7 @@ function buildLibraryResult(item) {
   const kind = (LIBRARY_KINDS.find(([k]) => k === item.kind) || [null, ""])[1];
   const sub = [kind, item.year, item.rating > 0 ? `★ ${item.rating.toFixed(1)}` : ""].filter(Boolean).join(" · ");
   div.innerHTML = `<div class="item-top">
-      ${item.poster ? `<img class="result-poster" src="${escapeHtml(item.poster)}" alt="" loading="lazy">` : `<div class="result-poster-fallback">${ICONS.download}</div>`}
+      ${item.poster ? `<img class="result-poster" src="${escapeHtml(cover(item.poster))}" alt="" loading="lazy">` : `<div class="result-poster-fallback">${ICONS.download}</div>`}
       <div class="item-meta">
         <div class="item-title">${escapeHtml(libraryTitle(item))}</div>
         <div class="item-sub">${escapeHtml(sub)}</div>
@@ -3631,6 +3734,27 @@ document.getElementById("libraryRescanBtn").addEventListener("click", async () =
   try { await fetch("/api/library/metadata", { method: "DELETE" }); } catch (e) { showToast("Couldn't reach the server", true); return; }
   showToast("Looking every title up on TMDB again…");
   loadLibrary();
+});
+
+// Settings > Library: the covers the server keeps (see cover()).
+const coverCacheStats = document.getElementById("coverCacheStats");
+function showCoverStats(d) {
+  coverCacheStats.textContent = d.files ? `${d.files} covers · ${formatBytes(d.bytes)}` : "No covers saved yet";
+}
+async function loadCoverStats() {
+  try { showCoverStats(await fetch("/api/covers").then(r => r.json())); } catch (e) {}
+}
+document.getElementById("coverCacheClearBtn").addEventListener("click", async () => {
+  try {
+    const d = await fetch("/api/covers", { method: "DELETE" }).then(r => r.json());
+    setCoverGeneration(d.generation);
+    showCoverStats(d);
+  } catch (e) { showToast("Couldn't reach the server", true); return; }
+  // Every cover on the page again, from new links.
+  homeRenderKey = "";
+  renderLibrary();
+  renderCatalogPage();
+  showToast("Covers cleared - they load again from TMDB");
 });
 
 async function init() {

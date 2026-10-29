@@ -457,25 +457,46 @@
     background: var(--surface-hover); border: 1px solid var(--border); transition: transform .15s ease, box-shadow .15s ease;
   }
   .lib-poster img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  /* A cover neither the server nor TMDB sent: the empty tile, not a broken image. */
+  img.is-broken { visibility: hidden; }
   .lib-poster .lib-fallback { position: absolute; inset: 0; display: grid; place-items: center; color: var(--text-tertiary); padding: 10px; text-align: center; font-size: 12px; }
   .lib-card:hover .lib-poster, .lib-card:focus-visible .lib-poster { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
   .lib-badge { position: absolute; left: 7px; top: 7px; font-size: 11px; font-weight: 700; padding: 3px 7px; border-radius: var(--radius-pill); background: rgba(0,0,0,.62); color: #fff; }
   .lib-title { font-size: 13.5px; font-weight: 600; margin-top: 8px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .lib-sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
   /* A collection's page: its artwork across the grid, then its films. */
-  .collection-head { grid-column: 1 / -1; position: relative; overflow: hidden; border-radius: var(--radius-md); border: 1px solid var(--border); background: var(--surface); min-height: 320px; display: flex; align-items: flex-end; }
-  .collection-backdrop { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-  .collection-head:has(.collection-backdrop)::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,.85), rgba(0,0,0,.35) 60%, rgba(0,0,0,.15)); }
-  .collection-head-body { position: relative; z-index: 1; padding: 72px 24px 24px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; max-width: 760px; }
-  .collection-head:has(.collection-backdrop) .collection-head-body { color: #fff; }
-  /* Back to Collections: the banner's top left corner, chevron and label on one line. */
-  .collection-back { position: absolute; top: 18px; left: 18px; z-index: 2; display: inline-flex; align-items: center; gap: 4px; padding: 6px 14px 6px 10px; font-size: 13px; line-height: 1; }
+  /* The collection's artwork fills the whole panel, behind the chips too;
+     shades on the left and bottom keep the text and posters readable.
+     overflow: clip (not hidden) keeps the sticky chips row working. */
+  .library-panel.has-collection-backdrop { position: relative; overflow: clip; isolation: isolate; min-height: calc(100dvh - var(--topbar-h, 60px) - 40px); background: #0c0d10; color: #fff; }
+  .library-panel.has-collection-backdrop > .library-note, .library-panel.has-collection-backdrop > .library-grid { position: relative; z-index: 1; }
+  .collection-stage { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+  .collection-backdrop { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 25%; }
+  .collection-shade { position: absolute; inset: 0; background:
+    linear-gradient(90deg, rgba(8,10,14,.92), rgba(8,10,14,.55) 42%, rgba(8,10,14,.05) 75%),
+    linear-gradient(0deg, rgba(8,10,14,.97) 8%, rgba(8,10,14,.6) 45%, rgba(8,10,14,0) 75%); }
+  .library-panel.has-collection-backdrop .panel-header { background: rgba(12,13,16,.45); border-bottom-color: rgba(255,255,255,.1); }
+  .library-panel.has-collection-backdrop .library-chip:not(.is-active) { background: rgba(0,0,0,.35); border-color: rgba(255,255,255,.18); color: #fff; }
+  .library-panel.has-collection-backdrop .library-chip.is-active { background: #fff; color: #111; }
+  .library-panel.has-collection-backdrop .library-filter input { color: #fff; }
+  .library-panel.has-collection-backdrop .lib-sub { color: rgba(255,255,255,.7); }
+
+  .library-grid.is-collection { display: block; }
+  .collection-head { position: relative; min-height: clamp(320px, 44vh, 480px); display: flex; align-items: flex-end; padding: 56px 8px 28px; }
+  .collection-head-body { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; max-width: 720px; }
+  .collection-back { position: absolute; top: 6px; left: 8px; display: inline-flex; align-items: center; gap: 4px; padding: 6px 14px 6px 10px; font-size: 13px; line-height: 1; }
   .collection-back svg { flex: none; display: block; }
-  .collection-head:has(.collection-backdrop) .collection-back { color: #fff; background: rgba(0,0,0,.45); border-color: rgba(255,255,255,.25); }
-  @media (max-width: 640px) { .collection-head { min-height: 240px; } .collection-head-body { padding: 64px 16px 18px; } }
-  .collection-name { margin: 6px 0 0; font-size: 24px; line-height: 1.15; font-weight: 700; }
-  .collection-count { font-size: 13px; font-weight: 600; opacity: .8; }
-  .collection-overview { margin: 2px 0 0; font-size: 13.5px; line-height: 1.45; opacity: .9; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .has-collection-backdrop .collection-back { color: #fff; background: rgba(0,0,0,.4); border-color: rgba(255,255,255,.25); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+  .collection-name { margin: 0; font-size: clamp(26px, 3.2vw, 40px); line-height: 1.1; font-weight: 800; letter-spacing: -0.02em; text-shadow: 0 2px 18px rgba(0,0,0,.35); }
+  .collection-count { font-size: 14px; font-weight: 600; opacity: .85; }
+  .collection-overview { margin: 4px 0 0; font-size: 14.5px; line-height: 1.5; opacity: .92; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .collection-track { padding: 6px 8px 18px; margin: 0; }
+  .collection-track > .lib-card { flex: 0 0 clamp(140px, 13vw, 190px); }
+  @media (max-width: 640px) {
+    .collection-head { min-height: 260px; padding: 8px 4px 20px; }
+    .collection-track { padding: 6px 4px 14px; }
+    .collection-track > .lib-card { flex-basis: 128px; }
+  }
   .search-section-head { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-secondary); padding: 12px 16px 4px; }
   .dt-files { display: flex; flex-direction: column; gap: 6px; }
   .dt-file { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--radius-md); background: var(--surface); border: 1px solid var(--border); }
@@ -488,10 +509,10 @@
   .dt-episode-text { flex: 1; min-width: 0; }
   .dt-episode-title { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dt-episode-sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-  .library-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin: 6px 0 14px; }
-  .library-stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; }
-  .library-stat b { display: block; font-size: 20px; }
-  .library-stat span { font-size: 12px; color: var(--text-secondary); }
+  .library-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0 0 24px; }
+  .library-stat { background: var(--settings-group-bg, var(--surface)); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-sm); padding: 12px 14px; }
+  .library-stat b { display: block; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .library-stat span { display: block; margin-top: 1px; font-size: 12px; color: var(--text-secondary); }
   .settings-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
   @media (max-width: 640px) {
     .layout { padding: 16px 16px 16px; }
@@ -1619,7 +1640,6 @@
      "new section" from "next row in the same section" at a glance:
      22px between sections, 10px from a section's label to its first row,
      9px of padding within each row. */
-  .settings-box { max-width: 520px; overflow-x: hidden; }
   /* Fix match: files, a one-line search, results to pick, the actions. */
   /* The box fits the window; only the results scroll, the head, files,
      search and actions stay in place. */
@@ -1688,63 +1708,168 @@
   }
   .modal-close-btn::before { transform: translate(-50%, -50%) rotate(45deg); }
   .modal-close-btn::after { transform: translate(-50%, -50%) rotate(-45deg); }
-  .settings-box > .modal-actions { border-top: 1px solid var(--border); padding-top: 16px; margin-top: 18px; }
-  /* Pinned to the top, not centred: tabs differ in height, and centred the
-     whole box jumped on every switch - now only its bottom edge moves. */
-  #settingsModal.is-open { align-items: flex-start; padding-top: 56px; }
-  @media (min-width: 641px) {
-    #settingsModal .settings-box { max-height: calc(100dvh / var(--ui-zoom) - 72px); }
-  }
-  @media (max-width: 640px) {
-    #settingsModal.is-open { padding-top: 16px; }
-  }
-
-  .settings-tabs {
+  /* ---------- Settings ----------
+     A computer gets two panes, like the system's own settings: the
+     sections down the left, the chosen one on the right with its own
+     scroll, and Reset / Save always in view at the bottom. A fixed height,
+     so switching sections never makes the box jump. A phone gets one
+     full-height column with the sections as a row of pills. Each section's
+     rows sit in a grouped card, its label above it. */
+  #settingsModal { --settings-nav-bg: rgba(0, 0, 0, 0.035); --settings-group-bg: rgba(255, 255, 255, 0.92); --settings-pane-bg: rgba(242, 242, 245, 0.75); }
+  html[data-theme="dark"] #settingsModal { --settings-nav-bg: rgba(255, 255, 255, 0.03); --settings-group-bg: rgba(255, 255, 255, 0.055); --settings-pane-bg: rgba(0, 0, 0, 0.12); }
+  .settings-box {
+    max-width: 880px;
+    height: min(720px, calc(100dvh - 32px));
+    padding: 0;
+    overflow: hidden;
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 6px;
-    margin-bottom: 18px;
-    padding-bottom: 16px;
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+  @media (min-width: 641px) {
+    .settings-box { height: min(720px, calc(100dvh / var(--ui-zoom) - 48px)); }
+  }
+  .settings-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 22px 12px;
+    background: var(--settings-nav-bg);
+    border-right: 1px solid var(--border);
+    min-width: 0;
+  }
+  .settings-nav-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 10px; }
+  .settings-nav-head .modal-title { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+  .settings-close-mobile { display: none; }
+  .settings-tabs { display: flex; flex-direction: column; gap: 2px; }
+  .settings-tab {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    width: 100%;
+    padding: 7px 10px;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: 13.5px;
+    font-weight: 500;
+    text-align: left;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  .settings-tab:hover:not(.is-active) { background: var(--surface-hover); }
+  .settings-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .settings-tab.is-active { background: var(--accent); color: #fff; }
+  .settings-tab-icon {
+    width: 26px;
+    height: 26px;
+    border-radius: 7px;
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    color: #fff;
+  }
+  .settings-tab-icon svg { width: 15px; height: 15px; }
+  .settings-tab-icon.is-general { background: #8e8e93; }
+  .settings-tab-icon.is-server { background: #5e5ce6; }
+  .settings-tab-icon.is-library { background: #f08c00; }
+  .settings-tab-icon.is-players { background: #28a745; }
+
+  .settings-main {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    background: var(--settings-pane-bg);
+  }
+  .settings-main-head {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 18px 20px 14px 28px;
     border-bottom: 1px solid var(--border);
   }
-  @media (max-width: 480px) {
-    .settings-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  }
-  .settings-tab {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    padding: 8px 10px;
-    border-radius: var(--radius-pill);
-    background: var(--surface);
-    border: 1px solid var(--border-strong);
-    color: var(--text-secondary);
-    font-size: 12.5px;
-    font-weight: 600;
-    white-space: nowrap;
-  }
-  .settings-tab svg { flex-shrink: 0; }
-  .settings-tab:hover:not(.is-active) { border-color: var(--accent); color: var(--accent); }
-  .settings-tab.is-active {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: white;
-  }
+  .settings-panel-title { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.015em; color: var(--text); }
+  .settings-panel-title[hidden] { display: none; }
+  .settings-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 20px 28px 28px; }
+  .settings-panel-intro { margin: 0 0 16px; font-size: 13px; line-height: 1.5; color: var(--text-secondary); }
   .settings-tab-panel[hidden] { display: none; }
+  .settings-main > .modal-actions {
+    flex: none;
+    margin: 0;
+    padding: 14px 28px;
+    border-top: 1px solid var(--border);
+    background: var(--surface-solid);
+  }
+  .settings-main > .modal-actions #settingsReset { margin-right: auto; }
 
-  .settings-section { margin-bottom: 22px; }
-  .settings-section:last-of-type { margin-bottom: 0; }
-  .settings-section .section-label { margin-bottom: 10px; }
+  .settings-section { margin-bottom: 24px; }
+  .settings-section:last-child { margin-bottom: 0; }
+  .settings-section > .section-label { display: flex; align-items: center; gap: 5px; margin: 0 0 8px 4px; }
+  .settings-group {
+    background: var(--settings-group-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+  }
   .settings-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 14px;
-    padding: 9px 0;
-    border-bottom: 1px solid var(--border);
+    gap: 16px;
+    min-height: 50px;
+    padding: 9px 16px;
   }
-  .settings-row:last-child { border-bottom: none; }
+  .settings-group > * + * { border-top: 1px solid var(--border); }
+  .settings-row-text { min-width: 0; }
+  .settings-row-hint { margin-top: 2px; font-size: 12px; line-height: 1.4; color: var(--text-secondary); }
+  .settings-group .settings-slider-row { padding: 12px 16px 14px; }
+  .settings-section > .streams-note { margin: 8px 4px 0; }
+
+  @media (max-width: 640px) {
+    #settingsModal.is-open { padding: 0; align-items: stretch; }
+    .settings-box {
+      max-width: none;
+      height: 100dvh;
+      max-height: 100dvh;
+      border: none;
+      border-radius: 0;
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+    .settings-nav {
+      gap: 12px;
+      padding: calc(14px + env(safe-area-inset-top)) 0 12px;
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+    }
+    .settings-nav-head { padding: 0 16px; }
+    .settings-close-mobile { display: inline-flex; }
+    .settings-main-head { display: none; }
+    .settings-tabs {
+      flex-direction: row;
+      gap: 6px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      padding: 0 16px;
+      scroll-padding: 0 16px;
+    }
+    .settings-tabs::-webkit-scrollbar { display: none; }
+    .settings-tab { width: auto; flex: none; gap: 7px; padding: 6px 12px 6px 6px; border-radius: var(--radius-pill); background: var(--settings-group-bg); border: 1px solid var(--border); }
+    .settings-tab.is-active { border-color: var(--accent); }
+    .settings-tab-icon { width: 22px; height: 22px; border-radius: 50%; }
+    .settings-tab-icon svg { width: 13px; height: 13px; }
+    .settings-scroll { padding: 18px 16px 24px; }
+    .settings-panel-intro { margin-top: 0; }
+    .settings-main > .modal-actions { padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); }
+    .settings-row { padding: 9px 14px; }
+    .settings-group .settings-slider-row { padding: 12px 14px 14px; }
+  }
   .settings-row-label {
     display: flex;
     align-items: center;
@@ -1770,7 +1895,7 @@
   .settings-box .settings-select,
   .settings-box input.settings-text-input {
     box-sizing: border-box;
-    width: 220px;
+    width: 260px;
     max-width: 100%;
     min-width: 0;
     height: 35px;
@@ -1876,7 +2001,7 @@
 
   /* Settings > Players: a card per player - its status on this device,
      where to get it, and for VLC on a computer its helper's command. */
-  .player-card { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px; margin-bottom: 10px; }
+  .player-card { background: var(--settings-group-bg, transparent); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-sm); padding: 14px 16px; margin-bottom: 10px; }
   .player-card .status-badge.is-on::before, .player-card .status-badge.is-warn::before {
     width: auto; height: auto; border-radius: 0; background: none; font-weight: 800;
   }
@@ -2021,6 +2146,17 @@
   }
   .toast-icon svg { width: 14px; height: 14px; }
   .toast.is-error .toast-icon { background: rgba(255, 143, 0, 0.16); color: #ff8f00; }
+  /* Something still running (a stream loading its start): a spinner. */
+  .toast.is-status .toast-icon { background: rgba(6, 104, 225, 0.12); }
+  .toast.is-status .spinner-ring {
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--border-strong);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: dt-spin 0.8s linear infinite;
+  }
+  .toast.is-status.is-error .spinner-ring { border-top-color: #ff8f00; }
   .toast-text { min-width: 0; overflow-wrap: anywhere; }
   .toast.is-leaving { animation: toast-out 0.2s ease forwards; }
   @keyframes toast-in {
